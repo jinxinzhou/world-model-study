@@ -1280,10 +1280,12 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
        end
 
        subgraph S4["Stage 4: Deploy to the real environment for validation"]
-           Env4["Real environment"] -->|obs| V2["V"]
-           V2 -->|z| C2["Controller"]
-           M2["M (provides h)"] -.->|h| C2
-           C2 -->|a| Env4
+           Env4["Real environment"] -->|obs| V2["V (encode)"]
+           V2 -->|"z_t"| C2["Controller"]
+           V2 -->|"z_t"| M2["M (RNN)<br/>update h_t → h_{t+1}"]
+           C2 -->|"a_t"| Env4
+           C2 -->|"a_t"| M2
+           M2 -.->|"h_{t+1}<br/>(used next step)"| C2
        end
 
        S1 --> S2

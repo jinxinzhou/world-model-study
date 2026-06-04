@@ -1280,10 +1280,12 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
        end
 
        subgraph S4["阶段 4:部署到真实环境验证"]
-           Env4["真实环境"] -->|obs| V2["V"]
-           V2 -->|z| C2["Controller"]
-           M2["M (提供 h)"] -.->|h| C2
-           C2 -->|a| Env4
+           Env4["真实环境"] -->|obs| V2["V (encode)"]
+           V2 -->|"z_t"| C2["Controller"]
+           V2 -->|"z_t"| M2["M (RNN)<br/>更新 h_t → h_{t+1}"]
+           C2 -->|"a_t"| Env4
+           C2 -->|"a_t"| M2
+           M2 -.->|"h_{t+1}<br/>(下一步用)"| C2
        end
 
        S1 --> S2
