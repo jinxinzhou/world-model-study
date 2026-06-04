@@ -31,9 +31,14 @@ Organized by the logic: **What it is → Why it matters → School comparison �
 ```
 asset/
 ├── world-models-2018/      # Architecture diagrams, VAE/MDN illustrations, CarRacing/Doom demos (GIF)
+├── planet-2019/            # PlaNet figures (RSSM, latent overshooting, DMC demos)
 ├── cma-es/                 # CMA-ES evolution process, 5-step loop, B/D decomposition
 └── formulas/               # Pre-rendered LaTeX formulas (PNG)
 ```
+
+## Companion: Paper Writing Notes
+
+📝 **[paper-writing/](paper-writing/)** — Writing techniques and templates distilled from deep-reading papers (the abstract template, intro structure, etc., grown over time).
 
 ## Rendering Requirements
 
