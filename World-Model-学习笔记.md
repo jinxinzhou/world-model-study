@@ -31,7 +31,7 @@ World Model(世界模型)是 AI agent 领域的热门方向,核心思想是让�
 | **Latent Dynamics(RL 派)** | Dreamer v1/v2/v3、PlaNet | latent state(带像素重建) |
 | **JEPA(预测式表征派)** | I-JEPA、V-JEPA、V-JEPA 2 | 抽象 embedding(无重建) |
 
-先明确你关心哪一支,学习路径差别很大。
+先明确所关心的流派,学习路径差别很大。
 
 </details>
 
@@ -390,7 +390,7 @@ env_dream.h = h_target
 - 模拟器 snapshot(MuJoCo):支持,但 restore 比 step 慢 10×+,**真机器人不支持**
 - HER(Hindsight Replay):事后假装目标,不是真 reset
 
-**情境**:你想训"侧翻边缘怎么救车"
+**情境**:训练「侧翻边缘救车」任务
 
 | 步骤 | 真实环境 | 梦境 |
 |------|---------|------|
@@ -837,7 +837,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
 
    ### Part 1:CMA-ES 是什么 —— 三句话原理
 
-   1. **维护一个多元高斯分布** $\mathcal{N}(m, \sigma^2 C)$ 描述"我觉得最优解大概在哪"
+   1. **维护一个多元高斯分布** $\mathcal{N}(m, \sigma^2 C)$ 描述「当前估计的最优解可能位置」
    2. **每一代撒 λ 个候选,选最好的 μ 个**(μ ≈ λ/2)
    3. **更新均值 m、协方差 C、步长 σ**,让分布慢慢"瞄准"最优区域
 
@@ -881,7 +881,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    - **B**:正交矩阵(C 的特征向量) —— 几何上是**旋转**,把标准坐标轴转到 C 椭球的主轴方向
    - **D**:对角矩阵(C 特征值的平方根) —— 几何上是**沿坐标轴方向缩放**
 
-   **为什么要拆 C 成 B·D²·Bᵀ?** 因为计算机只会生成标准正态噪声 $z \sim \mathcal{N}(0, I)$,我们需要把它变换成符合 $\mathcal{N}(m, \sigma^2 C)$ 的样本。下图把整个过程拆成 4 步直观展示:
+   **为什么要拆 C 成 B·D²·Bᵀ?** 因为计算机只能生成标准正态噪声 $z \sim \mathcal{N}(0, I)$,需要将其变换成符合 $\mathcal{N}(m, \sigma^2 C)$ 分布的样本。下图把整个过程拆成 4 步直观展示:
 
    <p align="center">
      <img src="asset/cma-es/01_BD_decomposition.png" width="900"/><br/>
@@ -959,7 +959,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    - 不用 Bellman,**直接对 actor 求 ∂Return/∂θ_actor 反传**
    - 这才是更现代、更高效的做法
 
-   → **你的直觉其实更接近"方案 B"**(让梦境可微+反传),Dreamer 2020 实现的正是这条路。
+   → **方案 B 的思路**(让梦境可微+反传)正是 Dreamer 2020 实现的路径。
 
    ---
 
@@ -1011,7 +1011,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
 
    ---
 
-   ### Part 6:动手玩玩
+   ### Part 6:实践入口
 
    ```python
    pip install cma
@@ -1037,7 +1037,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
 
    ### 🎯 整体总结
 
-   > **梦境技术上完全可微,但 Ha 2018 选 CMA-ES 是工程权衡:Controller 极小、梦境噪声大、model exploitation 怕被梯度放大、长 RNN 梯度难、demo 优先。Bellman 方程是 Q-learning 工具,不是 actor 优化的最佳选择;真正"可微梦境+反传 actor"的范式由 Dreamer 2020 实现,从此 CMA-ES 在 model-based RL 退场。你直觉里"用梯度求解"的想法,正是 Dreamer 系的核心思路 —— 不过用的是 policy gradient 而非 Bellman。**
+   > **梦境技术上完全可微,但 Ha 2018 选 CMA-ES 是工程权衡:Controller 极小、梦境噪声大、model exploitation 怕被梯度放大、长 RNN 梯度难、demo 优先。Bellman 方程是 Q-learning 工具,不是 actor 优化的最佳选择;真正"可微梦境+反传 actor"的范式由 Dreamer 2020 实现,从此 CMA-ES 在 model-based RL 退场。「用梯度求解」的直觉,正是 Dreamer 系的核心思路 —— 不过用的是 policy gradient 而非 Bellman。**
 
    </details>
 
@@ -1051,7 +1051,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    - 注意:**用真实 $z_t$** 更新 $h$(不是用 M sample 的 $\hat{z}$)
    - 这相当于 M 在真实环境里"陪跑",维护对未来的预期
 
-   **具体代码**(你给的图就是这段,论文 Algorithm 1):
+   **具体代码**(论文 Algorithm 1):
    ```python
    def rollout(controller):
        """在真实环境跑一局,既用于评估,也用于实际部署"""
@@ -1272,7 +1272,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
 
    ##### 细节 ③:奖励 $\hat{r}_{t+1}$ 在梦里怎么产生?
 
-   这是个**特别反直觉的点** —— 你以为 M 会预测 reward,但 **World Models 2018 在 VizDoom 上根本没显式预测连续 reward**。
+   这是个**特别反直觉的点** —— 直觉上 M 应该会预测 reward,但 **World Models 2018 在 VizDoom 上根本没显式预测连续 reward**。
 
    **VizDoom Take Cover 的实际做法**:
    ```python
@@ -1340,7 +1340,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    ③ 奖励处理 ─► 用 done 隐式推(VizDoom)or 显式 reward head(Dreamer)
    ```
 
-   理解这三层细节,你就能:
+   理解这三层细节后,即可:
    - 看懂 Dreamer 系论文里 RSSM 为什么做成 `(h, z)` 双路
    - 理解为什么 Dreamer 一定要加 reward head 才能扩展到通用任务
    - 不会再把"World Model"误解为"只是多个网络的 model-free"
