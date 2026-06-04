@@ -13,7 +13,7 @@
 - [I. What Is a World Model](#i-what-is-a-world-model)
 - [II. Why Are World Models Popular? What Is Their Practical Value?](#ii-why-are-world-models-popular-what-is-their-practical-value)
 - [III. In-Depth Comparison of the Three Schools](#iii-in-depth-comparison-of-the-three-schools)
-- [IV. Getting Started](#iv-getting-started)
+- [IV. Essential Papers](#iv-essential-papers)
 - [V. Reference Materials](#v-reference-materials)
 
 ---
@@ -196,7 +196,7 @@ Strictly speaking, therefore, **Dreamer is "latent but still generative," wherea
 
 ---
 
-## IV. Getting Started
+## IV. Essential Papers
 
 <details>
 <summary><b>4.0 Background Concept: Model-Free vs Model-Based RL</b></summary>
@@ -581,962 +581,1023 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
 </details>
 
 <details>
-<summary><b>4.1 Essential Papers (in Order)</b></summary>
+<summary><b>4.1 World Models (Ha & Schmidhuber, 2018)</b></summary>
 
-**Foundations**
-1. [**World Models**](https://arxiv.org/abs/1803.10122) (Ha & Schmidhuber, 2018) — the classic starting point: VAE + MDN-RNN + small controller ([interactive website](https://worldmodels.github.io/))
+> **Paper**: [arxiv.org/abs/1803.10122](https://arxiv.org/abs/1803.10122) · **Interactive site** (highly recommended): <https://worldmodels.github.io/>
+>
+> **TL;DR**: The classic starting point — VAE + MDN-RNN + a tiny controller. First clear demonstration that an agent can be trained inside its own dream and transferred back to the real environment.
 
-   This paper is the **starting point and intellectual totem** of modern World Model research. Its influence does not come from overwhelming performance, but from the first clear demonstration that **an Agent can learn to play games inside its own "dream."**
+This paper is the **starting point and intellectual totem** of modern World Model research. Its influence does not come from overwhelming performance, but from the first clear demonstration that **an Agent can learn to play games inside its own "dream."**
 
-   <p align="center">
-     <img src="asset/world-models-2018/world_model_comic.jpeg" width="600"/><br/>
-     <i>Opening example: the "mental model" from Scott McCloud's Understanding Comics</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/world_model_comic.jpeg" width="600"/><br/>
+  <i>Opening example: the "mental model" from Scott McCloud's Understanding Comics</i>
+</p>
 
-   ### 📖 Core Ideas
+### 📖 Core Ideas
 
-   #### Decomposing the Agent into Three Parts
+#### Decomposing the Agent into Three Parts
 
-   <p align="center">
-     <img src="asset/world-models-2018/world_model_overview.png" width="700"/><br/>
-     <i>Overall architecture: V (Vision) → M (Memory) → C (Controller)</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/world_model_overview.png" width="700"/><br/>
+  <i>Overall architecture: V (Vision) → M (Memory) → C (Controller)</i>
+</p>
 
-   ```
-      Observation ─►  V (Vision)  ─►  M (Memory)  ─►  C (Controller)  ─►  Action
-                     compresses the present   predicts the future   decides (very small)
-   ```
+```
+   Observation ─►  V (Vision)  ─►  M (Memory)  ─►  C (Controller)  ─►  Action
+                  compresses the present   predicts the future   decides (very small)
+```
 
-   | Module | Role | Implementation | Parameter Count |
-   |------|------|------|--------|
-   | **V** — Vision | Compress high-dimensional images into low-dimensional representations | **VAE** (variational autoencoder) | ~4M |
-   | **M** — Memory | Learn temporal dynamics of the world and predict the next latent | **MDN-RNN** (mixture density network + LSTM) | ~400K |
-   | **C** — Controller | Choose actions based on information from V and M | **Single-layer linear network** | ~1K |
+| Module | Role | Implementation | Parameter Count |
+|------|------|------|--------|
+| **V** — Vision | Compress high-dimensional images into low-dimensional representations | **VAE** (variational autoencoder) | ~4M |
+| **M** — Memory | Learn temporal dynamics of the world and predict the next latent | **MDN-RNN** (mixture density network + LSTM) | ~400K |
+| **C** — Controller | Choose actions based on information from V and M | **Single-layer linear network** | ~1K |
 
-   <p align="center">
-     <img src="asset/world-models-2018/world_model_schematic.png" width="600"/><br/>
-     <i>Internal Agent data flow: observation → z → action; h loops inside M</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/world_model_schematic.png" width="600"/><br/>
+  <i>Internal Agent data flow: observation → z → action; h loops inside M</i>
+</p>
 
-   🔑 **Key insight**: make "perception" and "memory" large models, and make "decision-making" **extremely small**. The decision-maker is small enough to be optimized by an **evolutionary algorithm (CMA-ES)** rather than backpropagation.
+🔑 **Key insight**: make "perception" and "memory" large models, and make "decision-making" **extremely small**. The decision-maker is small enough to be optimized by an **evolutionary algorithm (CMA-ES)** rather than backpropagation.
 
-   #### Module Breakdown
+#### Module Breakdown
 
-   **V: VAE Compresses Vision**
+**V: VAE Compresses Vision**
 
-   <p align="center">
-     <img src="asset/world-models-2018/vae.png" width="600"/><br/>
-     <i>VAE pipeline: image → encoder → latent z → decoder → reconstructed image</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/vae.png" width="600"/><br/>
+  <i>VAE pipeline: image → encoder → latent z → decoder → reconstructed image</i>
+</p>
 
-   - Input 64×64×3 game frames → output **32-dimensional latent `z`**
-   - Frames are collected with a random policy, followed by self-supervised training (standard VAE: reconstruction + KL)
+- Input 64×64×3 game frames → output **32-dimensional latent `z`**
+- Frames are collected with a random policy, followed by self-supervised training (standard VAE: reconstruction + KL)
 
-   **M: MDN-RNN Learns Dynamics**
+**M: MDN-RNN Learns Dynamics**
 
-   <p align="center">
-     <img src="asset/world-models-2018/mdn_rnn_new.png" width="600"/><br/>
-     <i>MDN-RNN: LSTM outputs parameters of a Gaussian mixture distribution, and sampling yields the next z</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/mdn_rnn_new.png" width="600"/><br/>
+  <i>MDN-RNN: LSTM outputs parameters of a Gaussian mixture distribution, and sampling yields the next z</i>
+</p>
 
-   **One forward pass of M**:
-   ```
-   Input:  (z_t, a_t, h_t)        ← current latent + action + previous LSTM hidden state
-   Output:
-     ① (π, μ, σ)                 ← Gaussian-mixture parameters of z_{t+1} (MDN component)
-                                    after sampling, the next-frame latent is obtained: z_{t+1} ~ Σ π_k · N(μ_k, σ_k²)
-     ② h_{t+1}                   ← new LSTM hidden state (used at the next step)
-     ③ done_logit                ← probability of termination (after sigmoid)
-   ```
+**One forward pass of M**:
+```
+Input:  (z_t, a_t, h_t)        ← current latent + action + previous LSTM hidden state
+Output:
+  ① (π, μ, σ)                 ← Gaussian-mixture parameters of z_{t+1} (MDN component)
+                                 after sampling, the next-frame latent is obtained: z_{t+1} ~ Σ π_k · N(μ_k, σ_k²)
+  ② h_{t+1}                   ← new LSTM hidden state (used at the next step)
+  ③ done_logit                ← probability of termination (after sigmoid)
+```
 
-   - Why a distribution? The real world is not fully predictable; **MDN (Gaussian mixture)** captures multimodal uncertainty
-   - **Temperature τ** controls sampling randomness: higher τ makes the dream more chaotic; lower τ makes it more deterministic
-   - The same MDN-RNN idea is also used in SketchRNN (predicting the next pen stroke):
+- Why a distribution? The real world is not fully predictable; **MDN (Gaussian mixture)** captures multimodal uncertainty
+- **Temperature τ** controls sampling randomness: higher τ makes the dream more chaotic; lower τ makes it more deterministic
+- The same MDN-RNN idea is also used in SketchRNN (predicting the next pen stroke):
 
-     <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
+  <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
 
-   **C: Ultra-Small Controller**
-   ```python
-   a_t = W_c · [z_t, h_t] + b_c    # just one linear layer
-   ```
-   - **CMA-ES** is used for black-box optimization of a few hundred parameters; no backpropagation is required
-   - Philosophical implication: **complex cognition can be delegated to the world model, while decision-making itself can be simple** (as in human driving)
+**C: Ultra-Small Controller**
+```python
+a_t = W_c · [z_t, h_t] + b_c    # just one linear layer
+```
+- **CMA-ES** is used for black-box optimization of a few hundred parameters; no backpropagation is required
+- Philosophical implication: **complex cognition can be delegated to the world model, while decision-making itself can be simple** (as in human driving)
 
-   <p align="center">
-     <img src="asset/world-models-2018/mccloud_baseball.jpeg" width="600"/><br/>
-     <i>Analogy: a baseball batter reacts within milliseconds using an "internal predictive model," rather than explicit planning</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/mccloud_baseball.jpeg" width="600"/><br/>
+  <i>Analogy: a baseball batter reacts within milliseconds using an "internal predictive model," rather than explicit planning</i>
+</p>
 
-   #### Training Pipeline (Three Stages, Fully Decoupled)
+#### Training Pipeline (Three Stages, Fully Decoupled)
 
-   World Models uses a **staged, non-end-to-end** training pipeline. Each stage is completed independently before moving to the next.
+World Models uses a **staged, non-end-to-end** training pipeline. Each stage is completed independently before moving to the next.
 
-   **🗺️ Three-Stage Overview** (with core formulas):
+**🗺️ Three-Stage Overview** (with core formulas):
 
-   **Stage 1**: collect replay data from 10,000 episodes with random actions
+**Stage 1**: collect replay data from 10,000 episodes with random actions
 
-   <p align="center"><img src="asset/formulas/f01.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f01.png" alt="formula"/></p>
 
-   **Stage 2(a)**: train VAE (images only) → V
+**Stage 2(a)**: train VAE (images only) → V
 
-   <p align="center"><img src="asset/formulas/f02.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f02.png" alt="formula"/></p>
 
-   **Stage 2(b)**: train MDN-RNN (sequences of z and a) → M
+**Stage 2(b)**: train MDN-RNN (sequences of z and a) → M
 
-   <p align="center"><img src="asset/formulas/f03.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f03.png" alt="formula"/></p>
 
-   **Stage 3**: freeze V and M; train Controller with CMA-ES
+**Stage 3**: freeze V and M; train Controller with CMA-ES
 
-   <p align="center"><img src="asset/formulas/f04.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f04.png" alt="formula"/></p>
 
-   **Stage 4** (Deployment / Inference): place the trained C back into the real environment
+**Stage 4** (Deployment / Inference): place the trained C back into the real environment
 
-   <p align="center"><img src="asset/formulas/f05.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f05.png" alt="formula"/></p>
 
-   The stages are explained in detail below.
+The stages are explained in detail below.
 
-   ##### Stage 1: Collect Real Data with a Random Policy
+##### Stage 1: Collect Real Data with a Random Policy
 
-   **🎯 Objective**: expose the world model to as many diverse states as possible (including death, collision, and other edge cases), so a **random policy** is used rather than a strong policy.
+**🎯 Objective**: expose the world model to as many diverse states as possible (including death, collision, and other edge cases), so a **random policy** is used rather than a strong policy.
 
-   **Core formula**:
-   <p align="center"><img src="asset/formulas/f06.png" alt="formula"/></p>
+**Core formula**:
+<p align="center"><img src="asset/formulas/f06.png" alt="formula"/></p>
 
-   That is, sample in the real environment under a uniformly random policy and collect (observation, action) sequences.
+That is, sample in the real environment under a uniformly random policy and collect (observation, action) sequences.
 
-   **Concrete code**:
-   ```python
-   data = []
-   for episode in range(10000):
-       obs = env.reset()
-       done = False
-       while not done:
-           a = env.action_space.sample()    # random action
-           obs_next, reward, done = env.step(a)
-           data.append((obs, a))            # store only observations and actions
-           obs = obs_next
-   ```
-
-   - **Scale**: VizDoom collects ~10,000 episodes; each has several hundred frames → several million frames in total
-   - **Storage**: VAE training only needs `obs`; M training needs `(obs, a)` sequences
-   - **No reward is required**: Stage 1 is entirely independent of reward signals (a flexibility of the World Models paradigm)
-
-   ##### Stage 2(a): Train VAE → Obtain V
-
-   **🎯 Objective**: learn a **compression-reconstruction** model that compresses 64×64×3 pixels into a 32-dimensional latent z, used as input features for M and C.
-
-   **Core formula** (VAE ELBO):
-   <p align="center"><img src="asset/formulas/f07.png" alt="formula"/></p>
-
-   - Encoder: `q(z|o) = N(μ_φ(o), σ_φ(o)²)` — encodes the image into a Gaussian distribution
-   - Decoder: `p(o|z)` — reconstructs the image from z
-   - **Result**: `encode: o → z` (32 dimensions) + `decode: z → o`
-
-   **Concrete code**:
-   ```python
-   for epoch in range(N):
-       for batch in shuffle(data):
-           obs = batch.obs                  # 64×64×3 pixels
-           mu, sigma = VAE.encoder(obs)     # output latent distribution parameters
-           z = mu + sigma * randn()         # reparameterization
-           obs_recon = VAE.decoder(z)       # reconstruct image
+**Concrete code**:
+```python
+data = []
+for episode in range(10000):
+    obs = env.reset()
+    done = False
+    while not done:
+        a = env.action_space.sample()    # random action
+        obs_next, reward, done = env.step(a)
+        data.append((obs, a))            # store only observations and actions
+        obs = obs_next
+```
 
-           loss = MSE(obs_recon, obs) + KL(mu, sigma)
-           loss.backward()
-   ```
+- **Scale**: VizDoom collects ~10,000 episodes; each has several hundred frames → several million frames in total
+- **Storage**: VAE training only needs `obs`; M training needs `(obs, a)` sequences
+- **No reward is required**: Stage 1 is entirely independent of reward signals (a flexibility of the World Models paradigm)
+
+##### Stage 2(a): Train VAE → Obtain V
+
+**🎯 Objective**: learn a **compression-reconstruction** model that compresses 64×64×3 pixels into a 32-dimensional latent z, used as input features for M and C.
+
+**Core formula** (VAE ELBO):
+<p align="center"><img src="asset/formulas/f07.png" alt="formula"/></p>
+
+- Encoder: `q(z|o) = N(μ_φ(o), σ_φ(o)²)` — encodes the image into a Gaussian distribution
+- Decoder: `p(o|z)` — reconstructs the image from z
+- **Result**: `encode: o → z` (32 dimensions) + `decode: z → o`
+
+**Concrete code**:
+```python
+for epoch in range(N):
+    for batch in shuffle(data):
+        obs = batch.obs                  # 64×64×3 pixels
+        mu, sigma = VAE.encoder(obs)     # output latent distribution parameters
+        z = mu + sigma * randn()         # reparameterization
+        obs_recon = VAE.decoder(z)       # reconstruct image
 
-   - **Purely unsupervised** — uses only obs and never uses action / reward
-   - **Freeze V** — it is no longer updated in the next stage
+        loss = MSE(obs_recon, obs) + KL(mu, sigma)
+        loss.backward()
+```
 
-   ##### Stage 2(b): Train MDN-RNN → Obtain M
+- **Purely unsupervised** — uses only obs and never uses action / reward
+- **Freeze V** — it is no longer updated in the next stage
 
-   **🎯 Objective**: learn a **temporal prediction** model so that M can predict the **probability distribution of the next z** and whether the episode terminates from `(current z, current action, historical memory h)`.
+##### Stage 2(b): Train MDN-RNN → Obtain M
 
-   **Core formula**:
-   <p align="center"><img src="asset/formulas/f08.png" alt="formula"/></p>
+**🎯 Objective**: learn a **temporal prediction** model so that M can predict the **probability distribution of the next z** and whether the episode terminates from `(current z, current action, historical memory h)`.
 
-   The predicted distribution of z is a mixture of K Gaussians:
-   <p align="center"><img src="asset/formulas/f09.png" alt="formula"/></p>
+**Core formula**:
+<p align="center"><img src="asset/formulas/f08.png" alt="formula"/></p>
 
-   - LSTM outputs `(π, μ, σ)` as mixture-distribution parameters
-   - Training objective: maximize the likelihood of the real `z_{t+1}` under this distribution
+The predicted distribution of z is a mixture of K Gaussians:
+<p align="center"><img src="asset/formulas/f09.png" alt="formula"/></p>
 
-   **Concrete code**:
-   ```python
-   # First use V to encode all obs into z sequences
-   for episode in data:
-       z_seq = [VAE.encode(obs) for obs in episode.obs]
-       a_seq = episode.actions
+- LSTM outputs `(π, μ, σ)` as mixture-distribution parameters
+- Training objective: maximize the likelihood of the real `z_{t+1}` under this distribution
 
-   for epoch in range(N):
-       for (z_seq, a_seq) in episodes:
-           h = zeros(256)
-           for t in range(len(z_seq) - 1):
-               (π, μ, σ), h, done_logit = M(z_seq[t], a_seq[t], h)
-               loss_z = -log_mixture_gaussian(z_seq[t+1], π, μ, σ)
-               loss_done = BCE(done_logit, real_done[t])
-               loss = loss_z + loss_done
-               loss.backward()
-   ```
+**Concrete code**:
+```python
+# First use V to encode all obs into z sequences
+for episode in data:
+    z_seq = [VAE.encode(obs) for obs in episode.obs]
+    a_seq = episode.actions
 
-   - **Freeze M** — it is no longer updated in the next stage
+for epoch in range(N):
+    for (z_seq, a_seq) in episodes:
+        h = zeros(256)
+        for t in range(len(z_seq) - 1):
+            (π, μ, σ), h, done_logit = M(z_seq[t], a_seq[t], h)
+            loss_z = -log_mixture_gaussian(z_seq[t+1], π, μ, σ)
+            loss_done = BCE(done_logit, real_done[t])
+            loss = loss_z + loss_done
+            loss.backward()
+```
 
-   ##### Stage 3: Train C with CMA-ES Inside the Dream
+- **Freeze M** — it is no longer updated in the next stage
 
-   **🎯 Objective**: train the Controller to learn a Policy that achieves high reward "inside the dream" — without touching the real environment, using only the virtual world formed by V+M. This is the method used for **VizDoom Take Cover** (CarRacing trains in the real environment, discussed below).
+##### Stage 3: Train C with CMA-ES Inside the Dream
 
-   **Core formula**:
-   <p align="center"><img src="asset/formulas/f10.png" alt="formula"/></p>
+**🎯 Objective**: train the Controller to learn a Policy that achieves high reward "inside the dream" — without touching the real environment, using only the virtual world formed by V+M. This is the method used for **VizDoom Take Cover** (CarRacing trains in the real environment, discussed below).
 
-   - Objective: find Controller parameters that maximize **cumulative reward in the dream**
-   - `r_t = +1` (reward rule in VizDoom: +1 for each surviving frame)
-   - Use **CMA-ES** (gradient-free black-box optimization) rather than backpropagation
+**Core formula**:
+<p align="center"><img src="asset/formulas/f10.png" alt="formula"/></p>
 
-   **Dream rollout function**:
-   ```python
-   def dream_rollout(controller_params):
-       """Run one episode entirely inside M and return fitness"""
-       z = sample_initial_z()           # draw a starting z from real data
-       h = rnn.initial_state()
-       cumulative_reward = 0
-       while True:
-           a = C_apply(controller_params, [z, h])         # ← compute action with candidate parameters
-           (π, μ, σ), h, done_logit = M(z, a, h)           # ← M acts as the virtual environment
-           z = sample_mdn(π, μ, σ, temperature=1.15)       # ← temperature prevents cheating
-           if sigmoid(done_logit) > random():
-               break
-           cumulative_reward += 1                          # surviving one frame gives +1
-       return cumulative_reward
-   ```
+- Objective: find Controller parameters that maximize **cumulative reward in the dream**
+- `r_t = +1` (reward rule in VizDoom: +1 for each surviving frame)
+- Use **CMA-ES** (gradient-free black-box optimization) rather than backpropagation
 
-   **CMA-ES evolutionary optimization loop**:
-   ```python
-   es = CMAES(initial_mean=zeros(C.param_count), sigma=0.1)
-   for generation in range(800):
-       # 1. CMA-ES generates a batch of candidate parameters (population_size=64)
-       candidates = es.ask()
-       # 2. Each candidate runs N dream episodes; fitness is averaged
-       fitnesses = [
-           mean([dream_rollout(c) for _ in range(16)])
-           for c in candidates
-       ]
-       # 3. Feed fitness back to CMA-ES; it updates the distribution
-       es.tell(candidates, fitnesses)
+**Dream rollout function**:
+```python
+def dream_rollout(controller_params):
+    """Run one episode entirely inside M and return fitness"""
+    z = sample_initial_z()           # draw a starting z from real data
+    h = rnn.initial_state()
+    cumulative_reward = 0
+    while True:
+        a = C_apply(controller_params, [z, h])         # ← compute action with candidate parameters
+        (π, μ, σ), h, done_logit = M(z, a, h)           # ← M acts as the virtual environment
+        z = sample_mdn(π, μ, σ, temperature=1.15)       # ← temperature prevents cheating
+        if sigmoid(done_logit) > random():
+            break
+        cumulative_reward += 1                          # surviving one frame gives +1
+    return cumulative_reward
+```
 
-   best_C = es.best_solution()           # trained Controller
-   ```
+**CMA-ES evolutionary optimization loop**:
+```python
+es = CMAES(initial_mean=zeros(C.param_count), sigma=0.1)
+for generation in range(800):
+    # 1. CMA-ES generates a batch of candidate parameters (population_size=64)
+    candidates = es.ask()
+    # 2. Each candidate runs N dream episodes; fitness is averaged
+    fitnesses = [
+        mean([dream_rollout(c) for _ in range(16)])
+        for c in candidates
+    ]
+    # 3. Feed fitness back to CMA-ES; it updates the distribution
+    es.tell(candidates, fitnesses)
 
-   - **Gradient-free**: CMA-ES is black-box optimization; it only observes fitness, not gradients
-   - **Parallel-friendly**: 64 candidates can run dream episodes simultaneously (GPU batch)
-   - **Repeated evaluation**: each candidate runs 16 rollouts and uses the mean, reducing noise from dream stochasticity
+best_C = es.best_solution()           # trained Controller
+```
 
-   <details>
-   <summary><b>📌 Concept Supplement: CMA-ES Explained + Why Not Backpropagation / Bellman?</b></summary>
+- **Gradient-free**: CMA-ES is black-box optimization; it only observes fitness, not gradients
+- **Parallel-friendly**: 64 candidates can run dream episodes simultaneously (GPU batch)
+- **Repeated evaluation**: each candidate runs 16 rollouts and uses the mean, reducing noise from dream stochasticity
 
-   **CMA-ES** = Covariance Matrix Adaptation Evolution Strategy, proposed by Nikolaus Hansen in 1996. It is one of the most successful evolutionary algorithms for **black-box continuous optimization**.
+<details>
+<summary><b>📌 Concept Supplement: CMA-ES Explained + Why Not Backpropagation / Bellman?</b></summary>
 
-   > ⚠️ **Notation convention**: standard CMA-ES literature uses **C** for the covariance matrix, but in the World Models paper **C** is already taken as the symbol for the **Controller**. To avoid confusion, this section uses **Σ** (the standard symbol from probability/statistics) for the covariance matrix. So "Controller C" and "covariance Σ" are two completely different objects.
+**CMA-ES** = Covariance Matrix Adaptation Evolution Strategy, proposed by Nikolaus Hansen in 1996. It is one of the most successful evolutionary algorithms for **black-box continuous optimization**.
 
-   ---
+> ⚠️ **Notation convention**: standard CMA-ES literature uses **C** for the covariance matrix, but in the World Models paper **C** is already taken as the symbol for the **Controller**. To avoid confusion, this section uses **Σ** (the standard symbol from probability/statistics) for the covariance matrix. So "Controller C" and "covariance Σ" are two completely different objects.
 
-   ### Part 1: What Is CMA-ES? — The Principle in Three Sentences
+---
 
-   1. **Maintain a multivariate Gaussian distribution** $\mathcal{N}(m, \sigma^2 \Sigma)$ describing "where the currently estimated optimum is likely located"
-   2. **Sample λ candidates each generation and select the best μ candidates** (μ ≈ λ/2)
-   3. **Update mean m, covariance Σ, and step size σ**, so the distribution gradually "aims" at the optimal region
+### Part 1: What Is CMA-ES? — The Principle in Three Sentences
 
-   **Analogy — finding a mountain summit while blindfolded**: scatter a group of people around the current location → have them report altitude → identify the direction of the highest few people → move the group in that direction → meanwhile adjust the scattering shape (ellipsoid) and range (step size).
+1. **Maintain a multivariate Gaussian distribution** $\mathcal{N}(m, \sigma^2 \Sigma)$ describing "where the currently estimated optimum is likely located"
+2. **Sample λ candidates each generation and select the best μ candidates** (μ ≈ λ/2)
+3. **Update mean m, covariance Σ, and step size σ**, so the distribution gradually "aims" at the optimal region
 
-   #### 🖼️ Intuitive View: How Does CMA-ES Converge?
+**Analogy — finding a mountain summit while blindfolded**: scatter a group of people around the current location → have them report altitude → identify the direction of the highest few people → move the group in that direction → meanwhile adjust the scattering shape (ellipsoid) and range (step size).
 
-   <p align="center">
-     <img src="asset/cma-es/02_generations_evolution.png" width="900"/><br/>
-     <i>Evolution of CMA-ES on the 2D objective function f(x,y) = −((x−3)² + 5(y+1)²). The green triangle is the true optimum (3, −1), the red star is the current mean m, the red ellipse is the current 2σ range of N(m, σ²Σ), white dots are sampled candidates, and yellow circles are the selected top-μ candidates. It converges reliably to the optimum within 20 generations.</i>
-   </p>
+#### 🖼️ Intuitive View: How Does CMA-ES Converge?
 
-   Observe:
-   - **Generation 0**: m is at (0, 0); the ellipse is a circle (C = I), with a large range
-   - **Generation 3**: m has already been "pulled" down and to the right (top-μ are in that direction), and the ellipse begins to flatten
-   - **Generation 8**: m is close to the true optimum; the ellipse continues shrinking and becomes elongated (because the y-direction gradient is steeper)
-   - **Generation 20**: nearly perfect convergence
+<p align="center">
+  <img src="asset/cma-es/02_generations_evolution.png" width="900"/><br/>
+  <i>Evolution of CMA-ES on the 2D objective function f(x,y) = −((x−3)² + 5(y+1)²). The green triangle is the true optimum (3, −1), the red star is the current mean m, the red ellipse is the current 2σ range of N(m, σ²Σ), white dots are sampled candidates, and yellow circles are the selected top-μ candidates. It converges reliably to the optimum within 20 generations.</i>
+</p>
 
-   #### Five-Step Loop per Generation
+Observe:
+- **Generation 0**: m is at (0, 0); the ellipse is a circle (C = I), with a large range
+- **Generation 3**: m has already been "pulled" down and to the right (top-μ are in that direction), and the ellipse begins to flatten
+- **Generation 8**: m is close to the true optimum; the ellipse continues shrinking and becomes elongated (because the y-direction gradient is steeper)
+- **Generation 20**: nearly perfect convergence
 
-   <p align="center">
-     <img src="asset/cma-es/03_5step_loop.png" width="900"/><br/>
-     <i>The five-step loop of each CMA-ES generation</i>
-   </p>
+#### Five-Step Loop per Generation
 
-   ```
-   ① Sampling:   x_i = m + σ·B·D·z_i,  z_i ~ N(0, I)
-   ② Evaluation: compute f(x_i)
-   ③ Sorting:    sort by fitness and select the top μ
-   ④ Mean update: m_new = Σ w_i · x_i
-   ⑤ Update covariance Σ and step size σ (using evolution paths)
-   ```
+<p align="center">
+  <img src="asset/cma-es/03_5step_loop.png" width="900"/><br/>
+  <i>The five-step loop of each CMA-ES generation</i>
+</p>
 
-   Key hyperparameters: **λ** (population) = 16~64, **μ** = λ/2, initial **σ** = 0.1, number of generations = hundreds to thousands.
+```
+① Sampling:   x_i = m + σ·B·D·z_i,  z_i ~ N(0, I)
+② Evaluation: compute f(x_i)
+③ Sorting:    sort by fitness and select the top μ
+④ Mean update: m_new = Σ w_i · x_i
+⑤ Update covariance Σ and step size σ (using evolution paths)
+```
 
-   #### 🔍 What Are B and D in Step ①?
+Key hyperparameters: **λ** (population) = 16~64, **μ** = λ/2, initial **σ** = 0.1, number of generations = hundreds to thousands.
 
-   $B$ and $D$ are the **eigendecomposition** of covariance matrix $\Sigma$:
-   <p align="center"><img src="asset/formulas/f12.png" alt="formula"/></p>
+#### 🔍 What Are B and D in Step ①?
 
-   - **B**: orthogonal matrix (eigenvectors of Σ) — geometrically a **rotation** that turns standard coordinate axes to the principal-axis directions of the Σ ellipsoid
-   - **D**: diagonal matrix (square roots of Σ's eigenvalues) — geometrically **scaling along coordinate axes**
+$B$ and $D$ are the **eigendecomposition** of covariance matrix $\Sigma$:
+<p align="center"><img src="asset/formulas/f12.png" alt="formula"/></p>
 
-   **Why decompose Σ into B·D²·Bᵀ?** Because computers can only generate standard normal noise $z \sim \mathcal{N}(0, I)$; this noise must be transformed into samples following the $\mathcal{N}(m, \sigma^2 \Sigma)$ distribution. The figure below decomposes the full process into four intuitive steps:
+- **B**: orthogonal matrix (eigenvectors of Σ) — geometrically a **rotation** that turns standard coordinate axes to the principal-axis directions of the Σ ellipsoid
+- **D**: diagonal matrix (square roots of Σ's eigenvalues) — geometrically **scaling along coordinate axes**
 
-   <p align="center">
-     <img src="asset/cma-es/01_BD_decomposition.png" width="900"/><br/>
-     <i>Geometric decomposition of the sampling formula x = m + σ·B·D·z: ① start from standard spherical noise z → ② D stretches it along coordinate axes into an ellipsoid → ③ B rotates it to the principal-axis direction of Σ → ④ σ scales it and translates it to position m. Blue dots are 200 samples; the red ellipse is the 2σ range.</i>
-   </p>
+**Why decompose Σ into B·D²·Bᵀ?** Because computers can only generate standard normal noise $z \sim \mathcal{N}(0, I)$; this noise must be transformed into samples following the $\mathcal{N}(m, \sigma^2 \Sigma)$ distribution. The figure below decomposes the full process into four intuitive steps:
 
-   **Tip**: B and D are recomputed only once per generation after Σ is updated (`eigendecompose(Σ)`), then reused for all λ samples in that generation, which is computationally efficient.
+<p align="center">
+  <img src="asset/cma-es/01_BD_decomposition.png" width="900"/><br/>
+  <i>Geometric decomposition of the sampling formula x = m + σ·B·D·z: ① start from standard spherical noise z → ② D stretches it along coordinate axes into an ellipsoid → ③ B rotates it to the principal-axis direction of Σ → ④ σ scales it and translates it to position m. Blue dots are 200 samples; the red ellipse is the 2σ range.</i>
+</p>
 
-   #### Adaptation of Covariance Σ (the Core of CMA)
+**Tip**: B and D are recomputed only once per generation after Σ is updated (`eigendecompose(Σ)`), then reused for all λ samples in that generation, which is computationally efficient.
 
-   > ⚠️ **Clarifying a common confusion**: this subsection is about **how to update Σ**, which is **a different step** from the earlier "`Σ = B·D²·Bᵀ` eigendecomposition":
-   > - **Sampling phase** (per-generation steps ①②): extract B, D from Σ, and use `x = m + σ·B·D·z` to generate candidates
-   > - **Update phase** (per-generation step ⑤, this subsection): use the feedback from the current generation to **modify Σ itself**
-   > - The two phases connect sequentially: use the old Σ's B, D to sample → evaluate → update Σ → next generation decomposes the new Σ
+#### Adaptation of Covariance Σ (the Core of CMA)
 
-   CMA-ES does not update Σ arbitrarily. Instead, it collects **two independent pieces of evidence** and combines them to make a small adjustment to Σ.
+> ⚠️ **Clarifying a common confusion**: this subsection is about **how to update Σ**, which is **a different step** from the earlier "`Σ = B·D²·Bᵀ` eigendecomposition":
+> - **Sampling phase** (per-generation steps ①②): extract B, D from Σ, and use `x = m + σ·B·D·z` to generate candidates
+> - **Update phase** (per-generation step ⑤, this subsection): use the feedback from the current generation to **modify Σ itself**
+> - The two phases connect sequentially: use the old Σ's B, D to sample → evaluate → update Σ → next generation decomposes the new Σ
 
-   ##### Signal 1: Rank-μ Update — "Where are the top-μ candidates of this generation concentrated?"
+CMA-ES does not update Σ arbitrarily. Instead, it collects **two independent pieces of evidence** and combines them to make a small adjustment to Σ.
 
-   **Intuition**: Look at the μ best candidates selected in the current generation. In which direction are they concentrated? Make Σ wider along that direction.
+##### Signal 1: Rank-μ Update — "Where are the top-μ candidates of this generation concentrated?"
 
-   **Math**:
-   <p align="center"><img src="asset/cma-es/06_rank_mu_formula.png" alt="rank-mu" width="450"/></p>
+**Intuition**: Look at the μ best candidates selected in the current generation. In which direction are they concentrated? Make Σ wider along that direction.
 
-   - $x_i$: the i-th top candidate
-   - $(x_i - m)(x_i - m)^\top$: **outer product**, turning a direction into a matrix
-   - $w_i$: rank weight (highest for top-1, decreasing)
+**Math**:
+<p align="center"><img src="asset/cma-es/06_rank_mu_formula.png" alt="rank-mu" width="450"/></p>
 
-   ##### Signal 2: Rank-1 Update — "In which direction has the mean been moving historically?"
+- $x_i$: the i-th top candidate
+- $(x_i - m)(x_i - m)^\top$: **outer product**, turning a direction into a matrix
+- $w_i$: rank weight (highest for top-1, decreasing)
 
-   **Intuition**: Beyond the current generation, also look at the **accumulated direction of historical mean movement** (evolution path $p_c$). If several consecutive generations move in the same direction, this is a strong signal → reinforce Σ along that long-term direction.
+##### Signal 2: Rank-1 Update — "In which direction has the mean been moving historically?"
 
-   **Math** — first maintain the evolution path (exponential moving average):
-   <p align="center"><img src="asset/cma-es/07_pc_formula.png" alt="pc-update" width="500"/></p>
+**Intuition**: Beyond the current generation, also look at the **accumulated direction of historical mean movement** (evolution path $p_c$). If several consecutive generations move in the same direction, this is a strong signal → reinforce Σ along that long-term direction.
 
-   Then take its outer product as C's contribution:
-   <p align="center"><img src="asset/cma-es/08_rank1_formula.png" alt="rank-1" width="280"/></p>
+**Math** — first maintain the evolution path (exponential moving average):
+<p align="center"><img src="asset/cma-es/07_pc_formula.png" alt="pc-update" width="500"/></p>
 
-   ##### The Two Signals Are Complementary
+Then take its outer product as C's contribution:
+<p align="center"><img src="asset/cma-es/08_rank1_formula.png" alt="rank-1" width="280"/></p>
 
-   | Signal | Pros | Cons |
-   |--------|------|------|
-   | **Rank-μ** | Uses μ samples, **rich information / good for width** | High per-generation noise, can chase randomness |
-   | **Rank-1** | **Historical accumulation, smooth and stable** | Uses only 1 direction (the evolution path), limited width info |
+##### The Two Signals Are Complementary
 
-   → **Combined**: Rank-μ provides "width", Rank-1 provides "long-term directional stability"; together they complement each other.
+| Signal | Pros | Cons |
+|--------|------|------|
+| **Rank-μ** | Uses μ samples, **rich information / good for width** | High per-generation noise, can chase randomness |
+| **Rank-1** | **Historical accumulation, smooth and stable** | Uses only 1 direction (the evolution path), limited width info |
 
-   ##### 🖼️ Geometric Meaning of the Two Signals
+→ **Combined**: Rank-μ provides "width", Rank-1 provides "long-term directional stability"; together they complement each other.
 
-   <p align="center">
-     <img src="asset/cma-es/04_rank_mu_rank_1.png" width="900"/><br/>
-     <i>① Left: Rank-μ uses the sample covariance of top-μ candidates (yellow circles) to construct an ellipse (blue), making Σ wider along that concentration direction; ② Middle: Rank-1 accumulates historical mean movements m₀ → m₅ into the evolution path p_c (thick red arrow); its outer product yields a "rod-shaped" contribution along that direction; ③ Right: new Σ (thick green) = old Σ (dashed) + Rank-μ (blue dotted) + Rank-1 (red dash-dotted), weighted fusion of all three.</i>
-   </p>
+##### 🖼️ Geometric Meaning of the Two Signals
 
-   ##### Full Update Formula for Σ
+<p align="center">
+  <img src="asset/cma-es/04_rank_mu_rank_1.png" width="900"/><br/>
+  <i>① Left: Rank-μ uses the sample covariance of top-μ candidates (yellow circles) to construct an ellipse (blue), making Σ wider along that concentration direction; ② Middle: Rank-1 accumulates historical mean movements m₀ → m₅ into the evolution path p_c (thick red arrow); its outer product yields a "rod-shaped" contribution along that direction; ③ Right: new Σ (thick green) = old Σ (dashed) + Rank-μ (blue dotted) + Rank-1 (red dash-dotted), weighted fusion of all three.</i>
+</p>
 
-   <p align="center"><img src="asset/formulas/f13.png" alt="Σ update formula"/></p>
+##### Full Update Formula for Σ
 
-   - First term $(1 - c_1 - c_\mu) \Sigma$: **preserves most of the old Σ** (prevents drastic oscillations)
-   - Second term $c_1 \cdot p_c p_c^\top$: Rank-1 contribution
-   - Third term $c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top$: Rank-μ contribution
-   - $c_1, c_\mu$ are small weights (typically on the order of 0.01), ensuring the sum remains positive-definite
+<p align="center"><img src="asset/formulas/f13.png" alt="Σ update formula"/></p>
 
-   ##### 🖼️ Complete Per-Generation 6-Step Flow
+- First term $(1 - c_1 - c_\mu) \Sigma$: **preserves most of the old Σ** (prevents drastic oscillations)
+- Second term $c_1 \cdot p_c p_c^\top$: Rank-1 contribution
+- Third term $c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top$: Rank-μ contribution
+- $c_1, c_\mu$ are small weights (typically on the order of 0.01), ensuring the sum remains positive-definite
 
-   Connecting the "sampling" and "update" phases, CMA-ES actually has 6 steps per generation (the earlier 5-step diagram was a simplification; here is the complete version):
+##### 🖼️ Complete Per-Generation 6-Step Flow
 
-   <p align="center">
-     <img src="asset/cma-es/05_6step_loop.png" width="950"/><br/>
-     <i>Full per-generation flow: ① Eigendecompose Σ → obtain B, D ② Use B, D to sample λ candidates ③ Evaluate and rank ④ Update mean m and evolution path p_c ⑤ Use Rank-μ + Rank-1 to update Σ ⑥ Update global step size σ. The next generation returns to ① and decomposes the new Σ.</i>
-   </p>
+Connecting the "sampling" and "update" phases, CMA-ES actually has 6 steps per generation (the earlier 5-step diagram was a simplification; here is the complete version):
 
-   **Key insight**: **"the B, D for sampling" and "the Σ being updated" are two faces of the same matrix** — the update phase modifies Σ itself, and the next generation's sampling phase extracts B, D from the new Σ for candidate generation. `Σ = B·D²·Bᵀ` is a "translation tool", whereas `Σ ← ...` is the actual "learning behavior".
+<p align="center">
+  <img src="asset/cma-es/05_6step_loop.png" width="950"/><br/>
+  <i>Full per-generation flow: ① Eigendecompose Σ → obtain B, D ② Use B, D to sample λ candidates ③ Evaluate and rank ④ Update mean m and evolution path p_c ⑤ Use Rank-μ + Rank-1 to update Σ ⑥ Update global step size σ. The next generation returns to ① and decomposes the new Σ.</i>
+</p>
 
-   ---
+**Key insight**: **"the B, D for sampling" and "the Σ being updated" are two faces of the same matrix** — the update phase modifies Σ itself, and the next generation's sampling phase extracts B, D from the new Σ for candidate generation. `Σ = B·D²·Bᵀ` is a "translation tool", whereas `Σ ← ...` is the actual "learning behavior".
 
-   ### Part 2: Why Did World Models Choose CMA-ES? (Clarifying a Common Misunderstanding)
+---
 
-   #### ⚠️ Misunderstanding: "The dream is not differentiable"
+### Part 2: Why Did World Models Choose CMA-ES? (Clarifying a Common Misunderstanding)
 
-   Strictly speaking, **the dream can be made fully differentiable mathematically**:
+#### ⚠️ Misunderstanding: "The dream is not differentiable"
 
-   | Component | Differentiability |
-   |------|-------|
-   | C (linear Controller) | ✅ differentiable |
-   | LSTM part of M | ✅ differentiable |
-   | MDN output layer (MLP) | ✅ differentiable |
-   | **Sampling z from MDN** | ⚠️ Not differentiable by default; **reparameterization can make it differentiable** (as shown by VAE) |
-   | **done sampling** | ⚠️ Bernoulli is not differentiable by default; **Gumbel-Softmax can make it differentiable** |
+Strictly speaking, **the dream can be made fully differentiable mathematically**:
 
-   **Conclusion**: Ha 2018 chose CMA-ES **not because differentiability was impossible, but as an engineering trade-off** — choosing CMA-ES naturally removes the need to make the entire chain differentiable.
+| Component | Differentiability |
+|------|-------|
+| C (linear Controller) | ✅ differentiable |
+| LSTM part of M | ✅ differentiable |
+| MDN output layer (MLP) | ✅ differentiable |
+| **Sampling z from MDN** | ⚠️ Not differentiable by default; **reparameterization can make it differentiable** (as shown by VAE) |
+| **done sampling** | ⚠️ Bernoulli is not differentiable by default; **Gumbel-Softmax can make it differentiable** |
 
-   #### ✅ Real Reason: Five Conditions Fit CMA-ES Perfectly
+**Conclusion**: Ha 2018 chose CMA-ES **not because differentiability was impossible, but as an engineering trade-off** — choosing CMA-ES naturally removes the need to make the entire chain differentiable.
 
-   | Condition | Actual Situation in World Models Stage 3 | This Means... |
-   |------|------------------------------|----------|
-   | **Parameter count of C** | Extremely small (hundreds to thousands) | Under ~100 dimensions, black-box search is sufficient and gradients have limited advantage |
-   | **Dream stochasticity** | MDN sample + τ=1.15, high fitness noise | Gradient algorithms suffer from noise; evolutionary algorithms are naturally noise-resistant |
-   | **Model exploitation** | C searches for dream bugs to exploit | **Gradients amplify cheating** (they directly reveal how C can exploit loopholes optimally) |
-   | **Long-sequence RNN gradients** | One episode may contain hundreds of frames | Exploding/vanishing gradients; LSTM only mitigates the problem |
-   | **Engineering simplicity** | The 2018 goal was to "first demonstrate feasibility" | CMA-ES requires only a few lines of code |
+#### ✅ Real Reason: Five Conditions Fit CMA-ES Perfectly
 
-   → **This is the true motivation for Ha 2018 choosing CMA-ES**, not a technical limitation.
+| Condition | Actual Situation in World Models Stage 3 | This Means... |
+|------|------------------------------|----------|
+| **Parameter count of C** | Extremely small (hundreds to thousands) | Under ~100 dimensions, black-box search is sufficient and gradients have limited advantage |
+| **Dream stochasticity** | MDN sample + τ=1.15, high fitness noise | Gradient algorithms suffer from noise; evolutionary algorithms are naturally noise-resistant |
+| **Model exploitation** | C searches for dream bugs to exploit | **Gradients amplify cheating** (they directly reveal how C can exploit loopholes optimally) |
+| **Long-sequence RNN gradients** | One episode may contain hundreds of frames | Exploding/vanishing gradients; LSTM only mitigates the problem |
+| **Engineering simplicity** | The 2018 goal was to "first demonstrate feasibility" | CMA-ES requires only a few lines of code |
 
-   ---
+→ **This is the true motivation for Ha 2018 choosing CMA-ES**, not a technical limitation.
 
-   ### Part 3: Can the Bellman Equation Be Used for Backward Solution?
+---
 
-   A common confusion must first be clarified:
+### Part 3: Can the Bellman Equation Be Used for Backward Solution?
 
-   #### ⚠️ The Bellman equation is a Q-learning tool, not an actor tool
+A common confusion must first be clarified:
 
-   ```
-   Bellman: Q(s,a) = r + γ · max_{a'} Q(s', a')
-   ```
+#### ⚠️ The Bellman equation is a Q-learning tool, not an actor tool
 
-   It is used to **learn the value function Q**, not to learn the Policy directly. Concretely:
+```
+Bellman: Q(s,a) = r + γ · max_{a'} Q(s', a')
+```
 
-   | Algorithm | What Bellman Is Used For |
-   |------|------------------|
-   | **DQN** (model-free) | Uses Bellman error as the loss for the Q network; argmax Q selects actions |
-   | **MuZero** (model-based) | Uses Bellman to train Q; Policy is obtained through MCTS search |
-   | **Dreamer V1/V2/V3** | ⭐ **Does not use Bellman**; it fits the critic with λ-return + uses analytic gradient backpropagation for the actor |
+It is used to **learn the value function Q**, not to learn the Policy directly. Concretely:
 
-   #### What if Bellman were forced into World Models?
+| Algorithm | What Bellman Is Used For |
+|------|------------------|
+| **DQN** (model-free) | Uses Bellman error as the loss for the Q network; argmax Q selects actions |
+| **MuZero** (model-based) | Uses Bellman to train Q; Policy is obtained through MCTS search |
+| **Dreamer V1/V2/V3** | ⭐ **Does not use Bellman**; it fits the critic with λ-return + uses analytic gradient backpropagation for the actor |
 
-   **Option A: Change C into a Q network**
-   - This becomes "model-based DQN": learn $Q(z, h, a)$ and select actions by argmax
-   - But CarRacing has **continuous actions**, making `max Q(s', a')` difficult to compute
-   - Moreover, the training target is fitting Q rather than directly maximizing reward, adding an indirect layer
+#### What if Bellman were forced into World Models?
 
-   **Option B: Make the dream differentiable + let the actor directly maximize imagined return** ← the path taken by Dreamer
-   - No Bellman; **backpropagate directly through ∂Return/∂θ_actor**
-   - This is the more modern and more efficient method
+**Option A: Change C into a Q network**
+- This becomes "model-based DQN": learn $Q(z, h, a)$ and select actions by argmax
+- But CarRacing has **continuous actions**, making `max Q(s', a')` difficult to compute
+- Moreover, the training target is fitting Q rather than directly maximizing reward, adding an indirect layer
 
-   → **The idea of Option B** (differentiable dream + backpropagation) is exactly the path implemented by Dreamer in 2020.
+**Option B: Make the dream differentiable + let the actor directly maximize imagined return** ← the path taken by Dreamer
+- No Bellman; **backpropagate directly through ∂Return/∂θ_actor**
+- This is the more modern and more efficient method
 
-   ---
+→ **The idea of Option B** (differentiable dream + backpropagation) is exactly the path implemented by Dreamer in 2020.
 
-   ### Part 4: How Dreamer Implements "Differentiable Dream + Backpropagation" (Later Evolution)
+---
 
-   ```
-   World Models (2018)               Dreamer V1 (2020)
-   ─────────────────────             ──────────────────
-   V (VAE) + M (MDN-RNN) trained in stages → V + M merged into RSSM, end-to-end
-   Tiny C + CMA-ES                 →  actor + critic (hundreds of thousands of parameters each)
-   Dream not intentionally differentiable → ⭐ make the dream fully differentiable + backpropagation
-   No critic                       →  ⭐ critic fits λ-return and provides the actor target
-   ```
+### Part 4: How Dreamer Implements "Differentiable Dream + Backpropagation" (Later Evolution)
 
-   **Core training loop of Dreamer V1**:
-   ```python
-   # rollout in the dream (H=15 steps)
-   s = sample_initial_state()
-   returns = 0
-   for t in range(H):
-       a = actor(s)                            # actor network outputs action
-       s_next = world_model.transition(s, a)   # ✅ differentiable transition
-       r = world_model.reward(s_next)          # ✅ differentiable reward
-       returns += γ**t * r
-   returns += γ**H * critic(s_H)               # critic estimates subsequent residual value
+```
+World Models (2018)               Dreamer V1 (2020)
+─────────────────────             ──────────────────
+V (VAE) + M (MDN-RNN) trained in stages → V + M merged into RSSM, end-to-end
+Tiny C + CMA-ES                 →  actor + critic (hundreds of thousands of parameters each)
+Dream not intentionally differentiable → ⭐ make the dream fully differentiable + backpropagation
+No critic                       →  ⭐ critic fits λ-return and provides the actor target
+```
 
-   # ⭐ backpropagate directly to actor (no Bellman, no sampling estimate)
-   actor_loss = -returns.mean()
-   actor_loss.backward()
-   ```
+**Core training loop of Dreamer V1**:
+```python
+# rollout in the dream (H=15 steps)
+s = sample_initial_state()
+returns = 0
+for t in range(H):
+    a = actor(s)                            # actor network outputs action
+    s_next = world_model.transition(s, a)   # ✅ differentiable transition
+    r = world_model.reward(s_next)          # ✅ differentiable reward
+    returns += γ**t * r
+returns += γ**H * critic(s_H)               # critic estimates subsequent residual value
 
-   Key difference: **Bellman error is not used**; instead, **analytic gradient ∂Return/∂θ_actor** directly maximizes imagined return.
+# ⭐ backpropagate directly to actor (no Bellman, no sampling estimate)
+actor_loss = -returns.mean()
+actor_loss.backward()
+```
 
-   ---
+Key difference: **Bellman error is not used**; instead, **analytic gradient ∂Return/∂θ_actor** directly maximizes imagined return.
 
-   ### Part 5: CMA-ES vs Backpropagation (Summary Comparison)
+---
 
-   | Dimension | CMA-ES (World Models) | Backpropagation (Dreamer) |
-   |------|---------------------|------------------|
-   | Requires gradients? | ❌ No | ✅ Must be differentiable |
-   | Suitable parameter count | Hundreds ~ thousands | Arbitrarily large (hundreds of millions) |
-   | Information utilization | λ × M evaluations per generation | One forward pass + backprop obtains the full gradient |
-   | Convergence speed | Slow | Fast (dense gradient information) |
-   | Robustness (noise) | Strong (selection rather than averaging) | Weak (noise enters gradients directly) |
-   | model exploitation risk | Medium (only sees fitness) | High (gradients directly exploit loopholes) |
-   | Suitable setting | Small black-box networks | Large differentiable networks |
+### Part 5: CMA-ES vs Backpropagation (Summary Comparison)
 
-   **The 2018 → 2020 turning point**: Dreamer made the chain differentiable and enlarged actor parameters → backpropagation became far more efficient than CMA-ES → **CMA-ES exited the historical stage of model-based RL**.
+| Dimension | CMA-ES (World Models) | Backpropagation (Dreamer) |
+|------|---------------------|------------------|
+| Requires gradients? | ❌ No | ✅ Must be differentiable |
+| Suitable parameter count | Hundreds ~ thousands | Arbitrarily large (hundreds of millions) |
+| Information utilization | λ × M evaluations per generation | One forward pass + backprop obtains the full gradient |
+| Convergence speed | Slow | Fast (dense gradient information) |
+| Robustness (noise) | Strong (selection rather than averaging) | Weak (noise enters gradients directly) |
+| model exploitation risk | Medium (only sees fitness) | High (gradients directly exploit loopholes) |
+| Suitable setting | Small black-box networks | Large differentiable networks |
 
-   ---
+**The 2018 → 2020 turning point**: Dreamer made the chain differentiable and enlarged actor parameters → backpropagation became far more efficient than CMA-ES → **CMA-ES exited the historical stage of model-based RL**.
 
-   ### Part 6: Practical Entry Point
+---
 
-   ```python
-   pip install cma
-   import cma
+### Part 6: Practical Entry Point
 
-   def rosenbrock(x):
-       return sum(100*(x[i+1] - x[i]**2)**2 + (1 - x[i])**2 for i in range(len(x)-1))
+```python
+pip install cma
+import cma
 
-   es = cma.CMAEvolutionStrategy(x0=[0.0]*10, sigma0=0.5, inopts={'popsize': 30})
-   es.optimize(rosenbrock)
-   print(es.result.xbest)
-   ```
+def rosenbrock(x):
+    return sum(100*(x[i+1] - x[i]**2)**2 + (1 - x[i])**2 for i in range(len(x)-1))
 
-   Alternatively, use Ha's own [**estool**](https://github.com/hardmaru/estool) — the official evolutionary toolkit for the World Models paper, including CMA-ES, OpenAI ES, PEPG, and others.
+es = cma.CMAEvolutionStrategy(x0=[0.0]*10, sigma0=0.5, inopts={'popsize': 30})
+es.optimize(rosenbrock)
+print(es.result.xbest)
+```
 
-   **Recommended resources**:
-   - [pycma official documentation](https://github.com/CMA-ES/pycma) — includes visualization and tutorials
-   - [Hansen — CMA-ES Tutorial](https://arxiv.org/abs/1604.00772) — written by the original author; essential reading
-   - [David Ha — Visual Guide to Evolution Strategies](https://blog.otoro.net/2017/10/29/visual-evolution-strategies/) ⭐ — beautifully visualized explanation
-   - [OpenAI ES paper (Salimans 2017)](https://arxiv.org/abs/1703.03864) — large-scale ES experiments on Atari
+Alternatively, use Ha's own [**estool**](https://github.com/hardmaru/estool) — the official evolutionary toolkit for the World Models paper, including CMA-ES, OpenAI ES, PEPG, and others.
 
-   ---
+**Recommended resources**:
+- [pycma official documentation](https://github.com/CMA-ES/pycma) — includes visualization and tutorials
+- [Hansen — CMA-ES Tutorial](https://arxiv.org/abs/1604.00772) — written by the original author; essential reading
+- [David Ha — Visual Guide to Evolution Strategies](https://blog.otoro.net/2017/10/29/visual-evolution-strategies/) ⭐ — beautifully visualized explanation
+- [OpenAI ES paper (Salimans 2017)](https://arxiv.org/abs/1703.03864) — large-scale ES experiments on Atari
 
-   ### 🎯 Overall Summary
+---
 
-   > **The dream is technically fully differentiable, but Ha 2018 chose CMA-ES as an engineering trade-off: the Controller is tiny, the dream is noisy, model exploitation might be amplified by gradients, long RNN gradients are difficult, and demo feasibility was the priority. The Bellman equation is a Q-learning tool, not the best choice for actor optimization; the true paradigm of "differentiable dream + backpropagated actor" was implemented by Dreamer 2020, after which CMA-ES receded from model-based RL. The intuition of "solving with gradients" is exactly the core idea of the Dreamer family — but it uses policy gradient rather than Bellman.**
+### 🎯 Overall Summary
 
-   </details>
+> **The dream is technically fully differentiable, but Ha 2018 chose CMA-ES as an engineering trade-off: the Controller is tiny, the dream is noisy, model exploitation might be amplified by gradients, long RNN gradients are difficult, and demo feasibility was the priority. The Bellman equation is a Q-learning tool, not the best choice for actor optimization; the true paradigm of "differentiable dream + backpropagated actor" was implemented by Dreamer 2020, after which CMA-ES receded from model-based RL. The intuition of "solving with gradients" is exactly the core idea of the Dreamer family — but it uses policy gradient rather than Bellman.**
 
-   ##### Stage 4: Deployment / Inference (Validation in the Real Environment)
+</details>
 
-   **🎯 Objective**: run the trained C in the real environment and test whether transfer succeeds. At this stage, **V and M are no longer updated, but they continue to be used online** (V provides perceptual compression; M provides temporal memory h).
+##### Stage 4: Deployment / Inference (Validation in the Real Environment)
 
-   **Core formula**:
-   <p align="center"><img src="asset/formulas/f11.png" alt="formula"/></p>
+**🎯 Objective**: run the trained C in the real environment and test whether transfer succeeds. At this stage, **V and M are no longer updated, but they continue to be used online** (V provides perceptual compression; M provides temporal memory h).
 
-   - Note: **real $z_t$** is used to update $h$ (not the sampled $\hat{z}$ from M)
-   - This is equivalent to M "running alongside" the real environment and maintaining expectations about the future
+**Core formula**:
+<p align="center"><img src="asset/formulas/f11.png" alt="formula"/></p>
 
-   **Concrete code** (paper Algorithm 1):
-   ```python
-   def rollout(controller):
-       """Run one episode in the real environment; used both for evaluation and actual deployment"""
-       obs = env.reset()                      # ← real environment!
-       h = rnn.initial_state()
-       done = False
-       cumulative_reward = 0
-       while not done:
-           z = vae.encode(obs)                # real obs → z
-           a = controller.action([z, h])      # C decides
-           obs, reward, done = env.step(a)    # real environment advances
-           cumulative_reward += reward
-           h = rnn.forward([a, z, h])         # ⭐ update h with real z
-                                              # (rather than the ẑ sampled from M)
-       return cumulative_reward
-   ```
+- Note: **real $z_t$** is used to update $h$ (not the sampled $\hat{z}$ from M)
+- This is equivalent to M "running alongside" the real environment and maintaining expectations about the future
 
-   **Two key details**:
-   1. **`obs` comes from the real environment** (`env.step`, not `M(...)`) — during deployment, the Controller sees the real game
-   2. **`h` is still maintained by M**, but its input uses **real z** (not sampled ẑ)
-      - C receives `[real z, h maintained by M]`, meaning it perceives the present and has "memory/expectation"
+**Concrete code** (paper Algorithm 1):
+```python
+def rollout(controller):
+    """Run one episode in the real environment; used both for evaluation and actual deployment"""
+    obs = env.reset()                      # ← real environment!
+    h = rnn.initial_state()
+    done = False
+    cumulative_reward = 0
+    while not done:
+        z = vae.encode(obs)                # real obs → z
+        a = controller.action([z, h])      # C decides
+        obs, reward, done = env.step(a)    # real environment advances
+        cumulative_reward += reward
+        h = rnn.forward([a, z, h])         # ⭐ update h with real z
+                                           # (rather than the ẑ sampled from M)
+    return cumulative_reward
+```
 
-   **Dream rollout vs real rollout**:
+**Two key details**:
+1. **`obs` comes from the real environment** (`env.step`, not `M(...)`) — during deployment, the Controller sees the real game
+2. **`h` is still maintained by M**, but its input uses **real z** (not sampled ẑ)
+   - C receives `[real z, h maintained by M]`, meaning it perceives the present and has "memory/expectation"
 
-   | Step | Dream rollout (when training C) | Real rollout (deployment / CarRacing training) |
-   |------|------------------------|--------------------------------------|
-   | Where does obs come from? | No obs needed; directly operate on z | `env.reset()` / `env.step()` |
-   | Where does z come from? | `sample_mdn(M output)` (virtual) | `vae.encode(real_obs)` (real) |
-   | h update | Updated inside M's LSTM | The same M via `rnn.forward([a, z, h])` |
-   | reward | Derived from done_logit +1 | Returned by `env.step` |
-   | Purpose | CMA-ES evolutionary fitness | Evaluation / actual gameplay |
+**Dream rollout vs real rollout**:
 
-   ✨ **Key insight**: V and M are **still used during deployment**, not merely as training auxiliaries. At inference time, they perform "perceptual compression + temporal memory," enabling the tiny C to make good decisions.
+| Step | Dream rollout (when training C) | Real rollout (deployment / CarRacing training) |
+|------|------------------------|--------------------------------------|
+| Where does obs come from? | No obs needed; directly operate on z | `env.reset()` / `env.step()` |
+| Where does z come from? | `sample_mdn(M output)` (virtual) | `vae.encode(real_obs)` (real) |
+| h update | Updated inside M's LSTM | The same M via `rnn.forward([a, z, h])` |
+| reward | Derived from done_logit +1 | Returned by `env.step` |
+| Purpose | CMA-ES evolutionary fitness | Evaluation / actual gameplay |
 
-   ##### CarRacing Special Case: Training C in the Real Environment
+✨ **Key insight**: V and M are **still used during deployment**, not merely as training auxiliaries. At inference time, they perform "perceptual compression + temporal memory," enabling the tiny C to make good decisions.
 
-   Because CarRacing has complex rewards, the **Controller was not trained inside the dream**:
+##### CarRacing Special Case: Training C in the Real Environment
 
-   ```python
-   # Directly use the same rollout() function to evaluate fitness
-   # Only difference: env is the real CarRacing environment
-   es = CMAES(...)
-   for gen in range(N):
-       candidates = es.ask()
-       fitnesses = [rollout(C_apply(c)) for c in candidates]   # use real env!
-       es.tell(candidates, fitnesses)
-   ```
+Because CarRacing has complex rewards, the **Controller was not trained inside the dream**:
 
-   - V and M are still trained in Stage 2 (using random rollout data)
-   - But C is trained directly in real CarRacing, using `[z, h]` as C's input (improving score by 40% compared with z alone)
+```python
+# Directly use the same rollout() function to evaluate fitness
+# Only difference: env is the real CarRacing environment
+es = CMAES(...)
+for gen in range(N):
+    candidates = es.ask()
+    fitnesses = [rollout(C_apply(c)) for c in candidates]   # use real env!
+    es.tell(candidates, fitnesses)
+```
 
-   ##### Advantages and Disadvantages of Three-Stage Independent Training
+- V and M are still trained in Stage 2 (using random rollout data)
+- But C is trained directly in real CarRacing, using `[z, h]` as C's input (improving score by 40% compared with z alone)
 
-   ✅ **Advantages**:
-   - Simple and clear; each stage can be debugged independently
-   - V and M are trained on unlabeled data, substantially reducing the need for real-environment interaction
-   - C is extremely small (hundreds of parameters), CMA-ES can solve it, and **no backpropagation is needed**
+##### Advantages and Disadvantages of Three-Stage Independent Training
 
-   ❌ **Disadvantages** (later addressed by Dreamer):
-   - Features learned by V are **not necessarily optimal for decision-making** (only for reconstructing obs)
-   - Independent three-stage training → no joint optimization
-   - Random rollout data in Stage 1 **may not cover critical states** (the iterative training issue mentioned in Section 5 of the paper)
+✅ **Advantages**:
+- Simple and clear; each stage can be debugged independently
+- V and M are trained on unlabeled data, substantially reducing the need for real-environment interaction
+- C is extremely small (hundreds of parameters), CMA-ES can solve it, and **no backpropagation is needed**
 
-   → These limitations directly led to **PlaNet's end-to-end training** and Dreamer's **imagination + backpropagation** route.
+❌ **Disadvantages** (later addressed by Dreamer):
+- Features learned by V are **not necessarily optimal for decision-making** (only for reconstructing obs)
+- Independent three-stage training → no joint optimization
+- Random rollout data in Stage 1 **may not cover critical states** (the iterative training issue mentioned in Section 5 of the paper)
 
-   ✨ Three modules are trained independently and do not rely on shared gradients — a distinctive 2018 design.
+→ These limitations directly led to **PlaNet's end-to-end training** and Dreamer's **imagination + backpropagation** route.
 
-   ### 🧪 Key Experiments
+✨ Three modules are trained independently and do not rely on shared gradients — a distinctive 2018 design.
 
-   #### Learning to Play Doom Inside the Dream
+### 🧪 Key Experiments
 
-   **CarRacing-v0**: the first method to solve the task (score > 900; previous best ~600).
+#### Learning to Play Doom Inside the Dream
 
-   🎬 **CarRacing demo video**:
+**CarRacing-v0**: the first method to solve the task (score > 900; previous best ~600).
 
-   <img src="asset/world-models-2018/mp4_carracing_z_only.gif" width="600"/>
+🎬 **CarRacing demo video**:
 
-   **VizDoom: Take Cover — the soul of the paper**: the Agent is trained **entirely inside M, without touching the real environment**.
+<img src="asset/world-models-2018/mp4_carracing_z_only.gif" width="600"/>
 
-   🎬 **Doom real-environment demo**:
+**VizDoom: Take Cover — the soul of the paper**: the Agent is trained **entirely inside M, without touching the real environment**.
 
-   <img src="asset/world-models-2018/mp4_doom_real.gif" width="600"/>
+🎬 **Doom real-environment demo**:
 
-   1. Run a random policy in the real environment to collect data
-   2. Train V and M
-   3. Treat M as the "dream environment"; the Controller **has never seen the real game**
-   4. Deploy the trained Controller directly into real Doom — **it can play, reaching the completion threshold of 750 surviving frames**
+<img src="asset/world-models-2018/mp4_doom_real.gif" width="600"/>
 
-   🤯 **This was the first clear historical demonstration that an Agent can learn inside its own world model and transfer to the real environment** — the core paradigm of today's model-based RL.
+1. Run a random policy in the real environment to collect data
+2. Train V and M
+3. Treat M as the "dream environment"; the Controller **has never seen the real game**
+4. Deploy the trained Controller directly into real Doom — **it can play, reaching the completion threshold of 750 surviving frames**
 
-   > 💡 For full interactive demos (VAE reconstruction, real-time Doom dream generation), visit the official website: <https://worldmodels.github.io/>
+🤯 **This was the first clear historical demonstration that an Agent can learn inside its own world model and transfer to the real environment** — the core paradigm of today's model-based RL.
 
-   **Interesting "cheating" behavior**: the Agent learned to exploit dream bugs (making fireballs disappear out of nowhere). The authors **increased τ to make the dream harder**, forcing a robust Policy. This foreshadowed a later central challenge: **model exploitation** (Policies exploiting model errors).
+> 💡 For full interactive demos (VAE reconstruction, real-time Doom dream generation), visit the official website: <https://worldmodels.github.io/>
 
-   ### 🔧 Implementation Details Deep-Dive
+**Interesting "cheating" behavior**: the Agent learned to exploit dream bugs (making fireballs disappear out of nowhere). The authors **increased τ to make the dream harder**, forcing a robust Policy. This foreshadowed a later central challenge: **model exploitation** (Policies exploiting model errors).
 
-   This section clarifies three engineering details that are **particularly easy to confuse**; understanding them is necessary for a precise understanding of World Models.
+### 🔧 Implementation Details Deep-Dive
 
-   ---
+This section clarifies three engineering details that are **particularly easy to confuse**; understanding them is necessary for a precise understanding of World Models.
 
-   ##### Detail ①: The Real Structural Difference Between World Model and Model-Free
+---
 
-   Common misunderstanding: "World Model merely adds an M network, and the Controller receives the predicted state."
-   **Reality**: the difference has **four layers**, and the most important one is not network structure.
+##### Detail ①: The Real Structural Difference Between World Model and Model-Free
 
-   | Dimension | Model-Free (DQN) | World Models (Ha 2018) |
-   |------|------------------|----------------------|
-   | **① Number of network modules** | 1 (Q network) | **3** (V + M + C) |
-   | **② Controller input** | Raw observation $o_t$ (or stacked frames) | $[z_t, h_t]$ — compressed observation + RNN hidden state |
-   | **③ Source of Controller training data** | **Real-environment `(s, a, r, s')`** | **Virtual sequences generated by M inside the dream** ⭐ the real revolution |
-   | **④ Optimization method** | Gradient descent + Bellman error | **CMA-ES** (evolutionary algorithm) |
+Common misunderstanding: "World Model merely adds an M network, and the Controller receives the predicted state."
+**Reality**: the difference has **four layers**, and the most important one is not network structure.
 
-   **Data-flow comparison**:
+| Dimension | Model-Free (DQN) | World Models (Ha 2018) |
+|------|------------------|----------------------|
+| **① Number of network modules** | 1 (Q network) | **3** (V + M + C) |
+| **② Controller input** | Raw observation $o_t$ (or stacked frames) | $[z_t, h_t]$ — compressed observation + RNN hidden state |
+| **③ Source of Controller training data** | **Real-environment `(s, a, r, s')`** | **Virtual sequences generated by M inside the dream** ⭐ the real revolution |
+| **④ Optimization method** | Gradient descent + Bellman error | **CMA-ES** (evolutionary algorithm) |
 
-   First examine the **input and output of Q-net** (the basis for understanding DQN):
+**Data-flow comparison**:
 
-   ```mermaid
-   flowchart LR
-       obs["obs<br/>(84×84×4 pixels)"] --> Qnet["Q Network<br/>(CNN + MLP)"]
-       Qnet --> Qvals["Q-value vector<br/>[q₁, q₂, ..., qₙ]"]
-       Qvals --> argmax["argmax"]
-       argmax --> action["action<br/>(e.g., FIRE)"]
-   ```
+First examine the **input and output of Q-net** (the basis for understanding DQN):
 
-   Q-net **learns only one thing** — "the expected total reward of each action under the current obs." **It never predicts the next frame.**
+```mermaid
+flowchart LR
+    obs["obs<br/>(84×84×4 pixels)"] --> Qnet["Q Network<br/>(CNN + MLP)"]
+    Qnet --> Qvals["Q-value vector<br/>[q₁, q₂, ..., qₙ]"]
+    Qvals --> argmax["argmax"]
+    argmax --> action["action<br/>(e.g., FIRE)"]
+```
 
-   **Complete DQN data flow**:
+Q-net **learns only one thing** — "the expected total reward of each action under the current obs." **It never predicts the next frame.**
 
-   ```mermaid
-   flowchart TD
-       Env["Real environment Env"] -->|obs| QNet["Q Network"]
-       QNet --> Qvals["[Q-value × N actions]"]
-       Qvals -->|argmax| action
-       action --> step["env.step(a)"]
-       step -->|"obs', r, done"| Buffer["Replay Buffer<br/>store (s, a, r, s')"]
-       Buffer -->|sample batch| Loss["TD Loss (Bellman):<br/>y = r + γ · max Q(s')<br/>L = MSE(Q(s).gather(a), y)"]
-       Loss -->|backward| Update["Update Q net parameters"]
-       Update -.->|next step| QNet
-   ```
+**Complete DQN data flow**:
 
-   **Characteristic**: **one network; all data flows through the real environment**.
+```mermaid
+flowchart TD
+    Env["Real environment Env"] -->|obs| QNet["Q Network"]
+    QNet --> Qvals["[Q-value × N actions]"]
+    Qvals -->|argmax| action
+    action --> step["env.step(a)"]
+    step -->|"obs', r, done"| Buffer["Replay Buffer<br/>store (s, a, r, s')"]
+    Buffer -->|sample batch| Loss["TD Loss (Bellman):<br/>y = r + γ · max Q(s')<br/>L = MSE(Q(s).gather(a), y)"]
+    Loss -->|backward| Update["Update Q net parameters"]
+    Update -.->|next step| QNet
+```
 
-   **Complete World Models data flow** (four stages):
+**Characteristic**: **one network; all data flows through the real environment**.
 
-   ```mermaid
-   flowchart TD
-       subgraph S1["Stage 1: Collect real data (run once)"]
-           Env1["Real environment"] -->|obs| Random["Random Policy"]
-           Random -->|a| Step1["env.step(a)"]
-           Step1 -->|"(obs, a) sequences<br/>10,000 episodes"| Data["Replay data"]
-       end
+**Complete World Models data flow** (four stages):
 
-       subgraph S2["Stage 2: Train world model (V and M)"]
-           Data --> V["V (VAE)<br/>obs → z (32D)"]
-           Data --> M["M (MDN-RNN)<br/>(z_t, a_t, h_t) →<br/>z_{t+1} distribution + h_{t+1} + done"]
-       end
+```mermaid
+flowchart TD
+    subgraph S1["Stage 1: Collect real data (run once)"]
+        Env1["Real environment"] -->|obs| Random["Random Policy"]
+        Random -->|a| Step1["env.step(a)"]
+        Step1 -->|"(obs, a) sequences<br/>10,000 episodes"| Data["Replay data"]
+    end
 
-       subgraph S3["Stage 3: Train Controller inside the dream (no real environment)"]
-           Init["initial: z₀, h₀"] --> State["(z_t, h_t)"]
-           State --> C["C (linear)<br/>a = W·[z,h] + b"]
-           C -->|a_t| MDream["M (virtual environment)<br/>outputs z', h', done"]
-           MDream -->|"if done: break<br/>else: total_reward += 1"| State
-           MDream -.->|fitness| CMAES["CMA-ES<br/>(evolutionary algorithm)<br/>optimizes C parameters"]
-       end
+    subgraph S2["Stage 2: Train world model (V and M)"]
+        Data --> V["V (VAE)<br/>obs → z (32D)"]
+        Data --> M["M (MDN-RNN)<br/>(z_t, a_t, h_t) →<br/>z_{t+1} distribution + h_{t+1} + done"]
+    end
 
-       subgraph S4["Stage 4: Deploy to the real environment for validation"]
-           Env4["Real environment"] -->|obs| V2["V (encode)"]
-           V2 -->|"z_t"| C2["Controller"]
-           V2 -->|"z_t"| M2["M (RNN)<br/>update h_t → h_{t+1}"]
-           C2 -->|"a_t"| Env4
-           C2 -->|"a_t"| M2
-           M2 -.->|"h_{t+1}<br/>(used next step)"| C2
-       end
+    subgraph S3["Stage 3: Train Controller inside the dream (no real environment)"]
+        Init["initial: z₀, h₀"] --> State["(z_t, h_t)"]
+        State --> C["C (linear)<br/>a = W·[z,h] + b"]
+        C -->|a_t| MDream["M (virtual environment)<br/>outputs z', h', done"]
+        MDream -->|"if done: break<br/>else: total_reward += 1"| State
+        MDream -.->|fitness| CMAES["CMA-ES<br/>(evolutionary algorithm)<br/>optimizes C parameters"]
+    end
 
-       S1 --> S2
-       S2 --> S3
-       S3 --> S4
-   ```
+    subgraph S4["Stage 4: Deploy to the real environment for validation"]
+        Env4["Real environment"] -->|obs| V2["V (encode)"]
+        V2 -->|"z_t"| C2["Controller"]
+        V2 -->|"z_t"| M2["M (RNN)<br/>update h_t → h_{t+1}"]
+        C2 -->|"a_t"| Env4
+        C2 -->|"a_t"| M2
+        M2 -.->|"h_{t+1}<br/>(used next step)"| C2
+    end
 
-   **Core insight**: **where the Controller is trained (dream vs real environment)** is the soul of the World Model paradigm, not "having one additional M network."
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+```
 
-   ---
+**Core insight**: **where the Controller is trained (dream vs real environment)** is the soul of the World Model paradigm, not "having one additional M network."
 
-   ##### Detail ②: Precise Distinction Among the Three "State" Concepts z, h, and o
+---
 
-   World Models contains three related vectors with entirely different roles, which are easy to confuse:
+##### Detail ②: Precise Distinction Among the Three "State" Concepts z, h, and o
 
-   | Symbol | Name | Source | Dimension (VizDoom) | Role |
-   |------|------|------|---------------|------|
-   | $o_t$ | **Observation** | Image provided by the real environment | 64×64×3 | Visible signal from the real world |
-   | $z_t$ | **Latent** (latent variable) | VAE compresses $o_t$ | 64 | **"Compressed representation of the current frame"** (space) |
-   | $h_t$ | **RNN Hidden State** | Maintained inside M (LSTM) | 256 | Summary of **"history + future expectation"** (time) |
+World Models contains three related vectors with entirely different roles, which are easy to confuse:
 
-   **Key distinction**:
-   - $z$ ≈ looking at a single photograph — only indicates what the scene looks like
-   - $h$ ≈ watching the first 5 seconds of a video — enables prediction of what will happen in the next second
-   - **Only the combination $(z, h)$ supports correct decisions**
+| Symbol | Name | Source | Dimension (VizDoom) | Role |
+|------|------|------|---------------|------|
+| $o_t$ | **Observation** | Image provided by the real environment | 64×64×3 | Visible signal from the real world |
+| $z_t$ | **Latent** (latent variable) | VAE compresses $o_t$ | 64 | **"Compressed representation of the current frame"** (space) |
+| $h_t$ | **RNN Hidden State** | Maintained inside M (LSTM) | 256 | Summary of **"history + future expectation"** (time) |
 
-   **Complete one-step transition in the dream**:
-   ```
-   (z_t, h_t, a_t) ──[M]──► (z_{t+1}, h_{t+1})
-                             │           │
-                        MDN sample     LSTM update
-   ```
+**Key distinction**:
+- $z$ ≈ looking at a single photograph — only indicates what the scene looks like
+- $h$ ≈ watching the first 5 seconds of a video — enables prediction of what will happen in the next second
+- **Only the combination $(z, h)$ supports correct decisions**
 
-   M **outputs two things simultaneously**:
-   1. A Gaussian-mixture distribution over $z_{t+1}$ (the compressed next-frame representation obtained via MDN sampling)
-   2. $h_{t+1}$ (the new memory vector naturally updated inside LSTM)
+**Complete one-step transition in the dream**:
+```
+(z_t, h_t, a_t) ──[M]──► (z_{t+1}, h_{t+1})
+                          │           │
+                     MDN sample     LSTM update
+```
 
-   **Key ablation experiment in the paper** (CarRacing):
+M **outputs two things simultaneously**:
+1. A Gaussian-mixture distribution over $z_{t+1}$ (the compressed next-frame representation obtained via MDN sampling)
+2. $h_{t+1}$ (the new memory vector naturally updated inside LSTM)
 
-   | Controller Input | Score |
-   |-----------------|---:|
-   | $z$ only | 632 ± 251 |
-   | **$z + h$** | **906 ± 21** ⭐ |
+**Key ablation experiment in the paper** (CarRacing):
 
-   → Adding $h$ substantially improves performance, proving that $h$ carries "dynamical information" absent from $z$. **This two-path $(z, h)$ design was directly inherited by RSSM in the Dreamer family**.
+| Controller Input | Score |
+|-----------------|---:|
+| $z$ only | 632 ± 251 |
+| **$z + h$** | **906 ± 21** ⭐ |
 
-   ---
+→ Adding $h$ substantially improves performance, proving that $h$ carries "dynamical information" absent from $z$. **This two-path $(z, h)$ design was directly inherited by RSSM in the Dreamer family**.
 
-   ##### Detail ③: How Is Reward $\hat{r}_{t+1}$ Generated Inside the Dream?
+---
 
-   This is a **particularly counterintuitive point** — intuition suggests that M should predict reward, but **World Models 2018 did not explicitly predict continuous reward at all on VizDoom**.
+##### Detail ③: How Is Reward $\hat{r}_{t+1}$ Generated Inside the Dream?
 
-   **Actual method in VizDoom Take Cover**:
-   ```python
-   # Output of M
-   M(z_t, a_t, h_t) → (π, μ, σ), h_{t+1}, done_logit
-                          ↑           ↑          ↑
-                     distribution of next z   hidden state  probability of termination
-   # Note: no reward head!
-   ```
+This is a **particularly counterintuitive point** — intuition suggests that M should predict reward, but **World Models 2018 did not explicitly predict continuous reward at all on VizDoom**.
 
-   **Reward is entirely derived implicitly from `done`** (because Take Cover has a very simple rule: surviving gives +1):
-   ```python
-   total_reward = 0
-   while True:
-       a = C([z, h])
-       (π, μ, σ), h, done_logit = M(z, a, h)
-       z = sample_mdn(π, μ, σ, temperature=1.15)
-       if sigmoid(done_logit) > random():
-           break              # dead, stop
-       total_reward += 1      # still alive, reward implicitly +1
-   ```
+**Actual method in VizDoom Take Cover**:
+```python
+# Output of M
+M(z_t, a_t, h_t) → (π, μ, σ), h_{t+1}, done_logit
+                       ↑           ↑          ↑
+                  distribution of next z   hidden state  probability of termination
+# Note: no reward head!
+```
 
-   **CarRacing uses a more "compromised" treatment** (complex rewards make dream training ineffective):
-   - The **Controller was not trained inside the dream**
-   - Instead, after V+M were trained, C was trained **directly in the real environment** with CMA-ES using z+h as features
+**Reward is entirely derived implicitly from `done`** (because Take Cover has a very simple rule: surviving gives +1):
+```python
+total_reward = 0
+while True:
+    a = C([z, h])
+    (π, μ, σ), h, done_logit = M(z, a, h)
+    z = sample_mdn(π, μ, σ, temperature=1.15)
+    if sigmoid(done_logit) > random():
+        break              # dead, stop
+    total_reward += 1      # still alive, reward implicitly +1
+```
 
-   | Task | Train C inside the dream? | Where does reward come from? |
-   |------|-----------|----------------|
-   | **VizDoom Take Cover** | ✅ Entirely trained inside the dream | Derived from done as +1 |
-   | **CarRacing** | ❌ Trained in the real environment | Provided by the real environment |
+**CarRacing uses a more "compromised" treatment** (complex rewards make dream training ineffective):
+- The **Controller was not trained inside the dream**
+- Instead, after V+M were trained, C was trained **directly in the real environment** with CMA-ES using z+h as features
 
-   → **The most spectacular paradigm, "learning inside the dream," was fully demonstrated by Ha 2018 only on VizDoom, whose reward rule is extremely simple**. This is an **easily overlooked limitation** of the paper.
+| Task | Train C inside the dream? | Where does reward come from? |
+|------|-----------|----------------|
+| **VizDoom Take Cover** | ✅ Entirely trained inside the dream | Derived from done as +1 |
+| **CarRacing** | ❌ Trained in the real environment | Provided by the real environment |
 
-   **How the Dreamer family upgrades this**: add a **reward head** (MLP) to explicitly predict continuous reward:
+→ **The most spectacular paradigm, "learning inside the dream," was fully demonstrated by Ha 2018 only on VizDoom, whose reward rule is extremely simple**. This is an **easily overlooked limitation** of the paper.
 
-   ```python
-   # Dreamer's World Model output
-   RSSM(s_t, a_t) → s_{t+1}, r̂_{t+1}, done
-                        ↑          ↑          ↑
-                    next state  predicted reward  termination
+**How the Dreamer family upgrades this**: add a **reward head** (MLP) to explicitly predict continuous reward:
 
-   # Training: supervise the reward head with real experiences
-   loss_reward = MSE(reward_head(s_pred), batch.real_reward)
+```python
+# Dreamer's World Model output
+RSSM(s_t, a_t) → s_{t+1}, r̂_{t+1}, done
+                     ↑          ↑          ↑
+                 next state  predicted reward  termination
 
-   # During dream rollout, accumulate r̂
-   for t in range(H=15):
-       a = actor(s)
-       s, r_hat, done = world_model.step(s, a)
-       total_value += γ**t * r_hat   # use r̂ to accumulate return
-   ```
+# Training: supervise the reward head with real experiences
+loss_reward = MSE(reward_head(s_pred), batch.real_reward)
 
-   → This is the key upgrade that enables Dreamer to handle **general tasks** (DMC, Atari, Minecraft): **reward is no longer derived from done, but explicitly modeled**.
+# During dream rollout, accumulate r̂
+for t in range(H=15):
+    a = actor(s)
+    s, r_hat, done = world_model.step(s, a)
+    total_value += γ**t * r_hat   # use r̂ to accumulate return
+```
 
-   ---
+→ This is the key upgrade that enables Dreamer to handle **general tasks** (DMC, Atari, Minecraft): **reward is no longer derived from done, but explicitly modeled**.
 
-   ##### Relationship Among the Three Details
+---
 
-   ```
-   ① Structural difference ─► Controller trained inside the dream (the soul)
-                               │
-                               ▼
-   ② z + h dual pathway ─► lets the Controller observe the full "space + time" state
-                               │
-                               ▼
-   ③ Reward handling ─► implicit from done (VizDoom) or explicit reward head (Dreamer)
-   ```
+##### Relationship Among the Three Details
 
-   After these three layers of detail are understood, it becomes possible to:
-   - Understand why RSSM in the Dreamer papers uses a dual `(h, z)` pathway
-   - Understand why Dreamer must add a reward head to scale to general tasks
-   - Avoid mistaking "World Model" for "just model-free with multiple networks"
+```
+① Structural difference ─► Controller trained inside the dream (the soul)
+                            │
+                            ▼
+② z + h dual pathway ─► lets the Controller observe the full "space + time" state
+                            │
+                            ▼
+③ Reward handling ─► implicit from done (VizDoom) or explicit reward head (Dreamer)
+```
 
-   ### 💭 Reflections
+After these three layers of detail are understood, it becomes possible to:
+- Understand why RSSM in the Dreamer papers uses a dual `(h, z)` pathway
+- Understand why Dreamer must add a reward head to scale to general tasks
+- Avoid mistaking "World Model" for "just model-free with multiple networks"
 
-   #### Contributions and Historical Status
+### 💭 Reflections
 
-   ✅ **Contributions**
-   1. First systematic engineering of the World Model paradigm (decoupling V+M+C)
-   2. First demonstration that a policy trained purely in a latent dream can transfer to the real environment
-   3. Probabilistic world model (MDN) foreshadowed today's stochastic generative models
-   4. Elegant combination of evolutionary algorithms and neural networks
-   5. Strong visualization and narrative, attracting many researchers to the field
+#### Contributions and Historical Status
 
-   ⚠️ **Limitations**
-   1. Three-stage independent training; features learned by V may not be optimal for decision-making (only for reconstruction)
-   2. CarRacing / Doom are relatively simple
-   3. MDN-RNN has limited capacity, and long-horizon prediction drifts
-   4. Once V is trained, it is frozen and cannot adapt online
+✅ **Contributions**
+1. First systematic engineering of the World Model paradigm (decoupling V+M+C)
+2. First demonstration that a policy trained purely in a latent dream can transfer to the real environment
+3. Probabilistic world model (MDN) foreshadowed today's stochastic generative models
+4. Elegant combination of evolutionary algorithms and neural networks
+5. Strong visualization and narrative, attracting many researchers to the field
 
-   🌳 **Subsequent Influence**
-   - **PlaNet (2019)**: merges V and M into RSSM and trains end-to-end
-   - **Dreamer v1/v2/v3**: performs actor-critic in latent, replacing evolution
-   - **DreamerV3**: solves 150+ tasks with one set of hyperparameters, including Minecraft diamond collection
-   - **DIAMOND / Genie / Sora**: replace M with diffusion / transformer
+⚠️ **Limitations**
+1. Three-stage independent training; features learned by V may not be optimal for decision-making (only for reconstruction)
+2. CarRacing / Doom are relatively simple
+3. MDN-RNN has limited capacity, and long-horizon prediction drifts
+4. Once V is trained, it is frozen and cannot adapt online
 
-   The Dreamer family is a direct descendant of this paper.
+🌳 **Subsequent Influence**
+- **PlaNet (2019)**: merges V and M into RSSM and trains end-to-end
+- **Dreamer v1/v2/v3**: performs actor-critic in latent, replacing evolution
+- **DreamerV3**: solves 150+ tasks with one set of hyperparameters, including Minecraft diamond collection
+- **DIAMOND / Genie / Sora**: replace M with diffusion / transformer
 
-   #### Reading Suggestions
+The Dreamer family is a direct descendant of this paper.
 
-   1. **Start with the interactive website** <https://worldmodels.github.io/> (all demos are animated and faster than reading the paper)
-   2. The paper is short (~25 pages), but the **appendix is extremely detailed** and worth careful reading
-   3. Focus on: VAE latent dimensionality comparisons, the role of MDN-RNN temperature τ, and the methodology of "training inside the dream"
-   4. Code: [estool](https://github.com/hardmaru/estool) · [WorldModelsExperiments](https://github.com/hardmaru/WorldModelsExperiments)
+#### Reading Suggestions
 
-   #### In One Sentence
+1. **Start with the interactive website** <https://worldmodels.github.io/> (all demos are animated and faster than reading the paper)
+2. The paper is short (~25 pages), but the **appendix is extremely detailed** and worth careful reading
+3. Focus on: VAE latent dimensionality comparisons, the role of MDN-RNN temperature τ, and the methodology of "training inside the dream"
+4. Code: [estool](https://github.com/hardmaru/estool) · [WorldModelsExperiments](https://github.com/hardmaru/WorldModelsExperiments)
 
-   > **This paper first turned "an Agent learning through imagination" from philosophy into a reproducible algorithm. Every module has since been replaced by later work, but the perception–memory–decision triad still dominates the entire model-based RL / world model field.**
+#### In One Sentence
 
-   <details>
-   <summary><b>📚 Learning Resources (Expand)</b></summary>
+> **This paper first turned "an Agent learning through imagination" from philosophy into a reproducible algorithm. Every module has since been replaced by later work, but the perception–memory–decision triad still dominates the entire model-based RL / world model field.**
 
-   **🎬 Video Explanations**
+<details>
+<summary><b>📚 Learning Resources (Expand)</b></summary>
 
-   By the author:
-   - [**David Ha — NeurIPS 2018 Talk**](https://youtu.be/HzA8LRqhujk) ⭐ — presented by the first author, ~30 minutes, highest information density; **strongly recommended as the first video**
-   - David Ha also has Stanford and workshop versions; searching YouTube for "David Ha World Models" will find them
+**🎬 Video Explanations**
 
-   Third-party explanations:
-   - [**Two Minute Papers — "Google's New Dreaming AI"**](https://www.youtube.com/results?search_query=two+minute+papers+world+models) — 5-minute popular explanation for intuition
-   - [**Arxiv Insights — World Models**](https://www.youtube.com/results?search_query=arxiv+insights+world+models) — roughly 10 minutes, clear explanation
-   - [**Yannic Kilcher channel**](https://www.youtube.com/@YannicKilcher) — search "World Models" for a line-by-line paper walkthrough
+By the author:
+- [**David Ha — NeurIPS 2018 Talk**](https://youtu.be/HzA8LRqhujk) ⭐ — presented by the first author, ~30 minutes, highest information density; **strongly recommended as the first video**
+- David Ha also has Stanford and workshop versions; searching YouTube for "David Ha World Models" will find them
 
-   **📝 English Text-and-Figure Explanations**
+Third-party explanations:
+- [**Two Minute Papers — "Google's New Dreaming AI"**](https://www.youtube.com/results?search_query=two+minute+papers+world+models) — 5-minute popular explanation for intuition
+- [**Arxiv Insights — World Models**](https://www.youtube.com/results?search_query=arxiv+insights+world+models) — roughly 10 minutes, clear explanation
+- [**Yannic Kilcher channel**](https://www.youtube.com/@YannicKilcher) — search "World Models" for a line-by-line paper walkthrough
 
-   - [**Official interactive website**](https://worldmodels.github.io/) ⭐ — **best introductory resource**; all demos are animated and far more intuitive than the PDF
-   - [**Lilian Weng — RL surveys and related posts** (Lil'Log)](https://lilianweng.github.io/tags/reinforcement-learning/) — RL tag page covering policy gradient, exploration, meta-RL, etc.; model-based content appears across surveys and [A (Long) Peek into RL](https://lilianweng.github.io/posts/2018-02-19-rl-overview/)
-   - [**The Gradient**](https://thegradient.pub/) — situates World Models within a broader AI narrative
+**📝 English Text-and-Figure Explanations**
 
-   **📝 Chinese Explanations**
+- [**Official interactive website**](https://worldmodels.github.io/) ⭐ — **best introductory resource**; all demos are animated and far more intuitive than the PDF
+- [**Lilian Weng — RL surveys and related posts** (Lil'Log)](https://lilianweng.github.io/tags/reinforcement-learning/) — RL tag page covering policy gradient, exploration, meta-RL, etc.; model-based content appears across surveys and [A (Long) Peek into RL](https://lilianweng.github.io/posts/2018-02-19-rl-overview/)
+- [**The Gradient**](https://thegradient.pub/) — situates World Models within a broader AI narrative
 
-   - **Machine Heart**: [search "World Models Great Dreamer"](https://www.jiqizhixin.com/search?keywords=World%20Models) — detailed Chinese coverage was published when the paper appeared
-   - **PaperWeekly**: WeChat account paperweekly; search "World Models" for a paper guide
-   - **Zhihu**:
-     - Search "World Models Ha Schmidhuber" — multiple highly liked explanations
-     - Search "learning in dreams" / "world model survey" for additional useful notes
-   - **Bilibili**: search "World Models paper close reading" and the "Mu Li reinforcement learning" series for related content
-   - **CSDN / Jianshu**: many paper notes exist; quality varies, so prioritize posts with >100 saves
+**📝 Chinese Explanations**
 
-   **💻 Code and Reproduction**
+- **Machine Heart**: [search "World Models Great Dreamer"](https://www.jiqizhixin.com/search?keywords=World%20Models) — detailed Chinese coverage was published when the paper appeared
+- **PaperWeekly**: WeChat account paperweekly; search "World Models" for a paper guide
+- **Zhihu**:
+  - Search "World Models Ha Schmidhuber" — multiple highly liked explanations
+  - Search "learning in dreams" / "world model survey" for additional useful notes
+- **Bilibili**: search "World Models paper close reading" and the "Mu Li reinforcement learning" series for related content
+- **CSDN / Jianshu**: many paper notes exist; quality varies, so prioritize posts with >100 saves
 
-   - [**hardmaru/WorldModelsExperiments**](https://github.com/hardmaru/WorldModelsExperiments) — official implementation by the authors (TensorFlow; complete but older)
-   - [**hardmaru/estool**](https://github.com/hardmaru/estool) — CMA-ES implementation (used for Controller training)
-   - [**ctallec/world-models**](https://github.com/ctallec/world-models) ⭐ — **PyTorch reproduction** with clean code, recommended for study
-   - [**zacwellmer/WorldModels**](https://github.com/zacwellmer/WorldModels) — another concise PyTorch version
+**💻 Code and Reproduction**
 
-   **🎓 Courses**
+- [**hardmaru/WorldModelsExperiments**](https://github.com/hardmaru/WorldModelsExperiments) — official implementation by the authors (TensorFlow; complete but older)
+- [**hardmaru/estool**](https://github.com/hardmaru/estool) — CMA-ES implementation (used for Controller training)
+- [**ctallec/world-models**](https://github.com/ctallec/world-models) ⭐ — **PyTorch reproduction** with clean code, recommended for study
+- [**zacwellmer/WorldModels**](https://github.com/zacwellmer/WorldModels) — another concise PyTorch version
 
-   - [**UC Berkeley CS 285: Deep RL**](https://rail.eecs.berkeley.edu/deeprlcourse/) — Sergey Levine, model-based RL lectures
-   - [**DeepMind x UCL RL Course**](https://www.deepmind.com/learning-resources/reinforcement-learning-lecture-series-2021) — model-based RL module
-   - [**Stanford CS 234: RL**](https://web.stanford.edu/class/cs234/)
+**🎓 Courses**
 
-   **📚 Further Reading**
+- [**UC Berkeley CS 285: Deep RL**](https://rail.eecs.berkeley.edu/deeprlcourse/) — Sergey Levine, model-based RL lectures
+- [**DeepMind x UCL RL Course**](https://www.deepmind.com/learning-resources/reinforcement-learning-lecture-series-2021) — model-based RL module
+- [**Stanford CS 234: RL**](https://web.stanford.edu/class/cs234/)
 
-   Prehistory (intellectual origins in Schmidhuber's 1990s work):
-   - [Schmidhuber 1990 — *Making the World Differentiable*](http://people.idsia.ch/~juergen/FKI-126-90ocr.pdf)
-   - [Schmidhuber 1991 — *Curious Model-Building Control Systems*](http://people.idsia.ch/~juergen/curiositysab/curiositysab.html)
+**📚 Further Reading**
 
-   Subsequent work (read immediately after World Models):
-   - [PlaNet](https://arxiv.org/abs/1811.04551) — end-to-end version
-   - [DreamerV3](https://arxiv.org/abs/2301.04104) — synthesis and strongest baseline
+Prehistory (intellectual origins in Schmidhuber's 1990s work):
+- [Schmidhuber 1990 — *Making the World Differentiable*](http://people.idsia.ch/~juergen/FKI-126-90ocr.pdf)
+- [Schmidhuber 1991 — *Curious Model-Building Control Systems*](http://people.idsia.ch/~juergen/curiositysab/curiositysab.html)
 
-   **🎯 Recommended Learning Order**
+Subsequent work (read immediately after World Models):
+- [PlaNet](https://arxiv.org/abs/1811.04551) — end-to-end version
+- [DreamerV3](https://arxiv.org/abs/2301.04104) — synthesis and strongest baseline
 
-   ```
-   1. Browse worldmodels.github.io first       (1 hour, intuitive experience)
-   2. Watch David Ha NeurIPS 2018 talk         (30 minutes, author's perspective)
-   3. Read Lil'Log [RL Overview](https://lilianweng.github.io/posts/2018-02-19-rl-overview/) (1 hour, mathematical organization)
-   4. Run the ctallec/world-models code once   (half a day to one day, hands-on)
-   5. Read the full paper + appendix           (1 day, details)
-   6. Move on to PlaNet / DreamerV3            (understand the evolution)
-   ```
+**🎯 Recommended Learning Order**
 
-   </details>
+```
+1. Browse worldmodels.github.io first       (1 hour, intuitive experience)
+2. Watch David Ha NeurIPS 2018 talk         (30 minutes, author's perspective)
+3. Read Lil'Log [RL Overview](https://lilianweng.github.io/posts/2018-02-19-rl-overview/) (1 hour, mathematical organization)
+4. Run the ctallec/world-models code once   (half a day to one day, hands-on)
+5. Read the full paper + appendix           (1 day, details)
+6. Move on to PlaNet / DreamerV3            (understand the evolution)
+```
 
-   > 📁 Supporting materials have been downloaded to `asset/world-models-2018/` (architecture diagrams, VAE/MDN-RNN diagrams, CarRacing & Doom demo videos). Image source: [worldmodels.github.io](https://worldmodels.github.io/), © Ha & Schmidhuber, 2018, for study reference only.
+</details>
 
-2. [**PlaNet**](https://arxiv.org/abs/1811.04551) (2019) — latent dynamics for planning
-3. **Dreamer v1/v2/v3** (2020–2023) — currently the strongest baseline in the RL school; **v3 is essential reading**
-   - [DreamerV1](https://arxiv.org/abs/1912.01603) · [DreamerV2](https://arxiv.org/abs/2010.02193) · [**DreamerV3**](https://arxiv.org/abs/2301.04104)
+> 📁 Supporting materials have been downloaded to `asset/world-models-2018/` (architecture diagrams, VAE/MDN-RNN diagrams, CarRacing & Doom demo videos). Image source: [worldmodels.github.io](https://worldmodels.github.io/), © Ha & Schmidhuber, 2018, for study reference only.
 
-**Generative / Video**
-
-4. [**GAIA-1**](https://arxiv.org/abs/2309.17080) (Wayve, 2023) — autonomous-driving world model ([official blog](https://wayve.ai/thinking/scaling-gaia-1/))
-5. **Genie / Genie 2** (DeepMind, 2024) — interactive generative environments
-   - [Genie paper](https://arxiv.org/abs/2402.15391) · [Genie 2 blog](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)
-6. [**Sora technical report**](https://openai.com/index/video-generation-models-as-world-simulators/) (OpenAI, 2024) — argument for treating video generation as world simulation
-
-**Frontier**
-
-7. **V-JEPA / V-JEPA 2** (Meta / LeCun) — non-generative predictive-embedding route
-   - [V-JEPA](https://arxiv.org/abs/2404.08471) · [V-JEPA 2](https://ai.meta.com/vjepa/) · [I-JEPA](https://arxiv.org/abs/2301.08243)
-8. Other items worth tracking:
-   - [**1X World Model**](https://www.1x.tech/discover/1x-world-model) (humanoid robots)
-   - [**Oasis**](https://oasis-model.github.io/) (Decart, real-time Minecraft generation)
-   - [**DIAMOND**](https://arxiv.org/abs/2405.12399) (NeurIPS 2024, [code](https://github.com/eloialonso/diamond))
 
 </details>
 
 <details>
-<summary><b>4.2 Hands-On Practice</b></summary>
+<summary><b>4.2 PlaNet (2019)</b></summary>
+
+> **Paper**: [arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551)
+>
+> **TL;DR**: Latent dynamics for planning. Turns the World Models' staged training into end-to-end, introducing RSSM — the key architecture. Uses CEM for online planning rather than evolutionary algorithms.
+
+_📝 Detailed deep-dive to be added_
+
+</details>
+
+<details>
+<summary><b>4.3 Dreamer v1 / v2 / v3 (2020–2023)</b></summary>
+
+> **Papers**: [DreamerV1](https://arxiv.org/abs/1912.01603) · [DreamerV2](https://arxiv.org/abs/2010.02193) · [**DreamerV3**](https://arxiv.org/abs/2301.04104)
+>
+> **TL;DR**: Currently the strongest baseline in the RL school. Introduces the paradigm of «training actor-critic via latent imagination + analytic gradient backpropagation». **V3 is essential reading** — same set of hyperparameters works on 150+ tasks, Minecraft diamond from scratch.
+
+_📝 Detailed deep-dive to be added_
+
+</details>
+
+<details>
+<summary><b>4.4 GAIA-1 (Wayve, 2023)</b></summary>
+
+> **Paper**: [arxiv.org/abs/2309.17080](https://arxiv.org/abs/2309.17080) · **Official blog**: <https://wayve.ai/thinking/scaling-gaia-1/>
+>
+> **TL;DR**: Autonomous-driving world model. Wayve uses GAIA to generate driving videos as corner-case augmentation data.
+
+_📝 Detailed deep-dive to be added_
+
+</details>
+
+<details>
+<summary><b>4.5 Genie / Genie 2 (DeepMind, 2024)</b></summary>
+
+> **Papers**: [Genie](https://arxiv.org/abs/2402.15391) · **Genie 2 blog**: <https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/>
+>
+> **TL;DR**: Interactive generative environments. Learns action-conditioned worlds from internet videos; can generate interactive worlds without any game engine.
+
+_📝 Detailed deep-dive to be added_
+
+</details>
+
+<details>
+<summary><b>4.6 Sora Technical Report (OpenAI, 2024)</b></summary>
+
+> **Technical report**: <https://openai.com/index/video-generation-models-as-world-simulators/>
+>
+> **TL;DR**: The narrative of «video generation as a world simulator». Catapulted the concept into the spotlight; capital and media followed rapidly.
+
+_📝 Detailed deep-dive to be added_
+
+</details>
+
+<details>
+<summary><b>4.7 V-JEPA / V-JEPA 2 (Meta / LeCun)</b></summary>
+
+> **Papers**: [V-JEPA](https://arxiv.org/abs/2404.08471) · [V-JEPA 2 official page](https://ai.meta.com/vjepa/) · [I-JEPA](https://arxiv.org/abs/2301.08243)
+>
+> **TL;DR**: Non-generative, predictive-embedding route. LeCun's «anti-Sora» approach — do not predict pixels, only predict abstract representations.
+
+_📝 Detailed deep-dive to be added_
+
+</details>
+
+<details>
+<summary><b>4.8 Other Notable Work</b></summary>
+
+- [**1X World Model**](https://www.1x.tech/discover/1x-world-model) (humanoid robots, 1X Technologies)
+- [**Oasis**](https://oasis-model.github.io/) (Decart, real-time Minecraft generation)
+- [**DIAMOND**](https://arxiv.org/abs/2405.12399) (NeurIPS 2024, [code](https://github.com/eloialonso/diamond)) — Atari visuals are stunning, clean codebase, a good starting point for replicating generative world models
+
+</details>
+
+
+---
+
+## V. Reference Materials
+<details>
+<summary><b>5.1 Hands-On Practice</b></summary>
 
 Minimum-cost path to a working run:
 ```bash
@@ -1544,14 +1605,14 @@ Minimum-cost path to a working run:
 pip install dreamerv3
 # or clone: https://github.com/danijar/dreamerv3
 ```
-- First run Dreamer v3 successfully on [`CartPole`](https://gymnasium.farama.org/environments/classic_control/cart_pole/) / [`Crafter`](https://github.com/danijar/crafter)
+- Start by running Dreamer v3 on [`CartPole`](https://gymnasium.farama.org/environments/classic_control/cart_pole/) / [`Crafter`](https://github.com/danijar/crafter)
 - Then try [`MineRL`](https://github.com/minerllabs/minerl) or [Atari 100k](https://github.com/google-research/rliable)
-- For the generative route, explore the [**open-source Genie reproduction**](https://github.com/1x-technologies/1xgpt) or [**DIAMOND**](https://github.com/eloialonso/diamond) (impressive Atari visuals and clean code)
+- For the generative side, experiment with [**open-source Genie reproduction**](https://github.com/1x-technologies/1xgpt) or [**DIAMOND**](https://github.com/eloialonso/diamond) (stunning Atari visuals, clean code)
 
 </details>
 
 <details>
-<summary><b>4.3 Filling in the Theoretical Foundations</b></summary>
+<summary><b>5.2 Filling in the Theoretical Foundations</b></summary>
 
 - **Variational inference / VAE** (latent modeling) — [Kingma's original paper](https://arxiv.org/abs/1312.6114) · [Lil'Log tutorial](https://lilianweng.github.io/posts/2018-08-12-vae/)
 - **RNN / Transformer / SSM (Mamba)** (temporal dynamics) — [Mamba paper](https://arxiv.org/abs/2312.00752)
@@ -1560,12 +1621,9 @@ pip install dreamerv3
 
 </details>
 
----
-
-## V. Reference Materials
 
 <details>
-<summary><b>5.1 Core Readings</b></summary>
+<summary><b>5.3 Core Readings</b></summary>
 
 - [**A Path Towards Autonomous Machine Intelligence**](https://openreview.net/pdf?id=BZ5a1r-kVsf) — Yann LeCun white paper and JEPA worldview
 - [**Danijar Hafner's homepage**](https://danijar.com/) — author of the Dreamer series; code, papers, and lectures are all available
@@ -1574,7 +1632,7 @@ pip install dreamerv3
 </details>
 
 <details>
-<summary><b>5.2 Survey Papers</b></summary>
+<summary><b>5.4 Survey Papers</b></summary>
 
 - [*World Models for Autonomous Driving: A Survey*](https://arxiv.org/abs/2403.02622) (2024)
 - [*A Survey of World Models for Autonomous Driving*](https://arxiv.org/abs/2501.11260) (2025)
@@ -1583,7 +1641,7 @@ pip install dreamerv3
 </details>
 
 <details>
-<summary><b>5.3 Blog & Resource Collections</b></summary>
+<summary><b>5.5 Blog & Resource Collections</b></summary>
 
 - [**Lil'Log**](https://lilianweng.github.io/) — Lilian Weng, with RL/world-model-related surveys
 - [**The Gradient**](https://thegradient.pub/)

@@ -13,7 +13,7 @@
 - [一、World Model 是什么](#一world-model-是什么)
 - [二、为什么 World Model 火?实际价值在哪?](#二为什么-world-model-火实际价值在哪)
 - [三、三大流派深入对比](#三三大流派深入对比)
-- [四、入门路径](#四入门路径)
+- [四、必读论文](#四必读论文)
 - [五、参考资料汇总](#五参考资料汇总)
 
 ---
@@ -196,7 +196,7 @@ LeCun 的观点很鲜明:
 
 ---
 
-## 四、入门路径
+## 四、必读论文
 
 <details>
 <summary><b>4.0 前置概念:Model-Free vs Model-Based RL</b></summary>
@@ -581,962 +581,1023 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
 </details>
 
 <details>
-<summary><b>4.1 必读论文(按顺序)</b></summary>
+<summary><b>4.1 World Models (Ha & Schmidhuber, 2018)</b></summary>
 
-**奠基**
-1. [**World Models**](https://arxiv.org/abs/1803.10122) (Ha & Schmidhuber, 2018) — 经典起点,VAE + MDN-RNN + 小 controller([交互式网站](https://worldmodels.github.io/))
+> **论文**:[arxiv.org/abs/1803.10122](https://arxiv.org/abs/1803.10122) · **交互式网站**(强烈推荐):<https://worldmodels.github.io/>
+>
+> **要点**:经典起点,VAE + MDN-RNN + 小 controller,第一次在梦境里训练 agent 并迁移到真实环境。
 
-   这篇论文是现代 World Model 研究的**起点和精神图腾**。影响力不在性能多炸裂,而在于第一次清晰展示了:**Agent 可以在自己"做的梦"里学会玩游戏。**
+这篇论文是现代 World Model 研究的**起点和精神图腾**。影响力不在性能多炸裂,而在于第一次清晰展示了:**Agent 可以在自己"做的梦"里学会玩游戏。**
 
-   <p align="center">
-     <img src="asset/world-models-2018/world_model_comic.jpeg" width="600"/><br/>
-     <i>开篇引子:Scott McCloud《Understanding Comics》中的"心智模型"</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/world_model_comic.jpeg" width="600"/><br/>
+  <i>开篇引子:Scott McCloud《Understanding Comics》中的"心智模型"</i>
+</p>
 
-   ### 📖 核心思想
+### 📖 核心思想
 
-   #### 把 Agent 拆成三块
+#### 把 Agent 拆成三块
 
-   <p align="center">
-     <img src="asset/world-models-2018/world_model_overview.png" width="700"/><br/>
-     <i>整体架构:V (Vision) → M (Memory) → C (Controller)</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/world_model_overview.png" width="700"/><br/>
+  <i>整体架构:V (Vision) → M (Memory) → C (Controller)</i>
+</p>
 
-   ```
-      观察 ─►  V (Vision)  ─►  M (Memory)  ─►  C (Controller)  ─►  动作
-               压缩当下          预测未来          决策(很小)
-   ```
+```
+   观察 ─►  V (Vision)  ─►  M (Memory)  ─►  C (Controller)  ─►  动作
+            压缩当下          预测未来          决策(很小)
+```
 
-   | 模块 | 角色 | 实现 | 参数量 |
-   |------|------|------|--------|
-   | **V** — Vision | 把高维图像压成低维表示 | **VAE**(变分自编码器) | ~4M |
-   | **M** — Memory | 学习世界的时间动力学,预测下一步 latent | **MDN-RNN**(混合密度网络 + LSTM) | ~400K |
-   | **C** — Controller | 根据 V 和 M 的信息选动作 | **单层线性网络** | ~1K |
+| 模块 | 角色 | 实现 | 参数量 |
+|------|------|------|--------|
+| **V** — Vision | 把高维图像压成低维表示 | **VAE**(变分自编码器) | ~4M |
+| **M** — Memory | 学习世界的时间动力学,预测下一步 latent | **MDN-RNN**(混合密度网络 + LSTM) | ~400K |
+| **C** — Controller | 根据 V 和 M 的信息选动作 | **单层线性网络** | ~1K |
 
-   <p align="center">
-     <img src="asset/world-models-2018/world_model_schematic.png" width="600"/><br/>
-     <i>Agent 内部数据流:观察 → z → action,h 在 M 内部循环</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/world_model_schematic.png" width="600"/><br/>
+  <i>Agent 内部数据流:观察 → z → action,h 在 M 内部循环</i>
+</p>
 
-   🔑 **关键洞察**:把"感知"和"记忆"做成大模型,把"决策"做得**极小**。决策器小到可以用**进化算法(CMA-ES)** 而不是反向传播来优化。
+🔑 **关键洞察**:把"感知"和"记忆"做成大模型,把"决策"做得**极小**。决策器小到可以用**进化算法(CMA-ES)** 而不是反向传播来优化。
 
-   #### 各模块拆解
+#### 各模块拆解
 
-   **V:VAE 压缩视觉**
+**V:VAE 压缩视觉**
 
-   <p align="center">
-     <img src="asset/world-models-2018/vae.png" width="600"/><br/>
-     <i>VAE 流程:图像 → encoder → latent z → decoder → 重建图像</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/vae.png" width="600"/><br/>
+  <i>VAE 流程:图像 → encoder → latent z → decoder → 重建图像</i>
+</p>
 
-   - 输入 64×64×3 游戏画面 → 输出 **32 维 latent `z`**
-   - 用随机策略采集帧,自监督训练(标准 VAE:重建 + KL)
+- 输入 64×64×3 游戏画面 → 输出 **32 维 latent `z`**
+- 用随机策略采集帧,自监督训练(标准 VAE:重建 + KL)
 
-   **M:MDN-RNN 学习动力学**
+**M:MDN-RNN 学习动力学**
 
-   <p align="center">
-     <img src="asset/world-models-2018/mdn_rnn_new.png" width="600"/><br/>
-     <i>MDN-RNN:LSTM 输出高斯混合分布的参数,采样得到下一步 z</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/mdn_rnn_new.png" width="600"/><br/>
+  <i>MDN-RNN:LSTM 输出高斯混合分布的参数,采样得到下一步 z</i>
+</p>
 
-   **M 的一次前向计算**:
-   ```
-   输入:  (z_t, a_t, h_t)        ← 当前 latent + 动作 + 上一时刻 LSTM 隐藏状态
-   输出:
-     ① (π, μ, σ)                 ← z_{t+1} 的高斯混合分布参数(MDN 部分)
-                                    采样后得到下一帧 latent:z_{t+1} ~ Σ π_k · N(μ_k, σ_k²)
-     ② h_{t+1}                   ← 新的 LSTM 隐藏状态(下一步用)
-     ③ done_logit                ← 是否结束的概率(sigmoid 后)
-   ```
+**M 的一次前向计算**:
+```
+输入:  (z_t, a_t, h_t)        ← 当前 latent + 动作 + 上一时刻 LSTM 隐藏状态
+输出:
+  ① (π, μ, σ)                 ← z_{t+1} 的高斯混合分布参数(MDN 部分)
+                                 采样后得到下一帧 latent:z_{t+1} ~ Σ π_k · N(μ_k, σ_k²)
+  ② h_{t+1}                   ← 新的 LSTM 隐藏状态(下一步用)
+  ③ done_logit                ← 是否结束的概率(sigmoid 后)
+```
 
-   - 为什么是分布?真实世界不可完全预测,用 **MDN(高斯混合)** 捕获多模态不确定性
-   - **温度 τ** 控制采样随机性:τ 越高梦境越混乱,τ 越低越确定
-   - 同样的 MDN-RNN 思路也用于 SketchRNN(预测下一笔笔画):
+- 为什么是分布?真实世界不可完全预测,用 **MDN(高斯混合)** 捕获多模态不确定性
+- **温度 τ** 控制采样随机性:τ 越高梦境越混乱,τ 越低越确定
+- 同样的 MDN-RNN 思路也用于 SketchRNN(预测下一笔笔画):
 
-     <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
+  <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
 
-   **C:超小 Controller**
-   ```python
-   a_t = W_c · [z_t, h_t] + b_c    # 就一个线性层
-   ```
-   - 用 **CMA-ES** 黑盒优化几百个参数,无需反向传播
-   - 哲学意义:**复杂认知交给世界模型,决策本身可以很简单**(像人开车)
+**C:超小 Controller**
+```python
+a_t = W_c · [z_t, h_t] + b_c    # 就一个线性层
+```
+- 用 **CMA-ES** 黑盒优化几百个参数,无需反向传播
+- 哲学意义:**复杂认知交给世界模型,决策本身可以很简单**(像人开车)
 
-   <p align="center">
-     <img src="asset/world-models-2018/mccloud_baseball.jpeg" width="600"/><br/>
-     <i>类比:棒球击球手凭"内部预测模型"在毫秒内反应,而不是显式规划</i>
-   </p>
+<p align="center">
+  <img src="asset/world-models-2018/mccloud_baseball.jpeg" width="600"/><br/>
+  <i>类比:棒球击球手凭"内部预测模型"在毫秒内反应,而不是显式规划</i>
+</p>
 
-   #### 训练流程(三阶段,完全解耦)
+#### 训练流程(三阶段,完全解耦)
 
-   World Models 用一个**分阶段、不端到端**的训练流程,每个阶段单独训完才进下一阶段。
+World Models 用一个**分阶段、不端到端**的训练流程,每个阶段单独训完才进下一阶段。
 
-   **🗺️ 三阶段速览**(含核心公式):
+**🗺️ 三阶段速览**(含核心公式):
 
-   **阶段 1**:随机动作收集 10000 局回放数据
+**阶段 1**:随机动作收集 10000 局回放数据
 
-   <p align="center"><img src="asset/formulas/f01.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f01.png" alt="formula"/></p>
 
-   **阶段 2(a)**:训 VAE(只看图像)→ V
+**阶段 2(a)**:训 VAE(只看图像)→ V
 
-   <p align="center"><img src="asset/formulas/f02.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f02.png" alt="formula"/></p>
 
-   **阶段 2(b)**:训 MDN-RNN(看 z 和 a 的序列)→ M
+**阶段 2(b)**:训 MDN-RNN(看 z 和 a 的序列)→ M
 
-   <p align="center"><img src="asset/formulas/f03.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f03.png" alt="formula"/></p>
 
-   **阶段 3**:冻结 V 和 M,CMA-ES 训 Controller
+**阶段 3**:冻结 V 和 M,CMA-ES 训 Controller
 
-   <p align="center"><img src="asset/formulas/f04.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f04.png" alt="formula"/></p>
 
-   **阶段 4**(部署 / 推理):把训好的 C 放回真实环境
+**阶段 4**(部署 / 推理):把训好的 C 放回真实环境
 
-   <p align="center"><img src="asset/formulas/f05.png" alt="formula"/></p>
+<p align="center"><img src="asset/formulas/f05.png" alt="formula"/></p>
 
-   下面逐阶段详细解释。
+下面逐阶段详细解释。
 
-   ##### 阶段 1:用随机策略收集真实数据
+##### 阶段 1:用随机策略收集真实数据
 
-   **🎯 目的**:让世界模型见过尽可能多样的状态(包括死亡、碰撞等边角情况),所以**用随机策略**而不是强策略。
+**🎯 目的**:让世界模型见过尽可能多样的状态(包括死亡、碰撞等边角情况),所以**用随机策略**而不是强策略。
 
-   **核心公式**:
-   <p align="center"><img src="asset/formulas/f06.png" alt="formula"/></p>
+**核心公式**:
+<p align="center"><img src="asset/formulas/f06.png" alt="formula"/></p>
 
-   即:在真实环境中按均匀随机策略采样,收集 (观察, 动作) 序列。
+即:在真实环境中按均匀随机策略采样,收集 (观察, 动作) 序列。
 
-   **具体代码**:
-   ```python
-   data = []
-   for episode in range(10000):
-       obs = env.reset()
-       done = False
-       while not done:
-           a = env.action_space.sample()    # 随机动作
-           obs_next, reward, done = env.step(a)
-           data.append((obs, a))            # 只存观察和动作
-           obs = obs_next
-   ```
-
-   - **规模**:VizDoom 收集 ~10000 局,每局几百帧 → 总共几百万帧
-   - **存储**:VAE 训练只需要 `obs`,M 训练需要 `(obs, a)` 序列
-   - **不需要 reward**:阶段 1 完全不依赖奖励信号(这是 World Models 范式的灵活性)
-
-   ##### 阶段 2(a):训 VAE → 得到 V
-
-   **🎯 目的**:学一个**压缩-重建**模型,把 64×64×3 像素压成 32 维 latent z,作为后续 M 和 C 的输入特征。
-
-   **核心公式**(VAE ELBO):
-   <p align="center"><img src="asset/formulas/f07.png" alt="formula"/></p>
-
-   - 编码器:`q(z|o) = N(μ_φ(o), σ_φ(o)²)` —— 把图像编码成高斯分布
-   - 解码器:`p(o|z)` —— 从 z 重建图像
-   - **结果**:`encode: o → z`(32 维) + `decode: z → o`
-
-   **具体代码**:
-   ```python
-   for epoch in range(N):
-       for batch in shuffle(data):
-           obs = batch.obs                  # 64×64×3 像素
-           mu, sigma = VAE.encoder(obs)     # 输出 latent 分布参数
-           z = mu + sigma * randn()         # reparameterization
-           obs_recon = VAE.decoder(z)       # 重建图像
+**具体代码**:
+```python
+data = []
+for episode in range(10000):
+    obs = env.reset()
+    done = False
+    while not done:
+        a = env.action_space.sample()    # 随机动作
+        obs_next, reward, done = env.step(a)
+        data.append((obs, a))            # 只存观察和动作
+        obs = obs_next
+```
 
-           loss = MSE(obs_recon, obs) + KL(mu, sigma)
-           loss.backward()
-   ```
+- **规模**:VizDoom 收集 ~10000 局,每局几百帧 → 总共几百万帧
+- **存储**:VAE 训练只需要 `obs`,M 训练需要 `(obs, a)` 序列
+- **不需要 reward**:阶段 1 完全不依赖奖励信号(这是 World Models 范式的灵活性)
+
+##### 阶段 2(a):训 VAE → 得到 V
+
+**🎯 目的**:学一个**压缩-重建**模型,把 64×64×3 像素压成 32 维 latent z,作为后续 M 和 C 的输入特征。
+
+**核心公式**(VAE ELBO):
+<p align="center"><img src="asset/formulas/f07.png" alt="formula"/></p>
+
+- 编码器:`q(z|o) = N(μ_φ(o), σ_φ(o)²)` —— 把图像编码成高斯分布
+- 解码器:`p(o|z)` —— 从 z 重建图像
+- **结果**:`encode: o → z`(32 维) + `decode: z → o`
+
+**具体代码**:
+```python
+for epoch in range(N):
+    for batch in shuffle(data):
+        obs = batch.obs                  # 64×64×3 像素
+        mu, sigma = VAE.encoder(obs)     # 输出 latent 分布参数
+        z = mu + sigma * randn()         # reparameterization
+        obs_recon = VAE.decoder(z)       # 重建图像
 
-   - **单纯无监督** —— 只看 obs,完全不看 action / reward
-   - **冻结 V** —— 下阶段不再更新
+        loss = MSE(obs_recon, obs) + KL(mu, sigma)
+        loss.backward()
+```
 
-   ##### 阶段 2(b):训 MDN-RNN → 得到 M
+- **单纯无监督** —— 只看 obs,完全不看 action / reward
+- **冻结 V** —— 下阶段不再更新
 
-   **🎯 目的**:学一个**时序预测**模型,让 M 能根据 `(当前 z, 当前动作, 历史记忆 h)` 预测**下一个 z 的概率分布**以及是否结束。
+##### 阶段 2(b):训 MDN-RNN → 得到 M
 
-   **核心公式**:
-   <p align="center"><img src="asset/formulas/f08.png" alt="formula"/></p>
+**🎯 目的**:学一个**时序预测**模型,让 M 能根据 `(当前 z, 当前动作, 历史记忆 h)` 预测**下一个 z 的概率分布**以及是否结束。
 
-   其中 z 的预测分布是 K 个高斯的混合:
-   <p align="center"><img src="asset/formulas/f09.png" alt="formula"/></p>
+**核心公式**:
+<p align="center"><img src="asset/formulas/f08.png" alt="formula"/></p>
 
-   - LSTM 输出 `(π, μ, σ)` 作为混合分布参数
-   - 训练目标:让真实的 `z_{t+1}` 在这个分布下概率最大
+其中 z 的预测分布是 K 个高斯的混合:
+<p align="center"><img src="asset/formulas/f09.png" alt="formula"/></p>
 
-   **具体代码**:
-   ```python
-   # 先用 V 把所有 obs 编码成 z 序列
-   for episode in data:
-       z_seq = [VAE.encode(obs) for obs in episode.obs]
-       a_seq = episode.actions
+- LSTM 输出 `(π, μ, σ)` 作为混合分布参数
+- 训练目标:让真实的 `z_{t+1}` 在这个分布下概率最大
 
-   for epoch in range(N):
-       for (z_seq, a_seq) in episodes:
-           h = zeros(256)
-           for t in range(len(z_seq) - 1):
-               (π, μ, σ), h, done_logit = M(z_seq[t], a_seq[t], h)
-               loss_z = -log_mixture_gaussian(z_seq[t+1], π, μ, σ)
-               loss_done = BCE(done_logit, real_done[t])
-               loss = loss_z + loss_done
-               loss.backward()
-   ```
+**具体代码**:
+```python
+# 先用 V 把所有 obs 编码成 z 序列
+for episode in data:
+    z_seq = [VAE.encode(obs) for obs in episode.obs]
+    a_seq = episode.actions
 
-   - **冻结 M** —— 下阶段不再更新
+for epoch in range(N):
+    for (z_seq, a_seq) in episodes:
+        h = zeros(256)
+        for t in range(len(z_seq) - 1):
+            (π, μ, σ), h, done_logit = M(z_seq[t], a_seq[t], h)
+            loss_z = -log_mixture_gaussian(z_seq[t+1], π, μ, σ)
+            loss_done = BCE(done_logit, real_done[t])
+            loss = loss_z + loss_done
+            loss.backward()
+```
 
-   ##### 阶段 3:用 CMA-ES 在梦境里训 C
+- **冻结 M** —— 下阶段不再更新
 
-   **🎯 目的**:让 Controller 学会"在梦里能拿高分"的策略 —— 完全不碰真实环境,只用 V+M 构成的虚拟世界来训。这是 **VizDoom Take Cover** 的做法(CarRacing 用真实环境训,见下文)。
+##### 阶段 3:用 CMA-ES 在梦境里训 C
 
-   **核心公式**:
-   <p align="center"><img src="asset/formulas/f10.png" alt="formula"/></p>
+**🎯 目的**:让 Controller 学会"在梦里能拿高分"的策略 —— 完全不碰真实环境,只用 V+M 构成的虚拟世界来训。这是 **VizDoom Take Cover** 的做法(CarRacing 用真实环境训,见下文)。
 
-   - 目标:找到使**梦境累积奖励**最大的 Controller 参数
-   - `r_t = +1`(每存活一帧,VizDoom 的奖励规则)
-   - 用 **CMA-ES**(无梯度黑盒优化)而非反向传播
+**核心公式**:
+<p align="center"><img src="asset/formulas/f10.png" alt="formula"/></p>
 
-   **梦境 rollout 函数**:
-   ```python
-   def dream_rollout(controller_params):
-       """完全在 M 里跑一局,返回 fitness"""
-       z = sample_initial_z()           # 从真实数据里抽一个起点 z
-       h = rnn.initial_state()
-       cumulative_reward = 0
-       while True:
-           a = C_apply(controller_params, [z, h])         # ← 用候选参数算动作
-           (π, μ, σ), h, done_logit = M(z, a, h)           # ← M 当虚拟环境
-           z = sample_mdn(π, μ, σ, temperature=1.15)       # ← 温度防作弊
-           if sigmoid(done_logit) > random():
-               break
-           cumulative_reward += 1                          # 活一帧 +1
-       return cumulative_reward
-   ```
+- 目标:找到使**梦境累积奖励**最大的 Controller 参数
+- `r_t = +1`(每存活一帧,VizDoom 的奖励规则)
+- 用 **CMA-ES**(无梯度黑盒优化)而非反向传播
 
-   **CMA-ES 进化优化循环**:
-   ```python
-   es = CMAES(initial_mean=zeros(C.param_count), sigma=0.1)
-   for generation in range(800):
-       # 1. CMA-ES 生成一批候选参数(population_size=64)
-       candidates = es.ask()
-       # 2. 每个候选都跑 N 次梦境,平均 fitness
-       fitnesses = [
-           mean([dream_rollout(c) for _ in range(16)])
-           for c in candidates
-       ]
-       # 3. 把 fitness 反馈给 CMA-ES,它会更新分布
-       es.tell(candidates, fitnesses)
+**梦境 rollout 函数**:
+```python
+def dream_rollout(controller_params):
+    """完全在 M 里跑一局,返回 fitness"""
+    z = sample_initial_z()           # 从真实数据里抽一个起点 z
+    h = rnn.initial_state()
+    cumulative_reward = 0
+    while True:
+        a = C_apply(controller_params, [z, h])         # ← 用候选参数算动作
+        (π, μ, σ), h, done_logit = M(z, a, h)           # ← M 当虚拟环境
+        z = sample_mdn(π, μ, σ, temperature=1.15)       # ← 温度防作弊
+        if sigmoid(done_logit) > random():
+            break
+        cumulative_reward += 1                          # 活一帧 +1
+    return cumulative_reward
+```
 
-   best_C = es.best_solution()           # 训好的 Controller
-   ```
+**CMA-ES 进化优化循环**:
+```python
+es = CMAES(initial_mean=zeros(C.param_count), sigma=0.1)
+for generation in range(800):
+    # 1. CMA-ES 生成一批候选参数(population_size=64)
+    candidates = es.ask()
+    # 2. 每个候选都跑 N 次梦境,平均 fitness
+    fitnesses = [
+        mean([dream_rollout(c) for _ in range(16)])
+        for c in candidates
+    ]
+    # 3. 把 fitness 反馈给 CMA-ES,它会更新分布
+    es.tell(candidates, fitnesses)
 
-   - **无梯度**:CMA-ES 是黑盒优化,只看 fitness 不看梯度
-   - **并行友好**:64 个候选可同时跑梦境(GPU batch)
-   - **多次评估**:每个候选 rollout 16 次取均值,降低梦境随机性带来的噪声
+best_C = es.best_solution()           # 训好的 Controller
+```
 
-   <details>
-   <summary><b>📌 概念补充:CMA-ES 详解 + 为什么不用反向传播 / Bellman?</b></summary>
+- **无梯度**:CMA-ES 是黑盒优化,只看 fitness 不看梯度
+- **并行友好**:64 个候选可同时跑梦境(GPU batch)
+- **多次评估**:每个候选 rollout 16 次取均值,降低梦境随机性带来的噪声
 
-   **CMA-ES** = Covariance Matrix Adaptation Evolution Strategy(协方差矩阵自适应进化策略),Nikolaus Hansen 1996 年提出,是**黑盒连续优化**最成功的进化算法之一。
+<details>
+<summary><b>📌 概念补充:CMA-ES 详解 + 为什么不用反向传播 / Bellman?</b></summary>
 
-   > ⚠️ **符号约定**:标准 CMA-ES 文献用 **C** 表示协方差矩阵,但 World Models 论文里 **C** 已经被用作 **Controller** 的代号。为避免混淆,本节用 **Σ**(标准统计学符号)表示协方差矩阵。所以"Controller C"和"协方差 Σ"是两个完全不同的对象。
+**CMA-ES** = Covariance Matrix Adaptation Evolution Strategy(协方差矩阵自适应进化策略),Nikolaus Hansen 1996 年提出,是**黑盒连续优化**最成功的进化算法之一。
 
-   ---
+> ⚠️ **符号约定**:标准 CMA-ES 文献用 **C** 表示协方差矩阵,但 World Models 论文里 **C** 已经被用作 **Controller** 的代号。为避免混淆,本节用 **Σ**(标准统计学符号)表示协方差矩阵。所以"Controller C"和"协方差 Σ"是两个完全不同的对象。
 
-   ### Part 1:CMA-ES 是什么 —— 三句话原理
+---
 
-   1. **维护一个多元高斯分布** $\mathcal{N}(m, \sigma^2 \Sigma)$ 描述「当前估计的最优解可能位置」
-   2. **每一代撒 λ 个候选,选最好的 μ 个**(μ ≈ λ/2)
-   3. **更新均值 m、协方差 Σ、步长 σ**,让分布慢慢"瞄准"最优区域
+### Part 1:CMA-ES 是什么 —— 三句话原理
 
-   **比喻 —— 蒙眼找山顶**:撒一群人到当前位置周围 → 让他们汇报海拔 → 看最高的几个人在哪个方向 → 集体往那边移动 → 同时调整撒人的形状(椭球)和范围(步长)。
+1. **维护一个多元高斯分布** $\mathcal{N}(m, \sigma^2 \Sigma)$ 描述「当前估计的最优解可能位置」
+2. **每一代撒 λ 个候选,选最好的 μ 个**(μ ≈ λ/2)
+3. **更新均值 m、协方差 Σ、步长 σ**,让分布慢慢"瞄准"最优区域
 
-   #### 🖼️ 直观看一眼:CMA-ES 怎么收敛?
+**比喻 —— 蒙眼找山顶**:撒一群人到当前位置周围 → 让他们汇报海拔 → 看最高的几个人在哪个方向 → 集体往那边移动 → 同时调整撒人的形状(椭球)和范围(步长)。
 
-   <p align="center">
-     <img src="asset/cma-es/02_generations_evolution.png" width="900"/><br/>
-     <i>CMA-ES 在 2D 目标函数 f(x,y) = −((x−3)² + 5(y+1)²) 上的进化过程。绿色三角是真实最优 (3, −1),红星是当前均值 m,红色椭圆是当前 N(m, σ²C) 的 2σ 范围,白点是采样的候选,黄色圈是选出来的 top-μ。20 代就稳稳收敛到最优。</i>
-   </p>
+#### 🖼️ 直观看一眼:CMA-ES 怎么收敛?
 
-   注意观察:
-   - **第 0 代**:m 在 (0, 0),椭圆是圆(C = I),范围大
-   - **第 3 代**:m 已经被往右下方向"拖"走(top-μ 都在那边),椭圆开始变扁
-   - **第 8 代**:m 接近真实最优,椭圆继续缩小、变成扁长形(因为 y 方向梯度更陡)
-   - **第 20 代**:几乎完美收敛
+<p align="center">
+  <img src="asset/cma-es/02_generations_evolution.png" width="900"/><br/>
+  <i>CMA-ES 在 2D 目标函数 f(x,y) = −((x−3)² + 5(y+1)²) 上的进化过程。绿色三角是真实最优 (3, −1),红星是当前均值 m,红色椭圆是当前 N(m, σ²C) 的 2σ 范围,白点是采样的候选,黄色圈是选出来的 top-μ。20 代就稳稳收敛到最优。</i>
+</p>
 
-   #### 每代 5 步循环
+注意观察:
+- **第 0 代**:m 在 (0, 0),椭圆是圆(C = I),范围大
+- **第 3 代**:m 已经被往右下方向"拖"走(top-μ 都在那边),椭圆开始变扁
+- **第 8 代**:m 接近真实最优,椭圆继续缩小、变成扁长形(因为 y 方向梯度更陡)
+- **第 20 代**:几乎完美收敛
 
-   <p align="center">
-     <img src="asset/cma-es/03_5step_loop.png" width="900"/><br/>
-     <i>CMA-ES 每代的 5 步流程图</i>
-   </p>
+#### 每代 5 步循环
 
-   ```
-   ① 采样:x_i = m + σ·B·D·z_i,  z_i ~ N(0, I)
-   ② 评估:计算 f(x_i)
-   ③ 排序:按 fitness 排,取前 μ 个
-   ④ 更新均值:m_new = Σ w_i · x_i
-   ⑤ 更新协方差 Σ 和步长 σ(看进化路径)
-   ```
+<p align="center">
+  <img src="asset/cma-es/03_5step_loop.png" width="900"/><br/>
+  <i>CMA-ES 每代的 5 步流程图</i>
+</p>
 
-   关键超参:**λ** (population) = 16~64,**μ** = λ/2,**σ** 初始 = 0.1,代数 = 几百到几千。
+```
+① 采样:x_i = m + σ·B·D·z_i,  z_i ~ N(0, I)
+② 评估:计算 f(x_i)
+③ 排序:按 fitness 排,取前 μ 个
+④ 更新均值:m_new = Σ w_i · x_i
+⑤ 更新协方差 Σ 和步长 σ(看进化路径)
+```
 
-   #### 🔍 步骤①里的 B 和 D 是什么?
+关键超参:**λ** (population) = 16~64,**μ** = λ/2,**σ** 初始 = 0.1,代数 = 几百到几千。
 
-   $B$ 和 $D$ 是协方差矩阵 $\Sigma$ 的**特征分解**:
-   <p align="center"><img src="asset/formulas/f12.png" alt="formula"/></p>
+#### 🔍 步骤①里的 B 和 D 是什么?
 
-   - **B**:正交矩阵(Σ 的特征向量) —— 几何上是**旋转**,把标准坐标轴转到 Σ 椭球的主轴方向
-   - **D**:对角矩阵(Σ 特征值的平方根) —— 几何上是**沿坐标轴方向缩放**
+$B$ 和 $D$ 是协方差矩阵 $\Sigma$ 的**特征分解**:
+<p align="center"><img src="asset/formulas/f12.png" alt="formula"/></p>
 
-   **为什么要拆 Σ 成 B·D²·Bᵀ?** 因为计算机只能生成标准正态噪声 $z \sim \mathcal{N}(0, I)$,需要将其变换成符合 $\mathcal{N}(m, \sigma^2 \Sigma)$ 分布的样本。下图把整个过程拆成 4 步直观展示:
+- **B**:正交矩阵(Σ 的特征向量) —— 几何上是**旋转**,把标准坐标轴转到 Σ 椭球的主轴方向
+- **D**:对角矩阵(Σ 特征值的平方根) —— 几何上是**沿坐标轴方向缩放**
 
-   <p align="center">
-     <img src="asset/cma-es/01_BD_decomposition.png" width="900"/><br/>
-     <i>采样公式 x = m + σ·B·D·z 的几何分解:① 从标准球形噪声 z 出发 → ② D 沿坐标轴拉伸成椭球 → ③ B 旋转到 Σ 的主轴方向 → ④ σ 放大并平移到 m 位置。蓝点是 200 个采样,红色椭圆是 2σ 范围。</i>
-   </p>
+**为什么要拆 Σ 成 B·D²·Bᵀ?** 因为计算机只能生成标准正态噪声 $z \sim \mathcal{N}(0, I)$,需要将其变换成符合 $\mathcal{N}(m, \sigma^2 \Sigma)$ 分布的样本。下图把整个过程拆成 4 步直观展示:
 
-   **小贴士**:每代只在 Σ 更新后重新算一次 B 和 D(`eigendecompose(Σ)`),然后这一代的 λ 次采样全部复用,计算上很划算。
+<p align="center">
+  <img src="asset/cma-es/01_BD_decomposition.png" width="900"/><br/>
+  <i>采样公式 x = m + σ·B·D·z 的几何分解:① 从标准球形噪声 z 出发 → ② D 沿坐标轴拉伸成椭球 → ③ B 旋转到 Σ 的主轴方向 → ④ σ 放大并平移到 m 位置。蓝点是 200 个采样,红色椭圆是 2σ 范围。</i>
+</p>
 
-   #### 协方差 Σ 的自适应(CMA 的灵魂)
+**小贴士**:每代只在 Σ 更新后重新算一次 B 和 D(`eigendecompose(Σ)`),然后这一代的 λ 次采样全部复用,计算上很划算。
 
-   > ⚠️ **先澄清一个常见混淆**:本小节讲的是「**如何更新 Σ**」,与前面「`Σ = B·D²·Bᵀ` 特征分解」是**两个不同的步骤**:
-   > - **采样阶段**(每代步骤 ①②):从 Σ 中提取 B、D,用 `x = m + σ·B·D·z` 生成候选
-   > - **更新阶段**(每代步骤 ⑤,即本节):用本代的反馈信息**修改 Σ 本身**
-   > - 两步前后衔接:先用旧 Σ 的 B、D 采样 → 评估 → 再更新 Σ → 下一代再分解新 Σ
+#### 协方差 Σ 的自适应(CMA 的灵魂)
 
-   CMA-ES 不是凭空更新 Σ,而是收集**两种独立证据**,合并后小幅度调整 Σ。
+> ⚠️ **先澄清一个常见混淆**:本小节讲的是「**如何更新 Σ**」,与前面「`Σ = B·D²·Bᵀ` 特征分解」是**两个不同的步骤**:
+> - **采样阶段**(每代步骤 ①②):从 Σ 中提取 B、D,用 `x = m + σ·B·D·z` 生成候选
+> - **更新阶段**(每代步骤 ⑤,即本节):用本代的反馈信息**修改 Σ 本身**
+> - 两步前后衔接:先用旧 Σ 的 B、D 采样 → 评估 → 再更新 Σ → 下一代再分解新 Σ
 
-   ##### 信号 1:Rank-μ Update —— "本代选优集中在哪个方向?"
+CMA-ES 不是凭空更新 Σ,而是收集**两种独立证据**,合并后小幅度调整 Σ。
 
-   **直觉**:观察本代选出的 μ 个最优候选,它们集中在哪个方向?Σ 就在那个方向加粗。
+##### 信号 1:Rank-μ Update —— "本代选优集中在哪个方向?"
 
-   **数学**:
-   <p align="center"><img src="asset/cma-es/06_rank_mu_formula.png" alt="rank-mu" width="450"/></p>
+**直觉**:观察本代选出的 μ 个最优候选,它们集中在哪个方向?Σ 就在那个方向加粗。
 
-   - $x_i$:第 i 个最优候选
-   - $(x_i - m)(x_i - m)^\top$:**外积**,把方向变成矩阵
-   - $w_i$:排名权重(top 1 权重最大,递减)
+**数学**:
+<p align="center"><img src="asset/cma-es/06_rank_mu_formula.png" alt="rank-mu" width="450"/></p>
 
-   ##### 信号 2:Rank-1 Update —— "历代均值在往哪走?"
+- $x_i$:第 i 个最优候选
+- $(x_i - m)(x_i - m)^\top$:**外积**,把方向变成矩阵
+- $w_i$:排名权重(top 1 权重最大,递减)
 
-   **直觉**:不只看本代,还要看**历代均值移动的累积方向**(进化路径 $p_c$)。如果连续几代都往同一方向走,这就是个强信号 → 沿这个长期方向加强 Σ。
+##### 信号 2:Rank-1 Update —— "历代均值在往哪走?"
 
-   **数学** —— 先维护进化路径(指数滑动平均):
-   <p align="center"><img src="asset/cma-es/07_pc_formula.png" alt="pc-update" width="500"/></p>
+**直觉**:不只看本代,还要看**历代均值移动的累积方向**(进化路径 $p_c$)。如果连续几代都往同一方向走,这就是个强信号 → 沿这个长期方向加强 Σ。
 
-   再取它的外积作为 C 的贡献:
-   <p align="center"><img src="asset/cma-es/08_rank1_formula.png" alt="rank-1" width="280"/></p>
+**数学** —— 先维护进化路径(指数滑动平均):
+<p align="center"><img src="asset/cma-es/07_pc_formula.png" alt="pc-update" width="500"/></p>
 
-   ##### 两个信号互补
+再取它的外积作为 C 的贡献:
+<p align="center"><img src="asset/cma-es/08_rank1_formula.png" alt="rank-1" width="280"/></p>
 
-   | 信号 | 优点 | 缺点 |
-   |------|------|------|
-   | **Rank-μ** | 用 μ 个样本,**信息量大、宽度好** | 单代噪声大,容易跟着随机走 |
-   | **Rank-1** | **历代累积、稳定平滑** | 只用 1 个方向(进化路径),宽度信息少 |
+##### 两个信号互补
 
-   → **合并起来**:Rank-μ 给"宽度",Rank-1 给"长期方向稳定性",互补。
+| 信号 | 优点 | 缺点 |
+|------|------|------|
+| **Rank-μ** | 用 μ 个样本,**信息量大、宽度好** | 单代噪声大,容易跟着随机走 |
+| **Rank-1** | **历代累积、稳定平滑** | 只用 1 个方向(进化路径),宽度信息少 |
 
-   ##### 🖼️ 两个信号的几何含义图
+→ **合并起来**:Rank-μ 给"宽度",Rank-1 给"长期方向稳定性",互补。
 
-   <p align="center">
-     <img src="asset/cma-es/04_rank_mu_rank_1.png" width="900"/><br/>
-     <i>① 左:Rank-μ 用 top-μ 候选(黄圈)的样本协方差构造一个椭圆(蓝色),把 Σ 朝那个集中方向加粗;② 中:Rank-1 累积历代均值 m₀ → m₅ 的移动方向得到进化路径 p_c(红色粗箭头),其外积给出沿该方向的"杆状"贡献;③ 右:新 Σ(粗绿)= 旧 Σ(虚线) + Rank-μ 蓝色虚线 + Rank-1 红色点划线,三者加权融合。</i>
-   </p>
+##### 🖼️ 两个信号的几何含义图
 
-   ##### 合并后的完整 Σ 更新公式
+<p align="center">
+  <img src="asset/cma-es/04_rank_mu_rank_1.png" width="900"/><br/>
+  <i>① 左:Rank-μ 用 top-μ 候选(黄圈)的样本协方差构造一个椭圆(蓝色),把 Σ 朝那个集中方向加粗;② 中:Rank-1 累积历代均值 m₀ → m₅ 的移动方向得到进化路径 p_c(红色粗箭头),其外积给出沿该方向的"杆状"贡献;③ 右:新 Σ(粗绿)= 旧 Σ(虚线) + Rank-μ 蓝色虚线 + Rank-1 红色点划线,三者加权融合。</i>
+</p>
 
-   <p align="center"><img src="asset/formulas/f13.png" alt="Σ update formula"/></p>
+##### 合并后的完整 Σ 更新公式
 
-   - 第一项 $(1 - c_1 - c_\mu) \Sigma$:**保留旧 Σ 的大部分**(防止剧烈震荡)
-   - 第二项 $c_1 \cdot p_c p_c^\top$:Rank-1 贡献
-   - 第三项 $c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top$:Rank-μ 贡献
-   - $c_1, c_\mu$ 是小权重(典型 0.01 量级),保证三者加和仍是正定矩阵
+<p align="center"><img src="asset/formulas/f13.png" alt="Σ update formula"/></p>
 
-   ##### 🖼️ 完整每代 6 步流程图
+- 第一项 $(1 - c_1 - c_\mu) \Sigma$:**保留旧 Σ 的大部分**(防止剧烈震荡)
+- 第二项 $c_1 \cdot p_c p_c^\top$:Rank-1 贡献
+- 第三项 $c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top$:Rank-μ 贡献
+- $c_1, c_\mu$ 是小权重(典型 0.01 量级),保证三者加和仍是正定矩阵
 
-   把"采样 + 更新"两个阶段串起来看,CMA-ES 每代实际有 6 步(前面的 5 步图是简化版,这里给出完整版):
+##### 🖼️ 完整每代 6 步流程图
 
-   <p align="center">
-     <img src="asset/cma-es/05_6step_loop.png" width="950"/><br/>
-     <i>每代完整流程:① 特征分解 Σ → 得到 B, D ② 用 B, D 采样 λ 个候选 ③ 评估并排序 ④ 更新均值 m 和进化路径 p_c ⑤ 用 Rank-μ + Rank-1 更新 Σ ⑥ 更新全局步长 σ。下一代回到 ① 用新 Σ 再分解。</i>
-   </p>
+把"采样 + 更新"两个阶段串起来看,CMA-ES 每代实际有 6 步(前面的 5 步图是简化版,这里给出完整版):
 
-   **关键洞察**:**「采样的 B, D」和「更新的 Σ」是同一个矩阵的两面**——更新阶段调整 Σ 本身,下一代的采样阶段再从新 Σ 提取 B、D 给候选生成用。`Σ = B·D²·Bᵀ` 是"翻译工具",`Σ ← ...` 才是"学习行为"。
+<p align="center">
+  <img src="asset/cma-es/05_6step_loop.png" width="950"/><br/>
+  <i>每代完整流程:① 特征分解 Σ → 得到 B, D ② 用 B, D 采样 λ 个候选 ③ 评估并排序 ④ 更新均值 m 和进化路径 p_c ⑤ 用 Rank-μ + Rank-1 更新 Σ ⑥ 更新全局步长 σ。下一代回到 ① 用新 Σ 再分解。</i>
+</p>
 
-   ---
+**关键洞察**:**「采样的 B, D」和「更新的 Σ」是同一个矩阵的两面**——更新阶段调整 Σ 本身,下一代的采样阶段再从新 Σ 提取 B、D 给候选生成用。`Σ = B·D²·Bᵀ` 是"翻译工具",`Σ ← ...` 才是"学习行为"。
 
-   ### Part 2:为什么 World Models 选 CMA-ES?(常见误解先澄清)
+---
 
-   #### ⚠️ 误解:"梦境不可微"
+### Part 2:为什么 World Models 选 CMA-ES?(常见误解先澄清)
 
-   严格说,**梦境数学上完全可以做成可微的**:
+#### ⚠️ 误解:"梦境不可微"
 
-   | 组件 | 可微性 |
-   |------|-------|
-   | C(线性 Controller) | ✅ 可微 |
-   | M 的 LSTM 部分 | ✅ 可微 |
-   | MDN 输出层(MLP) | ✅ 可微 |
-   | **从 MDN 采样 z** | ⚠️ 默认不可微,**用 reparameterization 可可微**(VAE 已证明) |
-   | **done 采样** | ⚠️ Bernoulli 默认不可微,**Gumbel-Softmax 可可微** |
+严格说,**梦境数学上完全可以做成可微的**:
 
-   **结论**:Ha 2018 选 CMA-ES **不是因为不能可微,而是工程权衡** —— 选择 CMA-ES 自然就不需要让链路可微。
+| 组件 | 可微性 |
+|------|-------|
+| C(线性 Controller) | ✅ 可微 |
+| M 的 LSTM 部分 | ✅ 可微 |
+| MDN 输出层(MLP) | ✅ 可微 |
+| **从 MDN 采样 z** | ⚠️ 默认不可微,**用 reparameterization 可可微**(VAE 已证明) |
+| **done 采样** | ⚠️ Bernoulli 默认不可微,**Gumbel-Softmax 可可微** |
 
-   #### ✅ 真实原因:5 个条件完美契合 CMA-ES
+**结论**:Ha 2018 选 CMA-ES **不是因为不能可微,而是工程权衡** —— 选择 CMA-ES 自然就不需要让链路可微。
 
-   | 条件 | World Models 阶段 3 的实际情况 | 这意味着… |
-   |------|------------------------------|----------|
-   | **C 的参数量** | 极小(几百到几千) | 100 维以下,黑盒搜索就够,梯度优势不明显 |
-   | **梦境随机性** | MDN sample + τ=1.15,fitness 噪声大 | 梯度算法被噪声坑,进化算法天然抗噪 |
-   | **Model exploitation** | C 会找梦境 bug 钻空子 | **梯度会"放大"作弊**(直接告诉 C 怎么钻漏洞最优) |
-   | **长序列 RNN 梯度** | 一局可能几百帧 | 梯度爆炸/消失,LSTM 也只能缓解 |
-   | **工程简单度** | 2018 年的目标是"先 demo 可行性" | CMA-ES 几行代码搞定 |
+#### ✅ 真实原因:5 个条件完美契合 CMA-ES
 
-   → **这才是 Ha 2018 选 CMA-ES 的真实动机**,不是技术限制。
+| 条件 | World Models 阶段 3 的实际情况 | 这意味着… |
+|------|------------------------------|----------|
+| **C 的参数量** | 极小(几百到几千) | 100 维以下,黑盒搜索就够,梯度优势不明显 |
+| **梦境随机性** | MDN sample + τ=1.15,fitness 噪声大 | 梯度算法被噪声坑,进化算法天然抗噪 |
+| **Model exploitation** | C 会找梦境 bug 钻空子 | **梯度会"放大"作弊**(直接告诉 C 怎么钻漏洞最优) |
+| **长序列 RNN 梯度** | 一局可能几百帧 | 梯度爆炸/消失,LSTM 也只能缓解 |
+| **工程简单度** | 2018 年的目标是"先 demo 可行性" | CMA-ES 几行代码搞定 |
 
-   ---
+→ **这才是 Ha 2018 选 CMA-ES 的真实动机**,不是技术限制。
 
-   ### Part 3:那能用 Bellman equation 反向求解吗?
+---
 
-   这里有个常见混淆需要先澄清:
+### Part 3:那能用 Bellman equation 反向求解吗?
 
-   #### ⚠️ Bellman 方程是 Q-learning 工具,不是 actor 的工具
+这里有个常见混淆需要先澄清:
 
-   ```
-   Bellman:Q(s,a) = r + γ · max_{a'} Q(s', a')
-   ```
+#### ⚠️ Bellman 方程是 Q-learning 工具,不是 actor 的工具
 
-   它用来**学 value 函数 Q**,不是直接学 policy。具体怎么用:
+```
+Bellman:Q(s,a) = r + γ · max_{a'} Q(s', a')
+```
 
-   | 算法 | 用 Bellman 做什么 |
-   |------|------------------|
-   | **DQN**(model-free) | 用 Bellman 误差当 Q 网络的损失,argmax Q 选动作 |
-   | **MuZero**(model-based) | 用 Bellman 训 Q,policy 用 MCTS 搜出来 |
-   | **Dreamer V1/V2/V3** | ⭐ **不用 Bellman**,用 λ-return 直接拟合 critic + 解析梯度反传 actor |
+它用来**学 value 函数 Q**,不是直接学 policy。具体怎么用:
 
-   #### 如果硬要在 World Models 用 Bellman 思路会怎样?
+| 算法 | 用 Bellman 做什么 |
+|------|------------------|
+| **DQN**(model-free) | 用 Bellman 误差当 Q 网络的损失,argmax Q 选动作 |
+| **MuZero**(model-based) | 用 Bellman 训 Q,policy 用 MCTS 搜出来 |
+| **Dreamer V1/V2/V3** | ⭐ **不用 Bellman**,用 λ-return 直接拟合 critic + 解析梯度反传 actor |
 
-   **方案 A:把 C 改成 Q 网络**
-   - 变成 "model-based DQN":学 $Q(z, h, a)$,argmax 选动作
-   - 但 CarRacing 是**连续动作** → `max Q(s', a')` 难算
-   - 而且训练目标是 fitting Q,不直接最大化 reward,**多了一层间接性**
+#### 如果硬要在 World Models 用 Bellman 思路会怎样?
 
-   **方案 B:让梦境可微 + actor 直接最大化想象 return** ← Dreamer 走的路
-   - 不用 Bellman,**直接对 actor 求 ∂Return/∂θ_actor 反传**
-   - 这才是更现代、更高效的做法
+**方案 A:把 C 改成 Q 网络**
+- 变成 "model-based DQN":学 $Q(z, h, a)$,argmax 选动作
+- 但 CarRacing 是**连续动作** → `max Q(s', a')` 难算
+- 而且训练目标是 fitting Q,不直接最大化 reward,**多了一层间接性**
 
-   → **方案 B 的思路**(让梦境可微+反传)正是 Dreamer 2020 实现的路径。
+**方案 B:让梦境可微 + actor 直接最大化想象 return** ← Dreamer 走的路
+- 不用 Bellman,**直接对 actor 求 ∂Return/∂θ_actor 反传**
+- 这才是更现代、更高效的做法
 
-   ---
+→ **方案 B 的思路**(让梦境可微+反传)正是 Dreamer 2020 实现的路径。
 
-   ### Part 4:Dreamer 怎么实现"可微梦境 + 反传"(后续演化)
+---
 
-   ```
-   World Models (2018)               Dreamer V1 (2020)
-   ─────────────────────             ──────────────────
-   V (VAE) + M (MDN-RNN) 分阶段训 →  V + M 合并成 RSSM,端到端
-   C 极小 + CMA-ES                →  actor + critic(各几十万参数)
-   梦境不刻意可微                  →  ⭐ 让梦境完全可微 + 反向传播
-   没有 critic                    →  ⭐ critic 拟合 λ-return,做 actor target
-   ```
+### Part 4:Dreamer 怎么实现"可微梦境 + 反传"(后续演化)
 
-   **Dreamer V1 的核心训练循环**:
-   ```python
-   # 在梦里 rollout(H=15 步)
-   s = sample_initial_state()
-   returns = 0
-   for t in range(H):
-       a = actor(s)                            # actor 网络出动作
-       s_next = world_model.transition(s, a)   # ✅ 可微的转移
-       r = world_model.reward(s_next)          # ✅ 可微的奖励
-       returns += γ**t * r
-   returns += γ**H * critic(s_H)               # critic 估计后续残值
+```
+World Models (2018)               Dreamer V1 (2020)
+─────────────────────             ──────────────────
+V (VAE) + M (MDN-RNN) 分阶段训 →  V + M 合并成 RSSM,端到端
+C 极小 + CMA-ES                →  actor + critic(各几十万参数)
+梦境不刻意可微                  →  ⭐ 让梦境完全可微 + 反向传播
+没有 critic                    →  ⭐ critic 拟合 λ-return,做 actor target
+```
 
-   # ⭐ 直接对 actor 反传(无 Bellman,无 sampling 估计)
-   actor_loss = -returns.mean()
-   actor_loss.backward()
-   ```
+**Dreamer V1 的核心训练循环**:
+```python
+# 在梦里 rollout(H=15 步)
+s = sample_initial_state()
+returns = 0
+for t in range(H):
+    a = actor(s)                            # actor 网络出动作
+    s_next = world_model.transition(s, a)   # ✅ 可微的转移
+    r = world_model.reward(s_next)          # ✅ 可微的奖励
+    returns += γ**t * r
+returns += γ**H * critic(s_H)               # critic 估计后续残值
 
-   关键差异:**没用 Bellman 误差**,而是 **解析梯度 ∂Return/∂θ_actor** 直接最大化想象 return。
+# ⭐ 直接对 actor 反传(无 Bellman,无 sampling 估计)
+actor_loss = -returns.mean()
+actor_loss.backward()
+```
 
-   ---
+关键差异:**没用 Bellman 误差**,而是 **解析梯度 ∂Return/∂θ_actor** 直接最大化想象 return。
 
-   ### Part 5:CMA-ES vs 反向传播(总结对比)
+---
 
-   | 维度 | CMA-ES(World Models) | 反向传播(Dreamer) |
-   |------|---------------------|------------------|
-   | 是否需要梯度 | ❌ 不需要 | ✅ 必须可微 |
-   | 适合参数量 | 几百 ~ 几千 | 任意大(亿级) |
-   | 信息利用率 | 每代 λ × M 次评估 | 一次前向+反传得到全梯度 |
-   | 收敛速度 | 慢 | 快(梯度信息密集) |
-   | 鲁棒性(噪声) | 强(选优而非平均) | 弱(噪声直接进梯度) |
-   | model exploitation 风险 | 中(只看 fitness) | 高(梯度直接钻漏洞) |
-   | 适合场景 | 小网络黑盒 | 大网络可微 |
+### Part 5:CMA-ES vs 反向传播(总结对比)
 
-   **2018 → 2020 的转折点**:Dreamer 把链路做可微 + actor 参数变大 → 反向传播效率远超 CMA-ES → **CMA-ES 在 model-based RL 退出历史舞台**。
+| 维度 | CMA-ES(World Models) | 反向传播(Dreamer) |
+|------|---------------------|------------------|
+| 是否需要梯度 | ❌ 不需要 | ✅ 必须可微 |
+| 适合参数量 | 几百 ~ 几千 | 任意大(亿级) |
+| 信息利用率 | 每代 λ × M 次评估 | 一次前向+反传得到全梯度 |
+| 收敛速度 | 慢 | 快(梯度信息密集) |
+| 鲁棒性(噪声) | 强(选优而非平均) | 弱(噪声直接进梯度) |
+| model exploitation 风险 | 中(只看 fitness) | 高(梯度直接钻漏洞) |
+| 适合场景 | 小网络黑盒 | 大网络可微 |
 
-   ---
+**2018 → 2020 的转折点**:Dreamer 把链路做可微 + actor 参数变大 → 反向传播效率远超 CMA-ES → **CMA-ES 在 model-based RL 退出历史舞台**。
 
-   ### Part 6:实践入口
+---
 
-   ```python
-   pip install cma
-   import cma
+### Part 6:实践入口
 
-   def rosenbrock(x):
-       return sum(100*(x[i+1] - x[i]**2)**2 + (1 - x[i])**2 for i in range(len(x)-1))
+```python
+pip install cma
+import cma
 
-   es = cma.CMAEvolutionStrategy(x0=[0.0]*10, sigma0=0.5, inopts={'popsize': 30})
-   es.optimize(rosenbrock)
-   print(es.result.xbest)
-   ```
+def rosenbrock(x):
+    return sum(100*(x[i+1] - x[i]**2)**2 + (1 - x[i])**2 for i in range(len(x)-1))
 
-   或用 Ha 自己的 [**estool**](https://github.com/hardmaru/estool) —— World Models 论文的官方进化工具,含 CMA-ES、OpenAI ES、PEPG 等。
+es = cma.CMAEvolutionStrategy(x0=[0.0]*10, sigma0=0.5, inopts={'popsize': 30})
+es.optimize(rosenbrock)
+print(es.result.xbest)
+```
 
-   **推荐资源**:
-   - [pycma 官方文档](https://github.com/CMA-ES/pycma) — 含可视化、教程
-   - [Hansen — CMA-ES Tutorial](https://arxiv.org/abs/1604.00772) — 原作者写,必读
-   - [David Ha — Visual Guide to Evolution Strategies](https://blog.otoro.net/2017/10/29/visual-evolution-strategies/) ⭐ — 极美的可视化讲解
-   - [OpenAI ES 论文(Salimans 2017)](https://arxiv.org/abs/1703.03864) — ES 在 Atari 大规模实验
+或用 Ha 自己的 [**estool**](https://github.com/hardmaru/estool) —— World Models 论文的官方进化工具,含 CMA-ES、OpenAI ES、PEPG 等。
 
-   ---
+**推荐资源**:
+- [pycma 官方文档](https://github.com/CMA-ES/pycma) — 含可视化、教程
+- [Hansen — CMA-ES Tutorial](https://arxiv.org/abs/1604.00772) — 原作者写,必读
+- [David Ha — Visual Guide to Evolution Strategies](https://blog.otoro.net/2017/10/29/visual-evolution-strategies/) ⭐ — 极美的可视化讲解
+- [OpenAI ES 论文(Salimans 2017)](https://arxiv.org/abs/1703.03864) — ES 在 Atari 大规模实验
 
-   ### 🎯 整体总结
+---
 
-   > **梦境技术上完全可微,但 Ha 2018 选 CMA-ES 是工程权衡:Controller 极小、梦境噪声大、model exploitation 怕被梯度放大、长 RNN 梯度难、demo 优先。Bellman 方程是 Q-learning 工具,不是 actor 优化的最佳选择;真正"可微梦境+反传 actor"的范式由 Dreamer 2020 实现,从此 CMA-ES 在 model-based RL 退场。「用梯度求解」的直觉,正是 Dreamer 系的核心思路 —— 不过用的是 policy gradient 而非 Bellman。**
+### 🎯 整体总结
 
-   </details>
+> **梦境技术上完全可微,但 Ha 2018 选 CMA-ES 是工程权衡:Controller 极小、梦境噪声大、model exploitation 怕被梯度放大、长 RNN 梯度难、demo 优先。Bellman 方程是 Q-learning 工具,不是 actor 优化的最佳选择;真正"可微梦境+反传 actor"的范式由 Dreamer 2020 实现,从此 CMA-ES 在 model-based RL 退场。「用梯度求解」的直觉,正是 Dreamer 系的核心思路 —— 不过用的是 policy gradient 而非 Bellman。**
 
-   ##### 阶段 4:部署 / 推理(在真实环境验证)
+</details>
 
-   **🎯 目的**:把训好的 C 拿到真实环境跑,看是否能迁移成功。此阶段**V 和 M 不再更新,但继续在线使用**(V 提供感知压缩,M 提供时序记忆 h)。
+##### 阶段 4:部署 / 推理(在真实环境验证)
 
-   **核心公式**:
-   <p align="center"><img src="asset/formulas/f11.png" alt="formula"/></p>
+**🎯 目的**:把训好的 C 拿到真实环境跑,看是否能迁移成功。此阶段**V 和 M 不再更新,但继续在线使用**(V 提供感知压缩,M 提供时序记忆 h)。
 
-   - 注意:**用真实 $z_t$** 更新 $h$(不是用 M sample 的 $\hat{z}$)
-   - 这相当于 M 在真实环境里"陪跑",维护对未来的预期
+**核心公式**:
+<p align="center"><img src="asset/formulas/f11.png" alt="formula"/></p>
 
-   **具体代码**(论文 Algorithm 1):
-   ```python
-   def rollout(controller):
-       """在真实环境跑一局,既用于评估,也用于实际部署"""
-       obs = env.reset()                      # ← 真实环境!
-       h = rnn.initial_state()
-       done = False
-       cumulative_reward = 0
-       while not done:
-           z = vae.encode(obs)                # 真实 obs → z
-           a = controller.action([z, h])      # C 决策
-           obs, reward, done = env.step(a)    # 真实环境推进
-           cumulative_reward += reward
-           h = rnn.forward([a, z, h])         # ⭐ 用真实 z 更新 h
-                                              # (而不是用 M sample 的 ẑ)
-       return cumulative_reward
-   ```
+- 注意:**用真实 $z_t$** 更新 $h$(不是用 M sample 的 $\hat{z}$)
+- 这相当于 M 在真实环境里"陪跑",维护对未来的预期
 
-   **两个关键细节**:
-   1. **`obs` 来自真实环境**(`env.step` 而非 `M(...)`)—— Controller 部署时见到的是真实游戏
-   2. **`h` 仍由 M 维护**,但输入用**真实 z**(不是 sample 的 ẑ)
-      - C 接收 `[真实 z, M 陪跑的 h]`,等于既感知当下又有"记忆/预期"
+**具体代码**(论文 Algorithm 1):
+```python
+def rollout(controller):
+    """在真实环境跑一局,既用于评估,也用于实际部署"""
+    obs = env.reset()                      # ← 真实环境!
+    h = rnn.initial_state()
+    done = False
+    cumulative_reward = 0
+    while not done:
+        z = vae.encode(obs)                # 真实 obs → z
+        a = controller.action([z, h])      # C 决策
+        obs, reward, done = env.step(a)    # 真实环境推进
+        cumulative_reward += reward
+        h = rnn.forward([a, z, h])         # ⭐ 用真实 z 更新 h
+                                           # (而不是用 M sample 的 ẑ)
+    return cumulative_reward
+```
 
-   **梦境 rollout vs 真实 rollout 对比**:
+**两个关键细节**:
+1. **`obs` 来自真实环境**(`env.step` 而非 `M(...)`)—— Controller 部署时见到的是真实游戏
+2. **`h` 仍由 M 维护**,但输入用**真实 z**(不是 sample 的 ẑ)
+   - C 接收 `[真实 z, M 陪跑的 h]`,等于既感知当下又有"记忆/预期"
 
-   | 步骤 | 梦境 rollout(训练 C 时) | 真实 rollout(部署 / CarRacing 训练时) |
-   |------|------------------------|--------------------------------------|
-   | obs 从哪来 | 不需要 obs,直接操作 z | `env.reset()` / `env.step()` |
-   | z 从哪来 | `sample_mdn(M 输出)`(虚拟) | `vae.encode(real_obs)`(真实) |
-   | h 更新 | M 的 LSTM 内部更新 | `rnn.forward([a, z, h])` 同样的 M |
-   | reward | done_logit 推出 +1 | `env.step` 返回 |
-   | 用途 | CMA-ES 进化 fitness | 评估 / 实际玩游戏 |
+**梦境 rollout vs 真实 rollout 对比**:
 
-   ✨ **关键洞察**:V 和 M 在部署时**继续被使用**,不是仅训练辅助 —— 它们在推理时承担"感知压缩 + 时序记忆"两项工作,让小小的 C 也能做出好决策。
+| 步骤 | 梦境 rollout(训练 C 时) | 真实 rollout(部署 / CarRacing 训练时) |
+|------|------------------------|--------------------------------------|
+| obs 从哪来 | 不需要 obs,直接操作 z | `env.reset()` / `env.step()` |
+| z 从哪来 | `sample_mdn(M 输出)`(虚拟) | `vae.encode(real_obs)`(真实) |
+| h 更新 | M 的 LSTM 内部更新 | `rnn.forward([a, z, h])` 同样的 M |
+| reward | done_logit 推出 +1 | `env.step` 返回 |
+| 用途 | CMA-ES 进化 fitness | 评估 / 实际玩游戏 |
 
-   ##### CarRacing 的特例:在真实环境训 C
+✨ **关键洞察**:V 和 M 在部署时**继续被使用**,不是仅训练辅助 —— 它们在推理时承担"感知压缩 + 时序记忆"两项工作,让小小的 C 也能做出好决策。
 
-   CarRacing 因为奖励复杂,**没在梦里训 Controller**:
+##### CarRacing 的特例:在真实环境训 C
 
-   ```python
-   # 直接用同一个 rollout() 函数评估 fitness
-   # 唯一区别:env 是真实 CarRacing 环境
-   es = CMAES(...)
-   for gen in range(N):
-       candidates = es.ask()
-       fitnesses = [rollout(C_apply(c)) for c in candidates]   # 用真实 env!
-       es.tell(candidates, fitnesses)
-   ```
+CarRacing 因为奖励复杂,**没在梦里训 Controller**:
 
-   - V 和 M 还是在阶段 2 训好(用 random rollout 数据)
-   - 但 C 直接在真实 CarRacing 里训,只是把 `[z, h]` 当 C 的输入(比只用 z 提分 40%)
+```python
+# 直接用同一个 rollout() 函数评估 fitness
+# 唯一区别:env 是真实 CarRacing 环境
+es = CMAES(...)
+for gen in range(N):
+    candidates = es.ask()
+    fitnesses = [rollout(C_apply(c)) for c in candidates]   # 用真实 env!
+    es.tell(candidates, fitnesses)
+```
 
-   ##### 三阶段独立训练的优劣
+- V 和 M 还是在阶段 2 训好(用 random rollout 数据)
+- 但 C 直接在真实 CarRacing 里训,只是把 `[z, h]` 当 C 的输入(比只用 z 提分 40%)
 
-   ✅ **优点**:
-   - 简单清晰,每阶段可单独 debug
-   - V 和 M 用无标签数据训练,大幅降低对真实环境交互的需求
-   - C 极小(几百参数),CMA-ES 可解,**无需反向传播**
+##### 三阶段独立训练的优劣
 
-   ❌ **缺点**(后来被 Dreamer 解决):
-   - V 学的特征**不一定对决策最优**(只为重建 obs)
-   - 三阶段独立 → 不能联合优化
-   - 阶段 1 的 random rollout 数据**覆盖不到关键状态**(论文 Section 5 提到的迭代训练问题)
+✅ **优点**:
+- 简单清晰,每阶段可单独 debug
+- V 和 M 用无标签数据训练,大幅降低对真实环境交互的需求
+- C 极小(几百参数),CMA-ES 可解,**无需反向传播**
 
-   → 这些缺陷直接催生了 **PlaNet 的端到端训练** 和 **Dreamer 的 imagination + 反向传播** 路线。
+❌ **缺点**(后来被 Dreamer 解决):
+- V 学的特征**不一定对决策最优**(只为重建 obs)
+- 三阶段独立 → 不能联合优化
+- 阶段 1 的 random rollout 数据**覆盖不到关键状态**(论文 Section 5 提到的迭代训练问题)
 
-   ✨ 三个模块独立训练,互不依赖梯度 —— 2018 年的清流。
+→ 这些缺陷直接催生了 **PlaNet 的端到端训练** 和 **Dreamer 的 imagination + 反向传播** 路线。
 
-   ### 🧪 关键实验
+✨ 三个模块独立训练,互不依赖梯度 —— 2018 年的清流。
 
-   #### 在梦里学会玩 Doom
+### 🧪 关键实验
 
-   **CarRacing-v0**:第一个解决该任务的方法(score > 900,此前最佳 ~600)。
+#### 在梦里学会玩 Doom
 
-   🎬 **CarRacing 演示视频**:
+**CarRacing-v0**:第一个解决该任务的方法(score > 900,此前最佳 ~600)。
 
-   <img src="asset/world-models-2018/mp4_carracing_z_only.gif" width="600"/>
+🎬 **CarRacing 演示视频**:
 
-   **VizDoom: Take Cover —— 论文灵魂**:让 Agent **完全在 M 里训练,不碰真实环境**。
+<img src="asset/world-models-2018/mp4_carracing_z_only.gif" width="600"/>
 
-   🎬 **Doom 真实环境演示**:
+**VizDoom: Take Cover —— 论文灵魂**:让 Agent **完全在 M 里训练,不碰真实环境**。
 
-   <img src="asset/world-models-2018/mp4_doom_real.gif" width="600"/>
+🎬 **Doom 真实环境演示**:
 
-   1. 真实环境跑 random policy 收集数据
-   2. 训 V 和 M
-   3. 把 M 当"梦境环境",Controller **从未见过真实游戏**
-   4. 训好的 Controller 直接部署到真实 Doom —— **能玩,通关阈值 750 帧存活**
+<img src="asset/world-models-2018/mp4_doom_real.gif" width="600"/>
 
-   🤯 **史上第一次清晰展示"Agent 可在自己的世界模型里学习并迁移到真实环境"** —— 这是今天 model-based RL 的核心范式。
+1. 真实环境跑 random policy 收集数据
+2. 训 V 和 M
+3. 把 M 当"梦境环境",Controller **从未见过真实游戏**
+4. 训好的 Controller 直接部署到真实 Doom —— **能玩,通关阈值 750 帧存活**
 
-   > 💡 想看完整可交互 demo(VAE 重建、Doom 梦境实时生成)请访问官方网站:<https://worldmodels.github.io/>
+🤯 **史上第一次清晰展示"Agent 可在自己的世界模型里学习并迁移到真实环境"** —— 这是今天 model-based RL 的核心范式。
 
-   **有趣的"作弊"现象**:Agent 学会利用梦境 bug(让火球凭空消失)。作者**调高 τ 让梦境更难**,逼出鲁棒策略。这预示了后来的核心难题:**model exploitation**(策略钻模型误差的空子)。
+> 💡 想看完整可交互 demo(VAE 重建、Doom 梦境实时生成)请访问官方网站:<https://worldmodels.github.io/>
 
-   ### 🔧 实现细节深入
+**有趣的"作弊"现象**:Agent 学会利用梦境 bug(让火球凭空消失)。作者**调高 τ 让梦境更难**,逼出鲁棒策略。这预示了后来的核心难题:**model exploitation**(策略钻模型误差的空子)。
 
-   这一节澄清三个**特别容易混淆**的工程细节,理解了它们才算真懂 World Models。
+### 🔧 实现细节深入
 
-   ---
+这一节澄清三个**特别容易混淆**的工程细节,理解了它们才算真懂 World Models。
 
-   ##### 细节 ①:World Model vs Model-Free 的真正结构差异
+---
 
-   常见误解:"World Model 只是多了个 M 网络,Controller 接收预测的 state"。
-   **真相**:差异有 **4 层**,而且最关键的不是网络结构。
+##### 细节 ①:World Model vs Model-Free 的真正结构差异
 
-   | 维度 | Model-Free (DQN) | World Models (Ha 2018) |
-   |------|------------------|----------------------|
-   | **① 网络模块数** | 1 个(Q 网络) | **3 个**(V + M + C) |
-   | **② Controller 输入** | 原始观察 $o_t$(或几帧叠加) | $[z_t, h_t]$ —— 压缩观察 + RNN 隐藏状态 |
-   | **③ Controller 训练数据来源** | **真实环境的 `(s, a, r, s')`** | **梦境里 M 生成的虚拟序列** ⭐ 真正的革命 |
-   | **④ 优化方式** | 梯度下降 + Bellman 误差 | **CMA-ES**(进化算法) |
+常见误解:"World Model 只是多了个 M 网络,Controller 接收预测的 state"。
+**真相**:差异有 **4 层**,而且最关键的不是网络结构。
 
-   **数据流对比**:
+| 维度 | Model-Free (DQN) | World Models (Ha 2018) |
+|------|------------------|----------------------|
+| **① 网络模块数** | 1 个(Q 网络) | **3 个**(V + M + C) |
+| **② Controller 输入** | 原始观察 $o_t$(或几帧叠加) | $[z_t, h_t]$ —— 压缩观察 + RNN 隐藏状态 |
+| **③ Controller 训练数据来源** | **真实环境的 `(s, a, r, s')`** | **梦境里 M 生成的虚拟序列** ⭐ 真正的革命 |
+| **④ 优化方式** | 梯度下降 + Bellman 误差 | **CMA-ES**(进化算法) |
 
-   先看 **Q-net 的输入输出**(理解 DQN 的基础):
+**数据流对比**:
 
-   ```mermaid
-   flowchart LR
-       obs["obs<br/>(84×84×4 像素)"] --> Qnet["Q Network<br/>(CNN + MLP)"]
-       Qnet --> Qvals["Q 值向量<br/>[q₁, q₂, ..., qₙ]"]
-       Qvals --> argmax["argmax"]
-       argmax --> action["action<br/>(例:FIRE)"]
-   ```
+先看 **Q-net 的输入输出**(理解 DQN 的基础):
 
-   Q-net **只学一件事** —— "在当前 obs 下,每个动作的预期总奖励"。**它从不预测下一帧画面**。
+```mermaid
+flowchart LR
+    obs["obs<br/>(84×84×4 像素)"] --> Qnet["Q Network<br/>(CNN + MLP)"]
+    Qnet --> Qvals["Q 值向量<br/>[q₁, q₂, ..., qₙ]"]
+    Qvals --> argmax["argmax"]
+    argmax --> action["action<br/>(例:FIRE)"]
+```
 
-   **DQN 完整数据流**:
+Q-net **只学一件事** —— "在当前 obs 下,每个动作的预期总奖励"。**它从不预测下一帧画面**。
 
-   ```mermaid
-   flowchart TD
-       Env["真实环境 Env"] -->|obs| QNet["Q Network"]
-       QNet --> Qvals["[Q值 × N动作]"]
-       Qvals -->|argmax| action
-       action --> step["env.step(a)"]
-       step -->|"obs', r, done"| Buffer["Replay Buffer<br/>存 (s, a, r, s')"]
-       Buffer -->|采样 batch| Loss["TD Loss (Bellman):<br/>y = r + γ · max Q(s')<br/>L = MSE(Q(s).gather(a), y)"]
-       Loss -->|backward| Update["更新 Q net 参数"]
-       Update -.->|下一步| QNet
-   ```
+**DQN 完整数据流**:
 
-   **特点**:**1 个网络,所有数据流经真实环境**。
+```mermaid
+flowchart TD
+    Env["真实环境 Env"] -->|obs| QNet["Q Network"]
+    QNet --> Qvals["[Q值 × N动作]"]
+    Qvals -->|argmax| action
+    action --> step["env.step(a)"]
+    step -->|"obs', r, done"| Buffer["Replay Buffer<br/>存 (s, a, r, s')"]
+    Buffer -->|采样 batch| Loss["TD Loss (Bellman):<br/>y = r + γ · max Q(s')<br/>L = MSE(Q(s).gather(a), y)"]
+    Loss -->|backward| Update["更新 Q net 参数"]
+    Update -.->|下一步| QNet
+```
 
-   **World Models 完整数据流**(4 个阶段):
+**特点**:**1 个网络,所有数据流经真实环境**。
 
-   ```mermaid
-   flowchart TD
-       subgraph S1["阶段 1:收集真实数据(只跑一次)"]
-           Env1["真实环境"] -->|obs| Random["Random Policy"]
-           Random -->|a| Step1["env.step(a)"]
-           Step1 -->|"(obs, a) 序列<br/>10000 局"| Data["回放数据"]
-       end
+**World Models 完整数据流**(4 个阶段):
 
-       subgraph S2["阶段 2:训世界模型(V 和 M)"]
-           Data --> V["V (VAE)<br/>obs → z (32维)"]
-           Data --> M["M (MDN-RNN)<br/>(z_t, a_t, h_t) →<br/>z_{t+1} 分布 + h_{t+1} + done"]
-       end
+```mermaid
+flowchart TD
+    subgraph S1["阶段 1:收集真实数据(只跑一次)"]
+        Env1["真实环境"] -->|obs| Random["Random Policy"]
+        Random -->|a| Step1["env.step(a)"]
+        Step1 -->|"(obs, a) 序列<br/>10000 局"| Data["回放数据"]
+    end
 
-       subgraph S3["阶段 3:梦境里训 Controller(完全不碰真实环境)"]
-           Init["initial: z₀, h₀"] --> State["(z_t, h_t)"]
-           State --> C["C(线性)<br/>a = W·[z,h] + b"]
-           C -->|a_t| MDream["M (虚拟环境)<br/>输出 z', h', done"]
-           MDream -->|"if done: break<br/>else: total_reward += 1"| State
-           MDream -.->|fitness| CMAES["CMA-ES<br/>(进化算法)<br/>优化 C 的参数"]
-       end
+    subgraph S2["阶段 2:训世界模型(V 和 M)"]
+        Data --> V["V (VAE)<br/>obs → z (32维)"]
+        Data --> M["M (MDN-RNN)<br/>(z_t, a_t, h_t) →<br/>z_{t+1} 分布 + h_{t+1} + done"]
+    end
 
-       subgraph S4["阶段 4:部署到真实环境验证"]
-           Env4["真实环境"] -->|obs| V2["V (encode)"]
-           V2 -->|"z_t"| C2["Controller"]
-           V2 -->|"z_t"| M2["M (RNN)<br/>更新 h_t → h_{t+1}"]
-           C2 -->|"a_t"| Env4
-           C2 -->|"a_t"| M2
-           M2 -.->|"h_{t+1}<br/>(下一步用)"| C2
-       end
+    subgraph S3["阶段 3:梦境里训 Controller(完全不碰真实环境)"]
+        Init["initial: z₀, h₀"] --> State["(z_t, h_t)"]
+        State --> C["C(线性)<br/>a = W·[z,h] + b"]
+        C -->|a_t| MDream["M (虚拟环境)<br/>输出 z', h', done"]
+        MDream -->|"if done: break<br/>else: total_reward += 1"| State
+        MDream -.->|fitness| CMAES["CMA-ES<br/>(进化算法)<br/>优化 C 的参数"]
+    end
 
-       S1 --> S2
-       S2 --> S3
-       S3 --> S4
-   ```
+    subgraph S4["阶段 4:部署到真实环境验证"]
+        Env4["真实环境"] -->|obs| V2["V (encode)"]
+        V2 -->|"z_t"| C2["Controller"]
+        V2 -->|"z_t"| M2["M (RNN)<br/>更新 h_t → h_{t+1}"]
+        C2 -->|"a_t"| Env4
+        C2 -->|"a_t"| M2
+        M2 -.->|"h_{t+1}<br/>(下一步用)"| C2
+    end
 
-   **核心洞察**:**Controller 在哪里训(梦境 vs 真实环境)** 才是 World Model 范式的灵魂,不是"多一个 M 网络"。
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+```
 
-   ---
+**核心洞察**:**Controller 在哪里训(梦境 vs 真实环境)** 才是 World Model 范式的灵魂,不是"多一个 M 网络"。
 
-   ##### 细节 ②:z、h、o 三个"状态"概念精确区分
+---
 
-   World Models 里有三个相关但角色完全不同的向量,容易混淆:
+##### 细节 ②:z、h、o 三个"状态"概念精确区分
 
-   | 符号 | 名字 | 来源 | 维度(VizDoom) | 角色 |
-   |------|------|------|---------------|------|
-   | $o_t$ | **观察**(Observation) | 真实环境给的画面 | 64×64×3 | 真实世界的可见信号 |
-   | $z_t$ | **Latent**(潜变量) | VAE 把 $o_t$ 压缩 | 64 | **"当前帧的压缩表示"**(空间) |
-   | $h_t$ | **RNN Hidden State** | M(LSTM)内部维护 | 256 | **"历史 + 未来预期"的总结**(时间) |
+World Models 里有三个相关但角色完全不同的向量,容易混淆:
 
-   **关键区分**:
-   - $z$ ≈ 看一张照片 —— 只知道场景长什么样
-   - $h$ ≈ 看一段视频前 5 秒 —— 能预测下 1 秒会发生什么
-   - **合在一起 $(z, h)$ 才能做正确决策**
+| 符号 | 名字 | 来源 | 维度(VizDoom) | 角色 |
+|------|------|------|---------------|------|
+| $o_t$ | **观察**(Observation) | 真实环境给的画面 | 64×64×3 | 真实世界的可见信号 |
+| $z_t$ | **Latent**(潜变量) | VAE 把 $o_t$ 压缩 | 64 | **"当前帧的压缩表示"**(空间) |
+| $h_t$ | **RNN Hidden State** | M(LSTM)内部维护 | 256 | **"历史 + 未来预期"的总结**(时间) |
 
-   **梦境一步的完整转移**:
-   ```
-   (z_t, h_t, a_t) ──[M]──► (z_{t+1}, h_{t+1})
-                             │           │
-                        MDN sample     LSTM 更新
-   ```
+**关键区分**:
+- $z$ ≈ 看一张照片 —— 只知道场景长什么样
+- $h$ ≈ 看一段视频前 5 秒 —— 能预测下 1 秒会发生什么
+- **合在一起 $(z, h)$ 才能做正确决策**
 
-   M **同时输出两个东西**:
-   1. $z_{t+1}$ 的高斯混合分布(用 MDN 采样得到下一帧的压缩表示)
-   2. $h_{t+1}$(LSTM 内部自然更新的新记忆向量)
+**梦境一步的完整转移**:
+```
+(z_t, h_t, a_t) ──[M]──► (z_{t+1}, h_{t+1})
+                          │           │
+                     MDN sample     LSTM 更新
+```
 
-   **论文关键消融实验**(CarRacing):
+M **同时输出两个东西**:
+1. $z_{t+1}$ 的高斯混合分布(用 MDN 采样得到下一帧的压缩表示)
+2. $h_{t+1}$(LSTM 内部自然更新的新记忆向量)
 
-   | Controller 输入 | Score |
-   |-----------------|---:|
-   | 只用 $z$ | 632 ± 251 |
-   | **用 $z + h$** | **906 ± 21** ⭐ |
+**论文关键消融实验**(CarRacing):
 
-   → 加上 $h$ 大幅提升,证明 $h$ 携带了 $z$ 没有的"动力学信息"。**这条 $(z, h)$ 双路设计直接被 Dreamer 系的 RSSM 继承**。
+| Controller 输入 | Score |
+|-----------------|---:|
+| 只用 $z$ | 632 ± 251 |
+| **用 $z + h$** | **906 ± 21** ⭐ |
 
-   ---
+→ 加上 $h$ 大幅提升,证明 $h$ 携带了 $z$ 没有的"动力学信息"。**这条 $(z, h)$ 双路设计直接被 Dreamer 系的 RSSM 继承**。
 
-   ##### 细节 ③:奖励 $\hat{r}_{t+1}$ 在梦里怎么产生?
+---
 
-   这是个**特别反直觉的点** —— 直觉上 M 应该会预测 reward,但 **World Models 2018 在 VizDoom 上根本没显式预测连续 reward**。
+##### 细节 ③:奖励 $\hat{r}_{t+1}$ 在梦里怎么产生?
 
-   **VizDoom Take Cover 的实际做法**:
-   ```python
-   # M 的输出
-   M(z_t, a_t, h_t) → (π, μ, σ), h_{t+1}, done_logit
-                          ↑           ↑          ↑
-                     下一个 z 的分布   隐藏状态  是否结束的概率
-   # 注意:没有 reward head!
-   ```
+这是个**特别反直觉的点** —— 直觉上 M 应该会预测 reward,但 **World Models 2018 在 VizDoom 上根本没显式预测连续 reward**。
 
-   **奖励完全由 `done` 隐式推出**(因为 Take Cover 规则极简:存活+1):
-   ```python
-   total_reward = 0
-   while True:
-       a = C([z, h])
-       (π, μ, σ), h, done_logit = M(z, a, h)
-       z = sample_mdn(π, μ, σ, temperature=1.15)
-       if sigmoid(done_logit) > random():
-           break              # 死了,停止
-       total_reward += 1      # 还活着,reward 隐式 +1
-   ```
+**VizDoom Take Cover 的实际做法**:
+```python
+# M 的输出
+M(z_t, a_t, h_t) → (π, μ, σ), h_{t+1}, done_logit
+                       ↑           ↑          ↑
+                  下一个 z 的分布   隐藏状态  是否结束的概率
+# 注意:没有 reward head!
+```
 
-   **CarRacing 的处理方式更"妥协"**(奖励复杂,梦里训不动):
-   - **没在梦里训 Controller**
-   - 而是把 V+M 训完后,**直接在真实环境**用 CMA-ES 训 C(z+h 作为特征)
+**奖励完全由 `done` 隐式推出**(因为 Take Cover 规则极简:存活+1):
+```python
+total_reward = 0
+while True:
+    a = C([z, h])
+    (π, μ, σ), h, done_logit = M(z, a, h)
+    z = sample_mdn(π, μ, σ, temperature=1.15)
+    if sigmoid(done_logit) > random():
+        break              # 死了,停止
+    total_reward += 1      # 还活着,reward 隐式 +1
+```
 
-   | 任务 | 在梦里训 C? | reward 怎么来? |
-   |------|-----------|----------------|
-   | **VizDoom Take Cover** | ✅ 完全梦里训 | done 推出 +1 |
-   | **CarRacing** | ❌ 真实环境训 | 真实环境给 |
+**CarRacing 的处理方式更"妥协"**(奖励复杂,梦里训不动):
+- **没在梦里训 Controller**
+- 而是把 V+M 训完后,**直接在真实环境**用 CMA-ES 训 C(z+h 作为特征)
 
-   → **"在梦里学"这个最炫的范式,Ha 2018 只在奖励规则极简的 VizDoom 上完整 demo 过**。这是论文一个**容易被忽略的局限**。
+| 任务 | 在梦里训 C? | reward 怎么来? |
+|------|-----------|----------------|
+| **VizDoom Take Cover** | ✅ 完全梦里训 | done 推出 +1 |
+| **CarRacing** | ❌ 真实环境训 | 真实环境给 |
 
-   **Dreamer 系如何升级**:加一个 **reward head**(MLP),显式预测连续 reward:
+→ **"在梦里学"这个最炫的范式,Ha 2018 只在奖励规则极简的 VizDoom 上完整 demo 过**。这是论文一个**容易被忽略的局限**。
 
-   ```python
-   # Dreamer 的 World Model 输出
-   RSSM(s_t, a_t) → s_{t+1}, r̂_{t+1}, done
-                        ↑          ↑          ↑
-                    下一状态  预测奖励   是否结束
+**Dreamer 系如何升级**:加一个 **reward head**(MLP),显式预测连续 reward:
 
-   # 训练:用真实经验监督 reward head
-   loss_reward = MSE(reward_head(s_pred), batch.real_reward)
+```python
+# Dreamer 的 World Model 输出
+RSSM(s_t, a_t) → s_{t+1}, r̂_{t+1}, done
+                     ↑          ↑          ↑
+                 下一状态  预测奖励   是否结束
 
-   # 梦里 rollout 时累加 r̂
-   for t in range(H=15):
-       a = actor(s)
-       s, r_hat, done = world_model.step(s, a)
-       total_value += γ**t * r_hat   # 用 r̂ 累积 return
-   ```
+# 训练:用真实经验监督 reward head
+loss_reward = MSE(reward_head(s_pred), batch.real_reward)
 
-   → 这才是 Dreamer 能跑通**通用任务**(DMC、Atari、Minecraft)的关键升级:**reward 不再依赖 done 推出,而是显式建模**。
+# 梦里 rollout 时累加 r̂
+for t in range(H=15):
+    a = actor(s)
+    s, r_hat, done = world_model.step(s, a)
+    total_value += γ**t * r_hat   # 用 r̂ 累积 return
+```
 
-   ---
+→ 这才是 Dreamer 能跑通**通用任务**(DMC、Atari、Minecraft)的关键升级:**reward 不再依赖 done 推出,而是显式建模**。
 
-   ##### 三个细节的相互关系
+---
 
-   ```
-   ① 结构差异 ─► Controller 在梦里训(灵魂)
-                       │
-                       ▼
-   ② z + h 双路 ─► 让 Controller 看到"空间 + 时间"完整状态
-                       │
-                       ▼
-   ③ 奖励处理 ─► 用 done 隐式推(VizDoom)or 显式 reward head(Dreamer)
-   ```
+##### 三个细节的相互关系
 
-   理解这三层细节后,即可:
-   - 看懂 Dreamer 系论文里 RSSM 为什么做成 `(h, z)` 双路
-   - 理解为什么 Dreamer 一定要加 reward head 才能扩展到通用任务
-   - 不会再把"World Model"误解为"只是多个网络的 model-free"
+```
+① 结构差异 ─► Controller 在梦里训(灵魂)
+                    │
+                    ▼
+② z + h 双路 ─► 让 Controller 看到"空间 + 时间"完整状态
+                    │
+                    ▼
+③ 奖励处理 ─► 用 done 隐式推(VizDoom)or 显式 reward head(Dreamer)
+```
 
-   ### 💭 理解思考
+理解这三层细节后,即可:
+- 看懂 Dreamer 系论文里 RSSM 为什么做成 `(h, z)` 双路
+- 理解为什么 Dreamer 一定要加 reward head 才能扩展到通用任务
+- 不会再把"World Model"误解为"只是多个网络的 model-free"
 
-   #### 贡献与历史地位
+### 💭 理解思考
 
-   ✅ **贡献**
-   1. 第一次系统性把 World Model 范式工程化(V+M+C 解耦)
-   2. 第一次证明纯 latent 梦境训练的 policy 可迁移真实环境
-   3. 概率性世界模型(MDN)预示了今天的随机生成模型
-   4. 进化算法 + 神经网络的优雅组合
-   5. 可视化和叙事极强,让无数研究者入坑
+#### 贡献与历史地位
 
-   ⚠️ **局限**
-   1. 三阶段独立训练,V 学的特征未必对决策最优(只为重建)
-   2. CarRacing / Doom 较简单
-   3. MDN-RNN 容量有限,长程预测会漂移
-   4. V 一旦训完就冻结,无法在线适应
+✅ **贡献**
+1. 第一次系统性把 World Model 范式工程化(V+M+C 解耦)
+2. 第一次证明纯 latent 梦境训练的 policy 可迁移真实环境
+3. 概率性世界模型(MDN)预示了今天的随机生成模型
+4. 进化算法 + 神经网络的优雅组合
+5. 可视化和叙事极强,让无数研究者入坑
 
-   🌳 **后续影响**
-   - **PlaNet (2019)**:V 和 M 合并到 RSSM,端到端训练
-   - **Dreamer v1/v2/v3**:latent 里做 actor-critic,替代进化
-   - **DreamerV3**:同一套超参解 150+ 任务,Minecraft 钻石
-   - **DIAMOND / Genie / Sora**:M 换成 diffusion / transformer
+⚠️ **局限**
+1. 三阶段独立训练,V 学的特征未必对决策最优(只为重建)
+2. CarRacing / Doom 较简单
+3. MDN-RNN 容量有限,长程预测会漂移
+4. V 一旦训完就冻结,无法在线适应
 
-   Dreamer 系完全是这篇论文的"亲儿子"。
+🌳 **后续影响**
+- **PlaNet (2019)**:V 和 M 合并到 RSSM,端到端训练
+- **Dreamer v1/v2/v3**:latent 里做 actor-critic,替代进化
+- **DreamerV3**:同一套超参解 150+ 任务,Minecraft 钻石
+- **DIAMOND / Genie / Sora**:M 换成 diffusion / transformer
 
-   #### 阅读建议
+Dreamer 系完全是这篇论文的"亲儿子"。
 
-   1. **先看交互式网站** <https://worldmodels.github.io/>(demo 都是动的,比论文快)
-   2. 论文不长(~25 页),但**附录极其详细**,值得细读
-   3. 重点关注:VAE latent 维度对比、MDN-RNN 温度 τ 作用、"在梦里训练"方法论
-   4. 代码:[estool](https://github.com/hardmaru/estool) · [WorldModelsExperiments](https://github.com/hardmaru/WorldModelsExperiments)
+#### 阅读建议
 
-   #### 一句话总结
+1. **先看交互式网站** <https://worldmodels.github.io/>(demo 都是动的,比论文快)
+2. 论文不长(~25 页),但**附录极其详细**,值得细读
+3. 重点关注:VAE latent 维度对比、MDN-RNN 温度 τ 作用、"在梦里训练"方法论
+4. 代码:[estool](https://github.com/hardmaru/estool) · [WorldModelsExperiments](https://github.com/hardmaru/WorldModelsExperiments)
 
-   > **第一次把"Agent 用想象力学习"从哲学变成可复现算法。每个模块都被后人替换了,但「感知—记忆—决策」三件套范式至今统治整个 model-based RL / world model 领域。**
+#### 一句话总结
 
-   <details>
-   <summary><b>📚 学习资源(展开)</b></summary>
+> **第一次把"Agent 用想象力学习"从哲学变成可复现算法。每个模块都被后人替换了,但「感知—记忆—决策」三件套范式至今统治整个 model-based RL / world model 领域。**
 
-   **🎬 视频讲解**
+<details>
+<summary><b>📚 学习资源(展开)</b></summary>
 
-   作者本人:
-   - [**David Ha — NeurIPS 2018 Talk**](https://youtu.be/HzA8LRqhujk) ⭐ — 一作亲自讲,~30 分钟,信息量最大,**强烈推荐先看**
-   - David Ha 还有 Stanford / 各种 workshop 的版本,YouTube 搜 "David Ha World Models" 可找到
+**🎬 视频讲解**
 
-   第三方解读:
-   - [**Two Minute Papers — "Google's New Dreaming AI"**](https://www.youtube.com/results?search_query=two+minute+papers+world+models) — 5 分钟科普,建立直觉
-   - [**Arxiv Insights — World Models**](https://www.youtube.com/results?search_query=arxiv+insights+world+models) — 10 分钟左右,讲得清晰
-   - [**Yannic Kilcher 频道**](https://www.youtube.com/@YannicKilcher) — 搜 "World Models",论文逐句过
+作者本人:
+- [**David Ha — NeurIPS 2018 Talk**](https://youtu.be/HzA8LRqhujk) ⭐ — 一作亲自讲,~30 分钟,信息量最大,**强烈推荐先看**
+- David Ha 还有 Stanford / 各种 workshop 的版本,YouTube 搜 "David Ha World Models" 可找到
 
-   **📝 英文图文解读**
+第三方解读:
+- [**Two Minute Papers — "Google's New Dreaming AI"**](https://www.youtube.com/results?search_query=two+minute+papers+world+models) — 5 分钟科普,建立直觉
+- [**Arxiv Insights — World Models**](https://www.youtube.com/results?search_query=arxiv+insights+world+models) — 10 分钟左右,讲得清晰
+- [**Yannic Kilcher 频道**](https://www.youtube.com/@YannicKilcher) — 搜 "World Models",论文逐句过
 
-   - [**官方交互式网站**](https://worldmodels.github.io/) ⭐ — **最佳入门资源**,demo 都是动的,比读 PDF 强 10 倍
-   - [**Lilian Weng — RL 综述与相关博文**(Lil'Log)](https://lilianweng.github.io/tags/reinforcement-learning/) — RL 标签页,涵盖 policy gradient、exploration、meta-RL 等;Model-Based 部分散见于综述与 [A (Long) Peek into RL](https://lilianweng.github.io/posts/2018-02-19-rl-overview/)
-   - [**The Gradient**](https://thegradient.pub/) — 把 World Models 放进更大的 AI 叙事
+**📝 英文图文解读**
 
-   **📝 中文解读**
+- [**官方交互式网站**](https://worldmodels.github.io/) ⭐ — **最佳入门资源**,demo 都是动的,比读 PDF 强 10 倍
+- [**Lilian Weng — RL 综述与相关博文**(Lil'Log)](https://lilianweng.github.io/tags/reinforcement-learning/) — RL 标签页,涵盖 policy gradient、exploration、meta-RL 等;Model-Based 部分散见于综述与 [A (Long) Peek into RL](https://lilianweng.github.io/posts/2018-02-19-rl-overview/)
+- [**The Gradient**](https://thegradient.pub/) — 把 World Models 放进更大的 AI 叙事
 
-   - **机器之心**:[搜索 "World Models 大梦想家"](https://www.jiqizhixin.com/search?keywords=World%20Models) — 当年发表时有详细中文报道
-   - **PaperWeekly**:微信号 paperweekly,搜 "World Models" 论文导读
-   - **知乎**:
-     - 搜索 "World Models Ha Schmidhuber" — 多篇高赞解读
-     - 搜 "在梦中学习" / "世界模型 综述" 也能找到不错的笔记
-   - **B 站**:搜 "World Models 论文精读"、"李沐 强化学习" 系列也有相关内容
-   - **CSDN / 简书**:论文笔记很多,质量参差,挑收藏数 > 100 的看
+**📝 中文解读**
 
-   **💻 代码与复现**
+- **机器之心**:[搜索 "World Models 大梦想家"](https://www.jiqizhixin.com/search?keywords=World%20Models) — 当年发表时有详细中文报道
+- **PaperWeekly**:微信号 paperweekly,搜 "World Models" 论文导读
+- **知乎**:
+  - 搜索 "World Models Ha Schmidhuber" — 多篇高赞解读
+  - 搜 "在梦中学习" / "世界模型 综述" 也能找到不错的笔记
+- **B 站**:搜 "World Models 论文精读"、"李沐 强化学习" 系列也有相关内容
+- **CSDN / 简书**:论文笔记很多,质量参差,挑收藏数 > 100 的看
 
-   - [**hardmaru/WorldModelsExperiments**](https://github.com/hardmaru/WorldModelsExperiments) — 作者官方实现(TensorFlow,完整但较老)
-   - [**hardmaru/estool**](https://github.com/hardmaru/estool) — CMA-ES 实现(Controller 训练用)
-   - [**ctallec/world-models**](https://github.com/ctallec/world-models) ⭐ — **PyTorch 复现**,代码干净,推荐学习用
-   - [**zacwellmer/WorldModels**](https://github.com/zacwellmer/WorldModels) — 另一个简洁 PyTorch 版本
+**💻 代码与复现**
 
-   **🎓 课程**
+- [**hardmaru/WorldModelsExperiments**](https://github.com/hardmaru/WorldModelsExperiments) — 作者官方实现(TensorFlow,完整但较老)
+- [**hardmaru/estool**](https://github.com/hardmaru/estool) — CMA-ES 实现(Controller 训练用)
+- [**ctallec/world-models**](https://github.com/ctallec/world-models) ⭐ — **PyTorch 复现**,代码干净,推荐学习用
+- [**zacwellmer/WorldModels**](https://github.com/zacwellmer/WorldModels) — 另一个简洁 PyTorch 版本
 
-   - [**UC Berkeley CS 285: Deep RL**](https://rail.eecs.berkeley.edu/deeprlcourse/) — Sergey Levine,model-based RL 章节
-   - [**DeepMind x UCL RL Course**](https://www.deepmind.com/learning-resources/reinforcement-learning-lecture-series-2021) — model-based RL 专题
-   - [**Stanford CS 234: RL**](https://web.stanford.edu/class/cs234/)
+**🎓 课程**
 
-   **📚 延伸阅读**
+- [**UC Berkeley CS 285: Deep RL**](https://rail.eecs.berkeley.edu/deeprlcourse/) — Sergey Levine,model-based RL 章节
+- [**DeepMind x UCL RL Course**](https://www.deepmind.com/learning-resources/reinforcement-learning-lecture-series-2021) — model-based RL 专题
+- [**Stanford CS 234: RL**](https://web.stanford.edu/class/cs234/)
 
-   前传(Schmidhuber 1990s 的思想源头):
-   - [Schmidhuber 1990 — *Making the World Differentiable*](http://people.idsia.ch/~juergen/FKI-126-90ocr.pdf)
-   - [Schmidhuber 1991 — *Curious Model-Building Control Systems*](http://people.idsia.ch/~juergen/curiositysab/curiositysab.html)
+**📚 延伸阅读**
 
-   后续(读完 World Models 后立刻读):
-   - [PlaNet](https://arxiv.org/abs/1811.04551) — 端到端版本
-   - [DreamerV3](https://arxiv.org/abs/2301.04104) — 集大成者
+前传(Schmidhuber 1990s 的思想源头):
+- [Schmidhuber 1990 — *Making the World Differentiable*](http://people.idsia.ch/~juergen/FKI-126-90ocr.pdf)
+- [Schmidhuber 1991 — *Curious Model-Building Control Systems*](http://people.idsia.ch/~juergen/curiositysab/curiositysab.html)
 
-   **🎯 推荐学习顺序**
+后续(读完 World Models 后立刻读):
+- [PlaNet](https://arxiv.org/abs/1811.04551) — 端到端版本
+- [DreamerV3](https://arxiv.org/abs/2301.04104) — 集大成者
 
-   ```
-   1. 先逛 worldmodels.github.io           (1 小时,体感)
-   2. 看 David Ha NeurIPS 2018 talk        (30 分钟,作者视角)
-   3. 读 Lil'Log [RL Overview](https://lilianweng.github.io/posts/2018-02-19-rl-overview/) (1 小时,数学梳理)
-   4. 跑一遍 ctallec/world-models 代码     (半天到一天,动手)
-   5. 通读论文 + 附录                       (1 天,细节)
-   6. 跳到 PlaNet / DreamerV3              (理解演化)
-   ```
+**🎯 推荐学习顺序**
 
-   </details>
+```
+1. 先逛 worldmodels.github.io           (1 小时,体感)
+2. 看 David Ha NeurIPS 2018 talk        (30 分钟,作者视角)
+3. 读 Lil'Log [RL Overview](https://lilianweng.github.io/posts/2018-02-19-rl-overview/) (1 小时,数学梳理)
+4. 跑一遍 ctallec/world-models 代码     (半天到一天,动手)
+5. 通读论文 + 附录                       (1 天,细节)
+6. 跳到 PlaNet / DreamerV3              (理解演化)
+```
 
-   > 📁 配套素材已下载到 `asset/world-models-2018/`(架构图、VAE/MDN-RNN 示意图、CarRacing & Doom 演示视频)。图片来源:[worldmodels.github.io](https://worldmodels.github.io/),© Ha & Schmidhuber, 2018,仅作学习参考。
+</details>
 
-2. [**PlaNet**](https://arxiv.org/abs/1811.04551) (2019) — latent dynamics 用于规划
-3. **Dreamer v1/v2/v3** (2020–2023) — 目前 RL 派最强基线,**v3 一定要读**
-   - [DreamerV1](https://arxiv.org/abs/1912.01603) · [DreamerV2](https://arxiv.org/abs/2010.02193) · [**DreamerV3**](https://arxiv.org/abs/2301.04104)
+> 📁 配套素材已下载到 `asset/world-models-2018/`(架构图、VAE/MDN-RNN 示意图、CarRacing & Doom 演示视频)。图片来源:[worldmodels.github.io](https://worldmodels.github.io/),© Ha & Schmidhuber, 2018,仅作学习参考。
 
-**生成式 / 视频**
-
-4. [**GAIA-1**](https://arxiv.org/abs/2309.17080) (Wayve, 2023) — 自动驾驶 world model([官方 blog](https://wayve.ai/thinking/scaling-gaia-1/))
-5. **Genie / Genie 2** (DeepMind, 2024) — 可交互生成环境
-   - [Genie 论文](https://arxiv.org/abs/2402.15391) · [Genie 2 blog](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)
-6. [**Sora 技术报告**](https://openai.com/index/video-generation-models-as-world-simulators/) (OpenAI, 2024) — 把视频生成视作 world simulator 的论述
-
-**前沿**
-
-7. **V-JEPA / V-JEPA 2** (Meta / LeCun) — 非生成式、predictive embedding 路线
-   - [V-JEPA](https://arxiv.org/abs/2404.08471) · [V-JEPA 2](https://ai.meta.com/vjepa/) · [I-JEPA](https://arxiv.org/abs/2301.08243)
-8. 其他值得关注:
-   - [**1X World Model**](https://www.1x.tech/discover/1x-world-model)(人形机器人)
-   - [**Oasis**](https://oasis-model.github.io/)(Decart,实时 Minecraft 生成)
-   - [**DIAMOND**](https://arxiv.org/abs/2405.12399)(NeurIPS 2024,[代码](https://github.com/eloialonso/diamond))
 
 </details>
 
 <details>
-<summary><b>4.2 动手实践</b></summary>
+<summary><b>4.2 PlaNet (2019)</b></summary>
+
+> **论文**:[arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551)
+>
+> **要点**:Latent dynamics 用于规划。把 World Models 的「分阶段」打通成端到端,引入 RSSM 这一关键架构。用 CEM 在线规划而非进化算法。
+
+_📝 详细精读待补充_
+
+</details>
+
+<details>
+<summary><b>4.3 Dreamer v1 / v2 / v3 (2020–2023)</b></summary>
+
+> **论文**:[DreamerV1](https://arxiv.org/abs/1912.01603) · [DreamerV2](https://arxiv.org/abs/2010.02193) · [**DreamerV3**](https://arxiv.org/abs/2301.04104)
+>
+> **要点**:目前 RL 派最强基线。引入「在想象里训 actor-critic + 解析梯度反传」范式。**V3 一定要读** —— 同一组超参跑通 150+ 任务,Minecraft 钻石(从零)。
+
+_📝 详细精读待补充_
+
+</details>
+
+<details>
+<summary><b>4.4 GAIA-1 (Wayve, 2023)</b></summary>
+
+> **论文**:[arxiv.org/abs/2309.17080](https://arxiv.org/abs/2309.17080) · **官方 blog**:<https://wayve.ai/thinking/scaling-gaia-1/>
+>
+> **要点**:自动驾驶 world model。Wayve 用 GAIA 生成驾驶视频,作为 corner case 增强数据。
+
+_📝 详细精读待补充_
+
+</details>
+
+<details>
+<summary><b>4.5 Genie / Genie 2 (DeepMind, 2024)</b></summary>
+
+> **论文**:[Genie](https://arxiv.org/abs/2402.15391) · **Genie 2 blog**:<https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/>
+>
+> **要点**:可交互生成环境。从互联网视频学到 action-conditioned 世界,无需游戏引擎即可生成可交互世界。
+
+_📝 详细精读待补充_
+
+</details>
+
+<details>
+<summary><b>4.6 Sora 技术报告 (OpenAI, 2024)</b></summary>
+
+> **技术报告**:<https://openai.com/index/video-generation-models-as-world-simulators/>
+>
+> **要点**:把视频生成视作 world simulator 的论述。把这个概念推成顶流,资本和媒体快速跟进。
+
+_📝 详细精读待补充_
+
+</details>
+
+<details>
+<summary><b>4.7 V-JEPA / V-JEPA 2 (Meta / LeCun)</b></summary>
+
+> **论文**:[V-JEPA](https://arxiv.org/abs/2404.08471) · [V-JEPA 2 官方页](https://ai.meta.com/vjepa/) · [I-JEPA](https://arxiv.org/abs/2301.08243)
+>
+> **要点**:非生成式、predictive embedding 路线。LeCun 力推的「反 Sora」方案 —— 不预测像素,只预测抽象表征。
+
+_📝 详细精读待补充_
+
+</details>
+
+<details>
+<summary><b>4.8 其他值得关注</b></summary>
+
+- [**1X World Model**](https://www.1x.tech/discover/1x-world-model)(人形机器人,1X Technologies)
+- [**Oasis**](https://oasis-model.github.io/)(Decart,实时 Minecraft 生成)
+- [**DIAMOND**](https://arxiv.org/abs/2405.12399)(NeurIPS 2024,[代码](https://github.com/eloialonso/diamond)) — Atari 视觉效果惊艳,代码干净,适合作为生成式 world model 的入门复现
+
+</details>
+
+
+---
+
+## 五、参考资料汇总
+<details>
+<summary><b>5.1 动手实践</b></summary>
 
 最小成本跑通:
 ```bash
@@ -1551,7 +1612,7 @@ pip install dreamerv3
 </details>
 
 <details>
-<summary><b>4.3 理论基础补齐</b></summary>
+<summary><b>5.2 理论基础补齐</b></summary>
 
 - **变分推断 / VAE**(latent 建模)— [Kingma 原论文](https://arxiv.org/abs/1312.6114) · [Lil'Log 教程](https://lilianweng.github.io/posts/2018-08-12-vae/)
 - **RNN / Transformer / SSM(Mamba)**(时序动力学)— [Mamba 论文](https://arxiv.org/abs/2312.00752)
@@ -1560,12 +1621,9 @@ pip install dreamerv3
 
 </details>
 
----
-
-## 五、参考资料汇总
 
 <details>
-<summary><b>5.1 核心读物</b></summary>
+<summary><b>5.3 核心读物</b></summary>
 
 - [**A Path Towards Autonomous Machine Intelligence**](https://openreview.net/pdf?id=BZ5a1r-kVsf) — Yann LeCun 白皮书,JEPA 世界观
 - [**Danijar Hafner 个人主页**](https://danijar.com/) — Dreamer 系列作者,代码、论文、讲座齐全
@@ -1574,7 +1632,7 @@ pip install dreamerv3
 </details>
 
 <details>
-<summary><b>5.2 综述论文</b></summary>
+<summary><b>5.4 综述论文</b></summary>
 
 - [*World Models for Autonomous Driving: A Survey*](https://arxiv.org/abs/2403.02622) (2024)
 - [*A Survey of World Models for Autonomous Driving*](https://arxiv.org/abs/2501.11260) (2025)
@@ -1583,7 +1641,7 @@ pip install dreamerv3
 </details>
 
 <details>
-<summary><b>5.3 Blog & 资源汇总</b></summary>
+<summary><b>5.5 Blog & 资源汇总</b></summary>
 
 - [**Lil'Log**](https://lilianweng.github.io/) — Lilian Weng,有 RL/世界模型相关综述
 - [**The Gradient**](https://thegradient.pub/)
