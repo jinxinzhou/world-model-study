@@ -1529,6 +1529,11 @@ Subsequent work (read immediately after World Models):
 
 This paper is the **direct predecessor of the Dreamer series** and Hafner's first model-based RL work. The RSSM dual-path latent architecture introduced here remains (as of 2026) the standard for model-based RL.
 
+<p align="center">
+  <img src="asset/planet-2019/combined.gif" width="500"/><br/>
+  <i>PlaNet in action on DeepMind Control Suite (6 continuous-control tasks, learned directly from pixels)</i>
+</p>
+
 ### 📖 Core Ideas
 
 #### Solving Three Pain Points of World Models
@@ -1551,6 +1556,11 @@ flowchart TD
 ```
 
 **Note**: **PlaNet has no actor / policy network** — each action is derived from CEM real-time planning (this is the biggest difference from Dreamer).
+
+<p align="center">
+  <img src="asset/planet-2019/planet_algorithm.png" width="800"/><br/>
+  <i>PlaNet overall algorithm (paper Figure 2). Left: training phase collects data from the real env and trains RSSM with end-to-end ELBO. Right: planning phase rolls out multiple trajectories in latent space from the current state and uses CEM to pick the best first action</i>
+</p>
 
 #### Key Innovations Compared
 
@@ -1576,12 +1586,22 @@ flowchart TD
 
 → **Order-of-magnitude (50×) sample-efficiency improvement**, the first time model-based RL **comprehensively beat model-free** on pixel tasks.
 
+<p align="center">
+  <img src="asset/planet-2019/result_table.png" width="800"/><br/>
+  <i>Paper Table 1: PlaNet uses <b>2,000 episodes</b> to reach the performance of D4PG with <b>100,000 episodes</b> — per-task efficiency gains of 11×–180×</i>
+</p>
+
 #### Key Ablations
 
 **Necessity of RSSM dual-path**:
 - Only deterministic h (pure RNN) → cannot express uncertainty, mediocre performance
 - Only stochastic z (pure VAE-RNN) → **untrainable**, long-term info washed out by noise
 - **h + z dual path** → **best** ⭐
+
+<p align="center">
+  <img src="asset/planet-2019/result_model.png" width="850"/><br/>
+  <i>Paper Figure 5: RSSM ablation. <b>Blue = PlaNet (h+z dual path)</b>, red = pure deterministic, green = pure stochastic. On all 6 tasks, pure-RNN and pure-VAE-RNN variants are clearly worse than the dual-path RSSM</i>
+</p>
 
 **Effect of latent overshooting**:
 - Only 1-step KL → short-term predictions OK, severe long-term drift
@@ -1622,6 +1642,11 @@ state s_t = (h_t, z_t)
 
 → This is the **core mathematical intuition** of RSSM: separate "stable memory of the past" and "uncertainty about the future" into two independent variables.
 
+<p align="center">
+  <img src="asset/planet-2019/rssm.png" width="900"/><br/>
+  <i>Paper Figure 1: Probabilistic graphical comparison of three dynamics models. <b>(a) RNN</b>: only deterministic h, cannot express uncertainty; <b>(b) SSM</b>: only stochastic s, long-term info easily washed out by noise; <b>(c) RSSM</b>: h (squares, deterministic) + s (circles, stochastic) coexist with distinct roles — this is PlaNet's core innovation</i>
+</p>
+
 #### Detail ②: Roles of the Four Sub-Networks
 
 | Network | Form | When Used |
@@ -1658,6 +1683,11 @@ Intuition:
 - `α_d` is the weight at each step (typically uniform)
 
 → This is key to PlaNet's long-horizon stability. DreamerV1 simplified to single-step KL + critic for residual values, which actually works better.
+
+<p align="center">
+  <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
+  <i>Paper Figure 3: Three training-objective variants. <b>(a) Standard ELBO</b>: only constrains adjacent steps (1-step KL); <b>(b) Observation Overshooting</b>: reconstructs observations across multiple steps (expensive); <b>(c) Latent Overshooting</b> ⭐: aligns prior and posterior KL across multiple steps in latent space — balancing accuracy and compute cost</i>
+</p>
 
 #### Detail ⑤: CEM Online Planning (No Actor!)
 
@@ -1706,6 +1736,11 @@ def plan_action(world_model, current_state):
 | I (CEM iterations) | 10 | 10 convergence iterations |
 
 **Per-step compute**: `10 × 1000 × 12 = 120,000 transition forward passes` — tens of milliseconds on GPU, but **real-time control on physical robots is challenging**. This is one of the key reasons PlaNet was superseded by Dreamer.
+
+<p align="center">
+  <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
+  <i>Paper Figure 4: CEM planning in latent space. Starting from the current state, multiple trajectories are rolled out in latent space (each generation of candidate action sequences); the world model predicts cumulative reward, elites are selected to update the action distribution, and the procedure iterates — <b>all without touching the real environment</b></i>
+</p>
 
 #### CEM vs CMA-ES (used by World Models)
 

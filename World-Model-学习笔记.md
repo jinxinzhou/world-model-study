@@ -1529,6 +1529,11 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 
 这篇论文是 Dreamer 系列的**直接前身**,Hafner 第一篇 model-based RL 工作。RSSM 双路 latent 架构在这里诞生,至今(2026)仍是 model-based RL 的标准。
 
+<p align="center">
+  <img src="asset/planet-2019/combined.gif" width="500"/><br/>
+  <i>PlaNet 在 DeepMind Control Suite 上的实际表现(6 个连续控制任务,从像素输入直接学控制)</i>
+</p>
+
 ### 📖 核心思想
 
 #### 解决 World Models 的三个痛点
@@ -1551,6 +1556,11 @@ flowchart TD
 ```
 
 **注意**:**PlaNet 没有 actor / policy 网络** —— 每个动作都是 CEM 实时规划得出的(这是和 Dreamer 最大的区别)。
+
+<p align="center">
+  <img src="asset/planet-2019/planet_algorithm.png" width="800"/><br/>
+  <i>PlaNet 算法整体流程(来自论文 Figure 2):左侧训练阶段从真实环境采数据训 RSSM(端到端 ELBO),右侧规划阶段从当前 state 出发,用 RSSM 在 latent 空间 rollout 出多个轨迹,CEM 挑选最优首步动作</i>
+</p>
 
 #### 关键创新对比
 
@@ -1576,12 +1586,22 @@ flowchart TD
 
 → **样本效率提升 50× 量级**,首次让 model-based RL 在像素任务上**全面碾压 model-free**。
 
+<p align="center">
+  <img src="asset/planet-2019/result_table.png" width="800"/><br/>
+  <i>论文 Table 1:PlaNet 用 <b>2000 episodes</b> 达到 D4PG <b>100,000 episodes</b> 的性能,各任务样本效率提升 11×~180×</i>
+</p>
+
 #### 关键消融
 
 **RSSM 双路的必要性**:
 - 只用 deterministic h(纯 RNN)→ 表达不了不确定性,中等性能
 - 只用 stochastic z(纯 VAE-RNN)→ **训不动**,长期信息被噪声冲掉
 - **h + z 双路** → **最好** ⭐
+
+<p align="center">
+  <img src="asset/planet-2019/result_model.png" width="850"/><br/>
+  <i>论文 Figure 5:RSSM 消融实验。<b>蓝色 = PlaNet (h+z 双路)</b>,红色 = 纯 deterministic,绿色 = 纯 stochastic。在所有 6 个任务上,纯 RNN 和纯 VAE-RNN 都明显差于双路 RSSM</i>
+</p>
 
 **Latent overshooting 的作用**:
 - 只用 1 步 KL → 短程预测可以,长程严重漂移
@@ -1622,6 +1642,11 @@ state s_t = (h_t, z_t)
 
 → 这是 RSSM 的**核心数学直觉**:把「过去的稳定记忆」和「未来的不确定性」分到两个变量里独立处理。
 
+<p align="center">
+  <img src="asset/planet-2019/rssm.png" width="900"/><br/>
+  <i>论文 Figure 1:三种动力学模型的概率图模型对比。<b>(a) RNN</b>:只有确定性 h,没法表达不确定性;<b>(b) SSM</b>:只有随机 s,长期信息易被噪声冲掉;<b>(c) RSSM</b>:h(方块,确定性)+ s(圆圈,随机性)并存,各司其职 —— 这就是 PlaNet 的核心创新</i>
+</p>
+
 #### 细节 ②:四个子网络的角色
 
 | 网络 | 形式 | 何时使用 |
@@ -1658,6 +1683,11 @@ PlaNet 把 World Models 三阶段独立训练的 V 和 M **合并成一个目标
 - `α_d` 是各步的权重(通常等权)
 
 → 这是 PlaNet 长程稳定性的关键。DreamerV1 简化为只用单步 KL + critic 估剩值,效果反而更好。
+
+<p align="center">
+  <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
+  <i>论文 Figure 3:三种训练目标对比。<b>(a) 标准 ELBO</b>:只在相邻时间步约束(1-step KL);<b>(b) Observation Overshooting</b>:跨多步重建观察(代价大);<b>(c) Latent Overshooting</b> ⭐:在 latent 空间跨多步对齐 prior 和 posterior 的 KL —— 平衡了准确性和计算成本</i>
+</p>
 
 #### 细节 ⑤:CEM 在线规划(没有 actor!)
 
@@ -1706,6 +1736,11 @@ def plan_action(world_model, current_state):
 | I(CEM 迭代次数) | 10 | 收敛迭代 10 次 |
 
 **单步计算量**:`10 × 1000 × 12 = 12 万次 transition 前向` —— GPU 上几十毫秒可完成,但**真机机器人实时控制吃力**。这是 PlaNet 被 Dreamer 取代的核心原因之一。
+
+<p align="center">
+  <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
+  <i>论文 Figure 4:CEM 在 latent 空间规划示意。从当前 state 出发,在 latent 里 rollout 多条 trajectory(各代候选动作序列),用 RSSM 预测累积奖励,选 elite 更新动作分布,迭代收敛 —— <b>全程不碰真实环境</b></i>
+</p>
 
 #### CEM vs CMA-ES(World Models 用的)
 
