@@ -1520,11 +1520,271 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 <details>
 <summary><b>4.2 PlaNet (2019)</b></summary>
 
-> **论文**:[arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551)
+> **论文**:[arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551)(Hafner et al., ICML 2019)
+> **代码**:<https://github.com/google-research/planet> · **项目页**:<https://planetrl.github.io/>
 >
-> **要点**:Latent dynamics 用于规划。把 World Models 的「分阶段」打通成端到端,引入 RSSM 这一关键架构。用 CEM 在线规划而非进化算法。
+> **TL;DR**:**学一个端到端的 latent 世界模型(RSSM),用 CEM 在 latent 空间「想象」未来的 rollouts 来选择动作**。把 World Models 的「分阶段」打通成「端到端」,样本效率比 model-free 高 50 倍。
 
-_📝 详细精读待补充_
+这篇论文是 Dreamer 系列的**直接前身**,Hafner 第一篇 model-based RL 工作。RSSM 双路 latent 架构在这里诞生,至今(2026)仍是 model-based RL 的标准。
+
+### 📖 核心思想
+
+#### 解决 World Models 的三个痛点
+
+| World Models 的痛点 | PlaNet 的回应 |
+|--------------------|--------------|
+| V 和 M 分开训 → VAE 学的特征未必对决策有用 | **端到端联合训练**(同一个 ELBO 损失) |
+| MDN-RNN 长程不稳 | **RSSM(确定性 + 随机性双路)** |
+| CMA-ES 训 Controller,扩展性差 | **CEM 在线规划**(无 Controller 网络) |
+| 只在 Doom/CarRacing demo | **DeepMind Control Suite**(6 个连续控制任务,像素输入) |
+
+#### 整体架构
+
+```mermaid
+flowchart TD
+    Env["真实环境"] -->|obs, action, reward| Buffer["Replay Buffer"]
+    Buffer -->|训练数据| RSSM["RSSM 世界模型<br/>(Encoder + Transition + Reward + Decoder)<br/>端到端 ELBO 损失"]
+    RSSM -.->|"latent rollout"| CEM["CEM 在线规划<br/>采样 1000 个动作序列<br/>选 top-100 elite,迭代 10 次"]
+    CEM -->|"a_t"| Env
+```
+
+**注意**:**PlaNet 没有 actor / policy 网络** —— 每个动作都是 CEM 实时规划得出的(这是和 Dreamer 最大的区别)。
+
+#### 关键创新对比
+
+| 维度 | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
+|------|--------------------|-----|---|
+| 训练方式 | 三阶段独立 | **端到端 ELBO** | 端到端 |
+| Latent 结构 | 单一连续高斯(VAE) | **(h, z) 双路 (RSSM)** | 同 PlaNet |
+| 决策方式 | CMA-ES 训 Controller | **CEM 在线规划** | Actor-Critic + 解析梯度 |
+| 主战场 | CarRacing / VizDoom | **DMC(6 任务)** | DMC / Atari / Minecraft |
+
+### 🧪 关键实验
+
+#### 在 DeepMind Control Suite(像素输入)击败 model-free 50×
+
+| Algorithm | 达到固定性能所需样本数 | 类型 |
+|-----------|-----------------------|------|
+| A3C | 50 M 帧 | model-free |
+| D4PG | 100 M 帧 | model-free SOTA |
+| **PlaNet** | **2 M 帧** | **model-based** ⭐ |
+
+→ **样本效率提升 50× 量级**,首次让 model-based RL 在像素任务上**全面碾压 model-free**。
+
+#### 关键消融
+
+**RSSM 双路的必要性**:
+- 只用 deterministic h(纯 RNN)→ 表达不了不确定性,中等性能
+- 只用 stochastic z(纯 VAE-RNN)→ **训不动**,长期信息被噪声冲掉
+- **h + z 双路** → **最好** ⭐
+
+**Latent overshooting 的作用**:
+- 只用 1 步 KL → 短程预测可以,长程严重漂移
+- 加入 D=50 步 overshooting → **长程预测显著稳定**
+
+**规划 horizon H 的影响**:
+- H=1 → 退化成贪心,差
+- **H=12 → 甜点** ⭐
+- H=50 → 模型误差累积,反而变差
+
+→ "**世界模型不能想太远**" 是 model-based RL 的永恒痛点。
+
+### 🔧 实现细节深入
+
+#### 细节 ①:RSSM 状态拆分(PlaNet 最关键贡献)
+
+<p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
+
+```
+state s_t = (h_t, z_t)
+            ↑    ↑
+       确定性  随机性
+       (GRU)  (高斯)
+```
+
+| 变量 | 类型 | 由谁产生 | 角色 |
+|------|------|---------|------|
+| `h_t` | **确定性** | GRU 的隐藏状态:`h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1})` | **长期记忆**,稳定可靠 |
+| `z_t` | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
+
+**为什么要双路?**(关键洞察)
+
+| 单路设计 | 问题 |
+|----------|------|
+| **纯确定性** | 没法表达噪声、多模态未来 |
+| **纯随机** | 训练不稳,长期信息被噪声冲掉 |
+| **双路 h + z** | ✅ h 保证稳定记忆,z 表达不确定性 |
+
+→ 这是 RSSM 的**核心数学直觉**:把「过去的稳定记忆」和「未来的不确定性」分到两个变量里独立处理。
+
+#### 细节 ②:四个子网络的角色
+
+| 网络 | 形式 | 何时使用 |
+|------|------|---------|
+| **Encoder**(Posterior) | $q(z_t \mid h_t, o_t)$ | **训练时**:看到真实 obs,出后验 z |
+| **Transition**(Prior) | $p(z_t \mid h_t)$ | **规划时 / 想象时**:不看 obs 也能预测 z ⭐ |
+| **Reward** | $p(r_t \mid h_t, z_t)$ | 预测奖励(规划时累加 return) |
+| **Decoder** | $p(o_t \mid h_t, z_t)$ | 重建 obs(**仅训练辅助**,部署不用) |
+
+🔑 **核心机制**:**训练时用 Encoder 的后验 z(有 obs 监督),规划时用 Transition 的 prior z(没有 obs)** —— 这就是 RSSM 能"在 latent 空间想象未来"的关键。
+
+#### 细节 ③:端到端 ELBO 损失
+
+PlaNet 把 World Models 三阶段独立训练的 V 和 M **合并成一个目标**:
+
+<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO"/></p>
+
+三个分量同时优化:
+- **重建项**:让 decoder 能从 (h, z) 重建 obs(类似 VAE)
+- **奖励项**:让 reward head 能预测真实奖励
+- **KL 项**:让 posterior `q(z|h, o)` 接近 prior `p(z|h)`(VAE 风格正则)
+
+→ 一个梯度同时优化 4 个子网络,**特征自动对决策有用**(不像 World Models 的 V 只学重建)。
+
+#### 细节 ④:Latent Overshooting(长程稳定性技巧)
+
+标准 ELBO 只看「单步预测」,但 PlaNet 要做 H=12 步规划 → 必须**多步预测都准**。
+
+<p align="center"><img src="asset/formulas/f15.png" alt="latent overshooting"/></p>
+
+直觉:
+- 让「从 t 时刻 prior 预测 d 步后的 z」接近「从 t+d 时刻 posterior 编码的 z」
+- 不仅单步准,**多步预测的分布也要对齐**
+- `α_d` 是各步的权重(通常等权)
+
+→ 这是 PlaNet 长程稳定性的关键。DreamerV1 简化为只用单步 KL + critic 估剩值,效果反而更好。
+
+#### 细节 ⑤:CEM 在线规划(没有 actor!)
+
+PlaNet **不学 policy 网络**,每个时间步**实时做规划**:
+
+<p align="center"><img src="asset/formulas/f17.png" alt="CEM optimization"/></p>
+
+```python
+def plan_action(world_model, current_state):
+    # 维护一个动作序列分布:每步独立高斯
+    μ = zeros(H, action_dim)        # H = 12 步规划 horizon
+    σ = ones(H, action_dim)
+
+    for iteration in range(I):       # I = 10 次 CEM 迭代
+        # 1. 采样 J 个候选动作序列(J = 1000)
+        action_seqs = sample_normal(μ, σ, J)
+
+        # 2. 用世界模型 rollout 每个序列,累积奖励
+        returns = []
+        for seq in action_seqs:
+            z, h = current_state
+            R = 0
+            for t in range(H):
+                z, h = world_model.transition(z, h, seq[t])  # 用 prior
+                R += world_model.reward(z, h)
+            returns.append(R)
+
+        # 3. 选 top-K(K = 100)elite
+        elite_idx = argsort(returns)[-K:]
+        elite_seqs = action_seqs[elite_idx]
+
+        # 4. 用 elite 的均值方差更新分布
+        μ = elite_seqs.mean(axis=0)
+        σ = elite_seqs.std(axis=0)
+
+    return μ[0]   # 只执行第一个动作,下一步重新规划
+```
+
+**关键参数**:
+
+| 参数 | 值 | 含义 |
+|------|----|----|
+| H(规划 horizon) | 12 | 想象 12 步未来 |
+| J(候选序列数) | 1000 | 每代采 1000 个序列 |
+| K(elite 数) | 100 | 选 top-100 |
+| I(CEM 迭代次数) | 10 | 收敛迭代 10 次 |
+
+**单步计算量**:`10 × 1000 × 12 = 12 万次 transition 前向` —— GPU 上几十毫秒可完成,但**真机机器人实时控制吃力**。这是 PlaNet 被 Dreamer 取代的核心原因之一。
+
+#### CEM vs CMA-ES(World Models 用的)
+
+| 维度 | CMA-ES (World Models) | CEM (PlaNet) |
+|------|----------------------|--------------|
+| 优化对象 | **Controller 的参数 θ** | **动作序列 a_{1:H}** |
+| 何时优化 | **训练时**,优化好之后部署 | **每步实时**(在线规划) |
+| 协方差自适应 | 是(Σ) | 否(每步独立高斯) |
+| 是否需要 actor 网络 | 是(线性 controller) | **否!** |
+
+### 💭 理解思考
+
+#### 贡献与历史地位
+
+✅ **贡献**
+
+1. **RSSM 双路 latent** —— 现代 model-based RL 的标准架构,被 Dreamer V1/V2/V3 全部继承
+2. **端到端 ELBO 训世界模型** —— 替代了 World Models 的分阶段,后续无数工作沿用
+3. **Latent overshooting** —— 长程稳定性技巧
+4. **DMC 上 50× 样本效率** —— 首次让 model-based 在视觉控制上完胜 model-free
+5. **代码开源** —— 后续 Dreamer 系的基线
+
+⚠️ **局限**(直接催生 Dreamer)
+
+1. **CEM 在线规划巨慢** —— 每步 12 万次前向,真机机器人实时控制吃力
+2. **没法学到隐式的长期策略** —— 规划只能想 12 步,长程任务表现差
+3. **只能解连续控制** —— CEM 对离散动作处理不优雅
+4. **仍有 model exploitation** —— 比 World Models 用 τ 防御更弱
+
+🌳 **后续影响**
+
+- **DreamerV1 (2020)**:CEM → actor-critic + 解析梯度反传,**推理快几十倍 + 性能更好**
+- **DreamerV2 (2021)**:RSSM 的 z 改成离散 categorical,攻克 Atari
+- **DreamerV3 (2023)**:同一架构 + symlog 归一化,150+ 任务通用
+- **MuZero 系**:借鉴 RSSM 思路 + MCTS 搜索
+- **TWM / IRIS / DIAMOND**:RSSM 的 transformer / diffusion 变体
+
+#### 演化脉络
+
+```
+World Models (2018)
+        │ 三阶段独立 / VAE + MDN-RNN / CMA-ES
+        ▼
+PlaNet (2019)           ← 我们在这里
+        │ 端到端 / RSSM 双路 / CEM 在线规划
+        ▼
+Dreamer V1 (2020)
+        │ 同 RSSM / Actor-Critic 替代 CEM / 解析梯度
+        ▼
+Dreamer V2/V3 (2021–2023)
+        │ 离散 z / symlog / 通用 150+ 任务
+```
+
+#### 阅读建议
+
+1. **先看项目页 demo**:<https://planetrl.github.io/>(2 分钟,体感)
+2. **读论文 Section 3-4**(RSSM 架构 + ELBO 损失)
+3. 跳过实现细节,直接跑官方代码 cartpole-swingup(半天)
+4. 想深入再读 Section 5(latent overshooting)
+5. **立刻跳到 DreamerV1**(自然演化)
+
+#### 一句话总结
+
+> **PlaNet = 端到端的 RSSM 世界模型 + CEM 在线规划。它把 World Models 的分阶段训练打通成端到端,引入了「确定性 h + 随机性 z」双路 latent 架构(被后续所有 Dreamer 沿用),在 DMC 上首次让 model-based RL 在像素任务上 50× 完胜 model-free。但 CEM 在线规划巨慢,直接催生了 DreamerV1 用 actor-critic + 解析梯度反传取代。**
+
+### 📚 学习资源
+
+**🎬 视频讲解**
+- [**Yannic Kilcher — PlaNet paper review**](https://www.youtube.com/results?search_query=yannic+kilcher+planet) — 论文逐句过
+- [**Hafner 在 Google AI Blog 的官方介绍**](https://blog.research.google/2019/02/introducing-planet-deep-planning.html)
+
+**💻 代码与复现**
+- [**google-research/planet**](https://github.com/google-research/planet) — 官方 TensorFlow 实现
+- [**Kaixhin/PlaNet**](https://github.com/Kaixhin/PlaNet) ⭐ — PyTorch 复现,推荐学习用
+- [**cross32768/PlaNet_PyTorch**](https://github.com/cross32768/PlaNet_PyTorch) — 另一个 PyTorch 版本
+
+**📝 中文解读**
+- 知乎搜索 "PlaNet 解读" / "Hafner RSSM"
+- PaperWeekly 微信号搜 "PlaNet"
+
+**📚 延伸阅读**
+- 前传:[World Models (2018)](https://arxiv.org/abs/1803.10122) ← 必读前置
+- 后续:[DreamerV1 (2020)](https://arxiv.org/abs/1912.01603) ← 必读
+- DMC 环境:[dm_control](https://github.com/google-deepmind/dm_control)
 
 </details>
 

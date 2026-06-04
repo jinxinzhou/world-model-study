@@ -1520,11 +1520,267 @@ Subsequent work (read immediately after World Models):
 <details>
 <summary><b>4.2 PlaNet (2019)</b></summary>
 
-> **Paper**: [arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551)
+> **Paper**: [arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551) (Hafner et al., ICML 2019)
+> **Code**: <https://github.com/google-research/planet> · **Project page**: <https://planetrl.github.io/>
 >
-> **TL;DR**: Latent dynamics for planning. Turns the World Models' staged training into end-to-end, introducing RSSM — the key architecture. Uses CEM for online planning rather than evolutionary algorithms.
+> **TL;DR**: **Learns an end-to-end latent world model (RSSM) and uses CEM to "imagine" future rollouts in latent space for action selection.** Turns World Models' staged training into end-to-end, achieving 50× sample efficiency over model-free.
 
-_📝 Detailed deep-dive to be added_
+This paper is the **direct predecessor of the Dreamer series** and Hafner's first model-based RL work. The RSSM dual-path latent architecture introduced here remains (as of 2026) the standard for model-based RL.
+
+### 📖 Core Ideas
+
+#### Solving Three Pain Points of World Models
+
+| World Models Pain Point | PlaNet Response |
+|------------------------|-----------------|
+| V and M trained separately → VAE features may not help decisions | **End-to-end joint training** (single ELBO loss) |
+| MDN-RNN unstable over long horizons | **RSSM (deterministic + stochastic dual path)** |
+| CMA-ES trains Controller, poor scalability | **CEM online planning** (no Controller network) |
+| Only demoed on Doom/CarRacing | **DeepMind Control Suite** (6 continuous-control tasks from pixels) |
+
+#### Overall Architecture
+
+```mermaid
+flowchart TD
+    Env["Real Environment"] -->|obs, action, reward| Buffer["Replay Buffer"]
+    Buffer -->|training data| RSSM["RSSM World Model<br/>(Encoder + Transition + Reward + Decoder)<br/>End-to-end ELBO loss"]
+    RSSM -.->|"latent rollout"| CEM["CEM Online Planning<br/>Sample 1000 action sequences<br/>Select top-100 elites, iterate 10 times"]
+    CEM -->|"a_t"| Env
+```
+
+**Note**: **PlaNet has no actor / policy network** — each action is derived from CEM real-time planning (this is the biggest difference from Dreamer).
+
+#### Key Innovations Compared
+
+| Dimension | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
+|-----------|--------------------|-----|---|
+| Training | Three stages, separate | **End-to-end ELBO** | End-to-end |
+| Latent structure | Single continuous Gaussian (VAE) | **(h, z) dual path (RSSM)** | Same as PlaNet |
+| Decision | CMA-ES trains Controller | **CEM online planning** | Actor-Critic + analytic gradients |
+| Main testbed | CarRacing / VizDoom | **DMC (6 tasks)** | DMC / Atari / Minecraft |
+
+### 🧪 Key Experiments
+
+#### Beats Model-Free by 50× on DeepMind Control Suite (Pixel Input)
+
+| Algorithm | Samples for fixed performance | Type |
+|-----------|------------------------------|------|
+| A3C | 50 M frames | model-free |
+| D4PG | 100 M frames | model-free SOTA |
+| **PlaNet** | **2 M frames** | **model-based** ⭐ |
+
+→ **Order-of-magnitude (50×) sample-efficiency improvement**, the first time model-based RL **comprehensively beat model-free** on pixel tasks.
+
+#### Key Ablations
+
+**Necessity of RSSM dual-path**:
+- Only deterministic h (pure RNN) → cannot express uncertainty, mediocre performance
+- Only stochastic z (pure VAE-RNN) → **untrainable**, long-term info washed out by noise
+- **h + z dual path** → **best** ⭐
+
+**Effect of latent overshooting**:
+- Only 1-step KL → short-term predictions OK, severe long-term drift
+- Adding D=50 step overshooting → **long-term predictions significantly more stable**
+
+**Effect of planning horizon H**:
+- H=1 → degenerates to greedy, poor
+- **H=12 → sweet spot** ⭐
+- H=50 → model errors accumulate, performance drops
+
+→ "**The world model cannot imagine too far ahead**" is an eternal pain point of model-based RL.
+
+### 🔧 Implementation Details Deep-Dive
+
+#### Detail ①: RSSM State Decomposition (PlaNet's Most Important Contribution)
+
+<p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
+
+```
+state s_t = (h_t, z_t)
+            ↑    ↑
+       deterministic  stochastic
+       (GRU)          (Gaussian)
+```
+
+| Variable | Type | Produced By | Role |
+|----------|------|-------------|------|
+| `h_t` | **Deterministic** | GRU hidden state: `h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1})` | **Long-term memory**, stable |
+| `z_t` | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
+
+**Why dual-path?** (Key insight)
+
+| Single-path Design | Problem |
+|--------------------|---------|
+| **Pure deterministic** | Cannot express noise, multi-modal futures |
+| **Pure stochastic** | Unstable training, long-term info washed out by noise |
+| **Dual path h + z** | ✅ h guarantees stable memory, z expresses uncertainty |
+
+→ This is the **core mathematical intuition** of RSSM: separate "stable memory of the past" and "uncertainty about the future" into two independent variables.
+
+#### Detail ②: Roles of the Four Sub-Networks
+
+| Network | Form | When Used |
+|---------|------|-----------|
+| **Encoder** (Posterior) | $q(z_t \mid h_t, o_t)$ | **Training**: sees real obs, outputs posterior z |
+| **Transition** (Prior) | $p(z_t \mid h_t)$ | **Planning / imagination**: predicts z without seeing obs ⭐ |
+| **Reward** | $p(r_t \mid h_t, z_t)$ | Predicts reward (accumulated for return during planning) |
+| **Decoder** | $p(o_t \mid h_t, z_t)$ | Reconstructs obs (**training only**, not used at deployment) |
+
+🔑 **Core mechanism**: **At training time, use the Encoder's posterior z (supervised by obs); at planning time, use the Transition's prior z (no obs available)** — this is what enables RSSM to "imagine the future in latent space".
+
+#### Detail ③: End-to-End ELBO Loss
+
+PlaNet **merges World Models' separately-trained V and M into a single objective**:
+
+<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO"/></p>
+
+Three terms optimized jointly:
+- **Reconstruction term**: enables decoder to reconstruct obs from (h, z) (VAE-style)
+- **Reward term**: enables reward head to predict true reward
+- **KL term**: makes posterior `q(z|h, o)` close to prior `p(z|h)` (VAE-style regularizer)
+
+→ A single gradient optimizes all 4 sub-networks, so **features automatically become decision-useful** (unlike World Models' V which only learns reconstruction).
+
+#### Detail ④: Latent Overshooting (Long-Horizon Stability Trick)
+
+Standard ELBO only considers "single-step prediction", but PlaNet does H=12 step planning → **multi-step predictions must all be accurate**.
+
+<p align="center"><img src="asset/formulas/f15.png" alt="latent overshooting"/></p>
+
+Intuition:
+- Make "prior prediction of z d steps ahead from time t" close to "posterior encoding of z at time t+d"
+- Not only single-step accurate, **but multi-step prediction distributions must also align**
+- `α_d` is the weight at each step (typically uniform)
+
+→ This is key to PlaNet's long-horizon stability. DreamerV1 simplified to single-step KL + critic for residual values, which actually works better.
+
+#### Detail ⑤: CEM Online Planning (No Actor!)
+
+PlaNet **does not learn a policy network**; instead it **plans in real time** at each step:
+
+<p align="center"><img src="asset/formulas/f17.png" alt="CEM optimization"/></p>
+
+```python
+def plan_action(world_model, current_state):
+    # Maintain a distribution over action sequences: independent Gaussian per step
+    μ = zeros(H, action_dim)        # H = 12 planning horizon
+    σ = ones(H, action_dim)
+
+    for iteration in range(I):       # I = 10 CEM iterations
+        # 1. Sample J candidate action sequences (J = 1000)
+        action_seqs = sample_normal(μ, σ, J)
+
+        # 2. Roll out each sequence with the world model, accumulate reward
+        returns = []
+        for seq in action_seqs:
+            z, h = current_state
+            R = 0
+            for t in range(H):
+                z, h = world_model.transition(z, h, seq[t])  # use prior
+                R += world_model.reward(z, h)
+            returns.append(R)
+
+        # 3. Select top-K elites (K = 100)
+        elite_idx = argsort(returns)[-K:]
+        elite_seqs = action_seqs[elite_idx]
+
+        # 4. Update distribution using elite mean and std
+        μ = elite_seqs.mean(axis=0)
+        σ = elite_seqs.std(axis=0)
+
+    return μ[0]   # Execute only the first action, replan at the next step
+```
+
+**Key parameters**:
+
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| H (planning horizon) | 12 | Imagine 12 steps ahead |
+| J (candidate sequences) | 1000 | 1000 sequences sampled per iteration |
+| K (elite count) | 100 | Select top 100 |
+| I (CEM iterations) | 10 | 10 convergence iterations |
+
+**Per-step compute**: `10 × 1000 × 12 = 120,000 transition forward passes` — tens of milliseconds on GPU, but **real-time control on physical robots is challenging**. This is one of the key reasons PlaNet was superseded by Dreamer.
+
+#### CEM vs CMA-ES (used by World Models)
+
+| Dimension | CMA-ES (World Models) | CEM (PlaNet) |
+|-----------|----------------------|--------------|
+| Optimization target | **Controller parameters θ** | **Action sequence a_{1:H}** |
+| When optimized | **Training time**, then deployed | **Each step in real-time** (online planning) |
+| Covariance adaptation | Yes (Σ) | No (independent Gaussian per step) |
+| Needs actor network? | Yes (linear controller) | **No!** |
+
+### 💭 Reflections
+
+#### Contributions and Historical Position
+
+✅ **Contributions**
+
+1. **RSSM dual-path latent** — the standard architecture in modern model-based RL, inherited by Dreamer V1/V2/V3
+2. **End-to-end ELBO training of world models** — replaced World Models' staged training, used by countless follow-ups
+3. **Latent overshooting** — long-horizon stability trick
+4. **50× sample efficiency on DMC** — first time model-based comprehensively beat model-free on visual control
+5. **Open-source code** — baseline for the subsequent Dreamer series
+
+⚠️ **Limitations** (directly led to Dreamer)
+
+1. **CEM online planning is very slow** — 120k forwards per step, hard for real-time robot control
+2. **Cannot learn implicit long-term policies** — planning only 12 steps, struggles on long-horizon tasks
+3. **Only solves continuous control** — CEM does not handle discrete actions elegantly
+4. **Still has model exploitation** — weaker defense than World Models' τ trick
+
+🌳 **Subsequent Impact**
+
+- **DreamerV1 (2020)**: CEM → actor-critic + analytic gradient backprop, **tens of times faster inference + better performance**
+- **DreamerV2 (2021)**: RSSM's z made discrete categorical, conquered Atari
+- **DreamerV3 (2023)**: same architecture + symlog normalization, general across 150+ tasks
+- **MuZero family**: borrows RSSM ideas + MCTS search
+- **TWM / IRIS / DIAMOND**: transformer / diffusion variants of RSSM
+
+#### Evolutionary Lineage
+
+```
+World Models (2018)
+        │ Three stages, separate / VAE + MDN-RNN / CMA-ES
+        ▼
+PlaNet (2019)           ← we are here
+        │ End-to-end / RSSM dual-path / CEM online planning
+        ▼
+Dreamer V1 (2020)
+        │ Same RSSM / Actor-Critic replaces CEM / analytic gradients
+        ▼
+Dreamer V2/V3 (2021–2023)
+        │ Discrete z / symlog / general across 150+ tasks
+```
+
+#### Reading Suggestions
+
+1. **Watch the project page demos first**: <https://planetrl.github.io/> (2 minutes, builds intuition)
+2. **Read paper Sections 3–4** (RSSM architecture + ELBO loss)
+3. Skip implementation details, just run the official `cartpole-swingup` (half a day)
+4. For deeper understanding, read Section 5 (latent overshooting)
+5. **Immediately jump to DreamerV1** (natural progression)
+
+#### One-Sentence Summary
+
+> **PlaNet = end-to-end RSSM world model + CEM online planning. It turned World Models' staged training into end-to-end and introduced the «deterministic h + stochastic z» dual-path latent architecture (inherited by all subsequent Dreamer variants), making model-based RL beat model-free by 50× on pixel-based DMC for the first time. However, CEM online planning is too slow, which directly led to DreamerV1 replacing it with actor-critic + analytic gradient backprop.**
+
+### 📚 Learning Resources
+
+**🎬 Video Explanations**
+- [**Yannic Kilcher — PlaNet paper review**](https://www.youtube.com/results?search_query=yannic+kilcher+planet) — line-by-line paper walkthrough
+- [**Hafner's official intro on Google AI Blog**](https://blog.research.google/2019/02/introducing-planet-deep-planning.html)
+
+**💻 Code & Reproductions**
+- [**google-research/planet**](https://github.com/google-research/planet) — official TensorFlow implementation
+- [**Kaixhin/PlaNet**](https://github.com/Kaixhin/PlaNet) ⭐ — PyTorch reproduction, recommended for learning
+- [**cross32768/PlaNet_PyTorch**](https://github.com/cross32768/PlaNet_PyTorch) — another PyTorch version
+
+**📝 Related Reading**
+- Predecessor: [World Models (2018)](https://arxiv.org/abs/1803.10122) ← essential prerequisite
+- Successor: [DreamerV1 (2020)](https://arxiv.org/abs/1912.01603) ← essential read
+- DMC environment: [dm_control](https://github.com/google-deepmind/dm_control)
 
 </details>
 
