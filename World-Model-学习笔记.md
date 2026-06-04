@@ -656,6 +656,8 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
 
   <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
 
+> 💡 **z 和 h 的关系澄清**:World Models 这里 **z 和 h 是「主从分离」关系** —— z 是 VAE 独立预训练的输出(只学视觉重建),h 只是 MDN-RNN 内部的「工作记忆」,辅助预测下一步 z。Controller 可选择只用 z、或用 [z, h](论文消融:CarRacing 上 [z, h] 提分 40%)。这与后来 PlaNet 的 **RSSM 双路 state**(联合训练、z 同时学视觉+动力学、(h, z) 共同构成统一环境状态)是**不同的设计哲学** —— 详见 §4.2 对比表。
+
 **C:超小 Controller**
 ```python
 a_t = W_c · [z_t, h_t] + b_c    # 就一个线性层
@@ -1555,9 +1557,12 @@ flowchart TD
 | 维度 | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
 |------|--------------------|-----|---|
 | 训练方式 | 三阶段独立 | **端到端 ELBO** | 端到端 |
-| Latent 结构 | 单一连续高斯(VAE) | **(h, z) 双路 (RSSM)** | 同 PlaNet |
+| Latent 结构 | VAE 出 z + MDN-RNN 副产生 h(**分离**,分阶段训) | **(h, z) 作为统一 state**(**双路 RSSM**,联合训) | 同 PlaNet |
+| z 学到什么 | 仅视觉重建(VAE 单独训) | **视觉重建 + 动力学预测**(KL 约束) | 同 PlaNet |
 | 决策方式 | CMA-ES 训 Controller | **CEM 在线规划** | Actor-Critic + 解析梯度 |
 | 主战场 | CarRacing / VizDoom | **DMC(6 任务)** | DMC / Atari / Minecraft |
+
+> 💡 **注意**:World Models 的 M 内部**也有** LSTM 隐藏状态 h,但它只是"工作记忆"的副产品,与 VAE 的 z **分阶段训练、概念上分离**(z 只学重建,h 只辅助预测 z)。PlaNet 的 RSSM 才**第一次把 (h, z) 视为统一的环境状态**,联合训练,让 z 同时学到视觉和动力学信息 —— 这是 RSSM 真正的革命性所在。
 
 ### 🧪 关键实验
 

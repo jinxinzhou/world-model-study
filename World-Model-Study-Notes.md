@@ -656,6 +656,8 @@ Output:
 
   <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
 
+> 💡 **Clarification on z vs h**: In World Models, **z and h are in a "principal-subordinate" relationship, not equal partners** — z is the output of a separately pre-trained VAE (learning only visual reconstruction), and h is just an internal "working memory" of the MDN-RNN that helps predict the next z. The Controller can take either z alone or `[z, h]` (the paper's ablation shows `[z, h]` improves CarRacing score by 40%). This is **a different design philosophy** from PlaNet's later **RSSM dual-path state** (joint training, where z learns both visual and dynamic information, and (h, z) jointly form a unified environment state) — see the comparison table in §4.2.
+
 **C: Ultra-Small Controller**
 ```python
 a_t = W_c · [z_t, h_t] + b_c    # just one linear layer
@@ -1555,9 +1557,12 @@ flowchart TD
 | Dimension | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
 |-----------|--------------------|-----|---|
 | Training | Three stages, separate | **End-to-end ELBO** | End-to-end |
-| Latent structure | Single continuous Gaussian (VAE) | **(h, z) dual path (RSSM)** | Same as PlaNet |
+| Latent structure | VAE produces z + MDN-RNN's h as by-product (**separate**, staged training) | **(h, z) as a unified state** (**dual-path RSSM**, joint training) | Same as PlaNet |
+| What z learns | Only visual reconstruction (VAE trained alone) | **Visual reconstruction + dynamics prediction** (KL constraint) | Same as PlaNet |
 | Decision | CMA-ES trains Controller | **CEM online planning** | Actor-Critic + analytic gradients |
 | Main testbed | CarRacing / VizDoom | **DMC (6 tasks)** | DMC / Atari / Minecraft |
+
+> 💡 **Note**: World Models' M does have an LSTM hidden state h internally, but it is only a "working memory" by-product, **conceptually separate** from VAE's z and trained in different stages (z only learns reconstruction; h only assists in predicting z). PlaNet's RSSM is the first to **treat (h, z) as a unified environment state**, trained jointly, so that z simultaneously captures both visual and dynamic information — this is the truly revolutionary aspect of RSSM.
 
 ### 🧪 Key Experiments
 
