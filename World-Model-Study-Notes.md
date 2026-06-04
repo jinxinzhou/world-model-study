@@ -201,59 +201,59 @@ Strictly speaking, therefore, **Dreamer is "latent but still generative," wherea
 <details>
 <summary><b>4.0 Background Concept: Model-Free vs Model-Based RL</b></summary>
 
-Understanding World Model first requires understanding its position in the RL taxonomy.
+Understanding the World Model requires first situating it within the RL family.
 
-### What Is the "Environment"?
+### What Is "the Environment"
 
-Environment = **a "black-box" that converts actions into next states and rewards**. Mathematically, it is defined by two functions:
+The environment is a **"black box" that turns actions into next states and rewards**. Mathematically it is defined by two functions:
 
 ```
-State transition:  P(s_{t+1} | s_t, a_t)     "Given this action, what will the next step become?"
-Reward function:   R(s_t, a_t)                "Given this action, how much reward is obtained?"
+state transition:  P(s_{t+1} | s_t, a_t)    "what happens after taking this action"
+reward function:   R(s_t, a_t)               "how many points this action earns"
 ```
 
-### "Not Learning the Environment" vs "Learning the Environment"
+### Two Learning Paradigms
 
-**🔴 Model-Free — Not Learning the Environment**
+**🔴 Model-Free — does not learn the environment**
 
-The Agent treats the environment as a **pure black-box**: it can try actions and receive feedback, but it **does not predict** "what will happen if X is done"; it only learns "**which action yields high reward in this state**."
+The agent treats the environment as a **pure black box**: it can try actions and receive feedback, but **does not predict** "what happens if I do X" — it only learns "**which action yields the highest score in this state**".
 
-- Analogy: playing Mario for the first time, failing 1000 times, and memorizing 1000 "successful patterns" without studying jump physics
-- DQN's method: input image → output Q values for 18 actions → argmax, while **never predicting the next frame**
+- Analogy: playing Mario for the first time, failing 1000 times, memorizing 1000 "winning patterns" — but never studying jump physics
+- What DQN does: image → Q-values for 18 actions → argmax. **Never predicts the next frame.**
 
-**🟢 Model-Based / World Model — Learning the Environment**
+**🟢 Model-Based / World Model — learns the environment**
 
-The Agent actively learns a **copy of the environment** (a world model) and then performs rollouts in its mind.
+The agent actively learns a **copy of the environment** (a world model) and then mentally simulates with it.
 
-- Analogy: learning that "press A → jump 4 blocks" and "touch Goomba → die," making mental rehearsal possible
-- Dreamer's method: learn RSSM to predict the next latent + reward, and train actor-critic in a virtual environment, i.e., "dreaming"
+- Analogy: learning "press A → jump 4 squares", "touch goomba → die" — these rules let one simulate ahead
+- What Dreamer does: train RSSM to predict next latent + reward, then "dream" inside the virtual env to train an actor-critic
 
 ### Key Clarification: Model ≠ Policy ≠ Value
 
-These three terms are easily confused:
+Three easily confused terms:
 
-| Concept | What Is Learned | Who Has It |
-|------|----------|------|
-| **Environment model** (model) | $P(s' \mid s, a)$ and $R(s, a)$ — **physical laws** | Only model-based |
-| **Value function** (value) | $V(s)$ or $Q(s, a)$ — **how good a state is** | Both can have it |
-| **Policy** (policy) | $\pi(a \mid s)$ — **which action to choose in a state** | Both can have it |
+| Concept | What it learns | Who has it |
+|---------|---------------|------------|
+| **Environment model** | `P(s' ∣ s,a)` and `R(s,a)` — **physical laws** | model-based only |
+| **Value function** | `V(s)` or `Q(s,a)` — **how good a state is** | both can have it |
+| **Policy** | `π(a ∣ s)` — **what action to take in a state** | both can have it |
 
-→ **Model-free learns "what to do" (Policy/value), but not "how the world works" (model)**
+→ **Model-free learns "what to do" (policy/value) but not "how the world works" (model)**
 → **Model-based learns "how the world works" (model), then derives "what to do"**
 
-### Comprehensive Comparison
+### Overall Comparison
 
 | Dimension | Model-Free | Model-Based |
-|------|-----------|-------------|
-| Learns an environment model? | ❌ | ✅ |
-| Sample efficiency | **Low** (requires massive interaction) | **High** (can train "inside the dream") |
-| Asymptotic performance | Can be very strong in the long run | Limited by model accuracy |
-| Engineering complexity | Relatively simple | Complex (must train a world model) |
-| Training stability | More stable | Vulnerable to model error (model exploitation) |
-| Compute | Fast in training/inference | Slow training (dual burden); inference may be slow (planning) |
-| Classic representatives | DQN, PPO, SAC | World Models, Dreamer, MuZero |
+|-----------|-----------|-------------|
+| Learns env model? | ❌ | ✅ |
+| Sample efficiency | **Low** (massive interaction) | **High** ("dream training" possible) |
+| Compute-for-performance at inference | ❌ Fixed | ✅ Linearly scalable |
+| Cross-task transfer | ❌ Almost none | ✅ Mostly preserved |
+| Engineering complexity | Relatively simple | Complex (must train world model) |
+| Training stability | Relatively stable | Vulnerable to model errors (model exploitation) |
+| Representative algorithms | DQN, PPO, SAC | World Models, Dreamer, MuZero |
 
-### Representative Model-Free Algorithm Families
+### Family Tree of Model-Free Algorithms
 
 ```
 ┌─ Value-based ─────────────────────────┐
@@ -261,322 +261,176 @@ These three terms are easily confused:
 └───────────────────────────────────────┘
 
 ┌─ Policy-based ────────────────────────┐
-│  REINFORCE → TRPO → PPO ⭐ most used   │
+│  REINFORCE → TRPO → PPO ⭐ most used  │
 └───────────────────────────────────────┘
 
 ┌─ Actor-Critic ────────────────────────┐
-│  A3C → DDPG → TD3 → SAC ⭐ continuous control │
+│  A3C → DDPG → TD3 → SAC ⭐ cont. ctrl │
 └───────────────────────────────────────┘
 ```
 
-### The Fatal Weakness of Model-Free Methods
+### 🚀 The True Value of Model-Based: It's Not "Saving Data", It's "Learning Laws"
 
-> **Low sample efficiency** — this is the fundamental reason model-based / world model methods emerged.
+Many people focus on a single Model-Based advantage — sample efficiency — **but this is only the surface**.
 
-- **DQN on Atari**: requires **200 million frames** (equivalent to a human playing continuously for 39 days)
-- **DreamerV3 on Crafter / Minecraft**: succeeds in **1 million steps**, a **100–1000× efficiency improvement**
+**Fundamental difference**:
+- Model-Free learns "**what to do in this task**" (task answer)
+- Model-Based learns "**how the world works**" (physical laws)
 
-→ In settings where "real data is expensive," such as **real robots, autonomous driving, and medicine**, model-free methods are nearly unusable.
-
-### 🔑 Why Model-Based Methods Have High Sample Efficiency
-
-**Core statement**: Model-Based uses **one real experience to train the world model once, then repeatedly creates unlimited "virtual experiences" inside the world model to train the policy**. Model-Free must use **one real experience for every training signal**, so the gap in real-data consumption is enormous.
-
-The following five fundamental reasons should be understood **in terms of concrete operations**:
-
-#### Reason 1: Learning Laws vs Learning Data Points
-
-| Step | Model-Free (DQN) | Model-Based (Dreamer) |
-|------|------------------|----------------------|
-| Receives `(s, a, r, s')` | Store in Replay Buffer | Store in Replay Buffer |
-| What is done with this experience? | Train the Q network: make $Q(s, a)$ close to $r + \gamma \cdot \max Q(s')$ | **Two steps**: ① train the world model $W(s, a) \to (s', r)$; ② use W to generate many virtual experiences to train the policy |
-| Network output space | "What to do" (Q values) | "**How the world works**" (transition + reward) |
-| What about unseen states? | Q values are interpolation and **fragile** | The world model can **extrapolate** (it has learned laws) |
-
-**Intuitive analogy**:
-- Model-free student: memorizes answers to 1000 mechanics problems → fails on problem 1001
-- Model-based student: learns $F = ma$ → can derive answers to any mechanics problem
-
-**Doom fireball example**:
-- Model-free has seen "left-side fireball" 1000 times → only learns "left-side fireball → jump right"
-- Model-based learns that "fireballs shoot linearly from the monster's mouth" → **knows what to do the first time a monster appears on the right**
-
-**Concrete implementation in Dreamer**:
-```python
-def world_model(s, a):
-    h = GRU(h, [z, a])
-    z_next = MLP_prior(h)
-    r_next = MLP_reward(h, z_next)
-    return z_next, r_next, h
-# What is stored in the network weights is "laws" (GRU + MLP parameters), not "data points"
-```
-
-#### Reason 2: Training Policy in the Dream = 10,000× Data Augmentation
-
-First introduce a key concept — **Replay Ratio**:
+This single fundamental difference yields **three independent external manifestations**:
 
 ```
-Replay Ratio = (number of gradient updates × batch_size) / number of newly collected real experiences
-             = average number of times each real experience is "seen" by the network
+        Model-Based learns world laws
+                  │
+        ┌─────────┼─────────┐
+        ▼         ▼         ▼
+  ① Sample efficiency  ② Test-time compute scaling  ③ Cross-task transfer
+       100–1000×              No ceiling              Mostly preserved
 ```
 
-**One Model-Free round**:
+Each is detailed below.
+
+---
+
+#### Advantage ①: 100–1000× More Sample-Efficient
+
+| Task | Model-Free | Model-Based | Speedup |
+|------|-----------|-------------|---------|
+| Atari Breakout | DQN/Rainbow **200 M frames** | DreamerV3 **20 M frames** | 10× |
+| Atari 100k | Rainbow very poor | EfficientZero near-human | huge |
+| Crafter | PPO tens of millions of steps, ~10 score | DreamerV3 **1 M steps**, ~14 SOTA | 30×+ |
+| Real-robot grasping | PPO months of real data | Dreamer-like **hours** | 1000× |
+
+**Why so efficient?** Compound effect of five fundamental mechanisms:
+
+| # | Mechanism | One-line explanation |
+|:---:|-----------|---------------------|
+| **1** | **Laws vs data points** | Network weights store "physical laws" (extrapolatable), not "state values" (only interpolatable) |
+| **2** | **Dream data augmentation** | 1 real experience → train world model → roll out hundreds of virtual experiences in dreams → policy training signal amplified hundreds of times |
+| **3** | **Free-start exploration** | Real environment can only reset to initial state; dreams can reset to any latent state (zero-cost trial-and-error) |
+| **4** | **Analytic gradient backprop** ⭐ | The entire imagination chain is differentiable; gradients propagate exactly (O(1) samples) vs Monte-Carlo estimates with high variance (O(N) samples) |
+| **5** | **Long-horizon rollout** | A 15-step latent rollout on GPU takes 1.5 ms — substituting for 1000 real-environment steps |
+
+💡 **Intuitive analogy — learning to drive**:
+- 🔴 Model-Free: want to learn snow driving? **Wait for snow**; want to learn rollover recovery? **Roll over for real**
+- 🟢 Model-Based: **drive 100 hours to learn steering/braking/friction laws**, then **mentally rehearse 10,000 corner cases**
+
+→ Engineering details of each mechanism are further unpacked in [§4.3 Dreamer](#43-dreamer-v1--v2--v3-2020–2023).
+
+---
+
+#### Advantage ②: Test-Time Compute Scaling ⭐ Most Underrated
+
+**Model-Free** compute allocation:
 ```
-1. Collect 256 real experiences
-2. Use these 256 experiences for 1 gradient update
-→ Replay Ratio ≈ 1 (each experience is sampled once on average)
-→ Even with repeated sampling from the Replay Buffer, Replay Ratio is at most ~20
-   (higher values cause overfitting collapse: Q-network errors self-amplify and the policy distorts)
+Training: massive compute to train Q / policy network
+Inference: one forward pass → output action (milliseconds)
 ```
+→ Inference compute is **fixed**: whether given 1 second or 1 minute, **the action is the same**. Performance is capped.
 
-**One Model-Based round**:
+**Model-Based** compute allocation:
 ```
-1. Collect 256 real experiences
-2. Train the world model for several steps (Replay Ratio for the world model ~ tens)
-3. Imagine inside the world model: 50 starting points × 15 steps = 750 virtual experiences
-4. The policy receives 750 gradient signals from virtual experiences
-→ Real data is effectively "amplified" by hundreds to thousands of times
-→ No overfitting — because virtual experiences are new samples "generated according to laws" by the world model,
-   not repeated licking of the same real data
+Training: train world model
+Inference: roll out with world model
+  - Given 1 second  → CEM runs 10 iterations, picks a decent action
+  - Given 1 minute  → CEM runs 600 iterations, picks a better action
+  - Given 1 hour    → almost finds the optimum
 ```
+→ **More inference compute directly translates to better performance** (as long as the world model is accurate enough).
 
-**Key comparison**:
+##### Classic Case: AlphaGo
 
-| Metric | Model-Free (DQN/PPO) | Model-Based (Dreamer) |
-|------|---------------------|---------------------|
-| Real experience consumed | 1000 steps | 1000 steps |
-| Gradient uses per real step | 1–20 (replay-ratio ceiling) | **World model ~ dozens; policy ~ hundreds to thousands** |
-| imagined rollout length H | Not applicable | 15 |
-| Number of imagined starting points (parallel) | Not applicable | 50 |
-| **Total number of "training states" seen by the policy** | 1000–20,000 | **1000 × 50 × 15 = 750,000** |
-| Overfitting risk | ❌ High replay ratio can collapse | ✅ Virtual data varies and is less prone to overfitting |
+The core insight from Silver 2017 (the reference cited in PlaNet's paragraph 2):
+- Once the network is trained, **the number of MCTS rollouts at inference time determines playing strength**
+- 1 second → amateur strong
+- 1 minute → professional player
+- 1 hour → beyond human world champion
 
-→ **With the same real-data consumption, the policy receives tens to thousands of times more training signal**.
+##### Modern Significance: o1 / o3 and "the new compute scaling curve"
 
-**Why cannot Model-Free simply raise the replay ratio?**
+In 2024–2025 this idea exploded into the LLM world:
 
-Experiments in Andrychowicz 2020, D'Oro 2022, and related work show:
-```
-replay ratio = 1   → normal
-replay ratio = 4   → slightly better
-replay ratio = 16  → begins to decline
-replay ratio = 64  → collapses (Q-value estimates become severely distorted)
-```
-**In model-free methods, "new data ↔ number of training steps" is fundamentally coupled**, producing a ceiling.
+| Trend | Manifestation |
+|-------|---------------|
+| **OpenAI o1 / o3** | Longer chain-of-thought at inference → continuously rising performance |
+| **Q\* / MCTS + LLM** | Bring search into LLM inference |
+| **Test-time compute scaling** | Has become a keyword for the 2025+ AGI roadmap |
 
-**Why can Model-Based break through?** The key is the **different generation mechanism**:
-- Model-free repeatedly samples the same real data → like "licking the same piece of candy repeatedly" → overfitting
-- Model-based uses the world model to generate new virtual data → like "using the candy recipe to make 1000 new candies" → every sample differs → no overfitting
+→ Training-time scaling (GPT-3/4) has limits; **inference-time scaling is the next growth curve** — and it **necessarily requires some form of world model + search**.
 
-**Why is virtual data effective?** As long as the world model is accurate enough, the dreamed `(ŝ, â, r̂, ŝ')` and real experiences have **consistent statistical distributions**; actor-critic cannot distinguish them. Dream data is nearly "free" (pure GPU matrix multiplication, microsecond scale).
+→ The Model-Based paradigm **natively supports "compute → performance"**; Model-Free cannot.
 
-#### Reason 3: The Dream Allows Arbitrary Resets and Free-Form Exploration
+---
 
-**First, a fundamental constraint: why can real environments only reset to the initial state?**
+#### Advantage ③: Cross-Task Transferability
 
-| Environment Type | Why Arbitrary Reset Is Impossible |
-|---------|---------------------|
-| **Real physical world** (robots/autonomous driving) | Physics is irreversible — there is no "undo key"; a shattered cup does not restore itself. One reset = manual human restoration + several seconds of waiting |
-| **Games / simulators** (Gym/Doom) | Developers expose only `env.reset()`, which returns to a fixed initial state; internal state is too complex (thousands of variables), and no dump/restore API was designed |
-| **Real software systems** (recommendation/search) | Want to reset to "rainy day + pedestrian crossing"? **Actual rain must occur** |
+**Why can't Model-Free transfer?**
 
-**By contrast, the dream = a collection of neural-network tensors**, which can be **assigned arbitrarily**:
-```python
-env_dream.z = z_target    # arbitrary starting point, no physical constraint
-env_dream.h = h_target
-```
-There is no timer, no memory dependency, complete reversibility, and complete controllability — this is the **fundamental structural advantage** of a world model over the real environment.
+Model-Free learns `Q(s, a)` or `π(a|s)` — the Q function is **tightly coupled to the reward**. Change the task or reward function, and Q becomes useless: **train from scratch**.
 
-**Several engineering workarounds that "pretend reset is possible"** (shown to clarify the advantage of the dream):
-- Multiple parallel workers: can only start from states that are **naturally reached**
-- Simulator snapshot (MuJoCo): supported, but restore is 10×+ slower than step, and **real robots do not support it**
-- HER (Hindsight Replay): retrospectively relabels goals; it is not a real reset
+**Why can Model-Based transfer?**
 
-**Scenario**: training an "edge-of-rollover vehicle recovery" task
+Model-Based learns `P(s' | s, a)` — **the transition function only concerns physical laws and is independent of rewards**. Switch tasks, and **the transition function still holds**.
 
-| Step | Real Environment | Dream |
-|------|---------|------|
-| Reach the "edge of rollover" state | **Must actually drive there**, requiring hundreds of full episodes | **Directly select a rollover latent state as the starting point** |
-| Try 1000 recovery strategies | Damage the vehicle 1000 times | Completed within 1 second |
-| After failure | episode ends and the entire environment resets | **Return directly to the previous frame and retry** |
+##### Concrete Examples
 
-**Dreamer implementation**:
-```python
-# Randomly select 50 real states from the Replay Buffer as starting points
-real_states = buffer.sample(batch_size=50)
-h_0, z_0 = encoder(real_states)
-# 50 starting points perform rollout fully in parallel
-for t in range(15):
-    a_t = actor(h_t, z_t)
-    h_{t+1}, z_{t+1} = world_model(h_t, z_t, a_t)
-```
+| New task | Model-Free | Model-Based |
+|----------|-----------|-------------|
+| "Grasp a cup" → "fold clothes" | **Retrain Q from scratch** | **World model unchanged**; only retrain the reward head |
+| "Walk flat" → "climb stairs" | **Retrain Q from scratch** | **World model unchanged** (leg physics identical) |
+| Change reward shape (sparse → dense) | **Retrain Q** | **Zero modification** |
 
-**Core gap**:
+##### Modern Significance: Robot Foundation Models + LLM Agents
 
-| Operation | Real Environment | Dream |
-|------|---------|------|
-| Reset to any state | ❌ Mostly only reset to initial state | ✅ Any z is possible |
-| Parallel multiple rollouts | ❌ Requires multiple instances and is expensive | ✅ GPU batch=1024 is still easy |
-| "Undo" outcomes | ❌ Physics is irreversible | ✅ Reset latent |
-| Start from an unseen "hypothetical state" | ❌ Impossible | ✅ Possible as long as it lies within the world-model distribution |
+This property is being realized in 2024–2026:
 
-**Greatest benefit: Counterfactual reasoning**
+| Direction | Manifestation |
+|-----------|---------------|
+| **Robot foundation models** (Octo / OpenVLA / RT-X) | Train one universal dynamics → deploy to many tasks |
+| **LLM Agent** | LLMs are a kind of semantic-level world model; one model handles coding/reasoning/planning |
+| **LeCun's JEPA roadmap** | Core thesis: "learn world laws → transfer across tasks" |
 
-> "What would have happened if the Agent had gone left?"
+---
 
-Model-free cannot answer (it was not actually tried); Model-based can **try it inside the dream** and obtain an answer within microseconds.
+#### These Three Are Fundamentally One Thing
 
-**Concrete analogy**:
-- Training a student in the real environment = every attempt must begin with the first lesson of grade one; to practice the final college-entrance problem, **the entire high-school curriculum must be repeated first**
-- Training a student in the dream = **jump to any problem at will**, and practice whichever problem is desired
-
-→ The exploration cost in the real environment is mostly spent on **reaching the state of interest**, not on **learning how to handle it**. This is why the dream's "arbitrary reset" can yield an additional 2–10× improvement in sample efficiency.
-
-
-#### Reason 4: Analytic Gradient Backpropagation (the Dreamer Family's Killer Feature)
-
-**Model-Free Policy gradient (using REINFORCE as an example)**:
-```
-∇θ J = E[ R · ∇θ log π(a|s) ]
-            ↑          ↑
-        real reward  random sampling
-```
-`R` is affected by environmental randomness → the gradient is a **Monte Carlo estimate** with **very high variance** → N must be extremely large (thousands to tens of thousands of episodes) for stability.
-
-**Model-Based + differentiable world model**:
-```python
-# The entire imagination chain consists of neural networks and is differentiable!
-for t in range(H):
-    a_t = actor(h_t, z_t)
-    h_{t+1}, z_{t+1} = world_model(h_t, z_t, a_t)
-    r_t = reward_model(h_t, z_t)
-    total_value += γ**t * r_t
-
-loss = -total_value
-loss.backward()    # gradients backpropagate through reward → world_model → actor end-to-end
-```
-
-**Comparison**:
-
-| Perspective | Model-Free | Model-Based |
-|------|-----------|-------------|
-| Gradient source | Sampling estimate $\nabla_\theta J \approx R \cdot \nabla \log \pi$ | **Analytic computation** $\nabla_\theta R = \frac{\partial R}{\partial a} \cdot \frac{\partial a}{\partial \theta}$ |
-| Information per step | One scalar reward | All tensors (the total derivative of $R$) |
-| Sample complexity | $O(1/\epsilon^2)$ | $\mathbf{O(1/\epsilon)}$ |
-| Analogy | Guessing the direction of a mountain summit while blindfolded | **Using a compass to know the precise gradient direction** |
-
-**Key technique: Reparameterization Trick (making randomness differentiable)**
-```python
-# ❌ Not differentiable (gradient is broken)
-z = sample(Normal(μ, σ))
-# ✅ Differentiable (gradients can backpropagate through μ and σ)
-ε = sample(Normal(0, 1))
-z = μ + σ * ε
-```
-This is a core technique shared by VAE, Dreamer, and Diffusion.
-
-#### Reason 5: Long-Horizon Rollout / Imagination Is Possible in the Dream
-
-**Model-Free evaluation of "long-term value"**:
-```
-1. Run the real environment for 1000 steps
-2. Wait for the episode to end
-3. Propagate cumulative return backward to each step
-```
-
-| Operation | Real Time Required |
-|------|---------|
-| 1 real step | 1ms ~ 1s |
-| Complete a 1000-step episode | 1s ~ several minutes |
-| Run 1000 episodes for stable estimation | several hours ~ several days |
-
-**Model-Based evaluation of "long-term value"**:
-```
-1. rollout 15 steps in latent
-2. Critic estimates the remaining residual value
-3. λ-return = Σ γ^t · r_t + γ^H · V(s_H)
-```
-
-| Operation | Real Time Required |
-|------|---------|
-| 1 world-model step (GPU batch=50) | 0.1ms |
-| Complete H=15 rollout steps | 1.5ms |
-| Parallel 50 starting points | **still 1.5ms** |
-
-→ **1.5ms of compute produces 50×15=750 steps of long-term signal**
-
-**Why can "15 steps replace 1000 steps"?**
+Back to the fundamental difference:
 
 ```
-V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
-       ↑                                          ↑
-     the 15 imagined steps                    critic estimates the later "residual value"
+                 Model-Based learns "world laws"
+                          │
+              Not "task answers" — physics / transitions
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+   ① Sample-efficient    ② Inference scaling   ③ Cross-task transfer
+   One experience yields  Laws roll out         Laws hold for any task
+   more supervision       arbitrarily; more
+   signals                compute = better
 ```
 
-As long as the critic's `V(s_15)` is reasonably accurate, **there is no need to actually rollout to 1000 steps** — this is **bootstrapping**.
+**Core insight**: **the three advantages are not three independent things — they are three manifestations of the single fundamental difference: "learning world laws vs learning task strategies"**. Once you see this, you see why World Model is a critical route to AGI (rather than merely "a sample-efficiency trick").
 
-| Method | rollout length | Why |
-|------|--------------|--------|
-| Monte Carlo | Full episode (1000) | Does not trust V; relies entirely on real rewards |
-| Model-free TD (1-step) | 1 step | Fully trusts V; high bias |
-| **Dreamer λ-return** | **15 steps** | **Sweet spot**: moderately trusts V + moderately uses real signal |
+---
 
-#### 📊 Summary Table of the Five Reasons
+### Costs (No Free Lunch)
 
-| # | Reason | Model-Free Method | Model-Based Method | Source of Efficiency Gain |
-|:---:|------|----------------|----------------|------------|
-| **1** | **Learning laws vs learning data points** | Q network stores "state→value" data points | World model stores the physical laws of "state+action→next state" | **Generalization** — can infer even for unseen states |
-| **2** | **Data augmentation** | 1 real experience → 1 policy update | 1 real experience → train world model → hundreds/thousands of dream rollouts → hundreds/thousands of policy updates | **Training signal ×750+** |
-| **3** | **Free-form exploration** | Must truly reach a state; failure = episode reset | Arbitrarily reset to any latent; failure = replay latent | **Zero-cost trial and error** |
-| **4** | **Analytic gradient** | Policy gradient uses sampling, O(N) samples | The whole imagination chain is differentiable; exact gradient backpropagation, O(1) samples | **Variance elimination → exponential convergence acceleration** |
-| **5** | **Long-horizon rollout** | 1000 real steps = actual time for 1000 steps | GPU 15 steps + critic estimates remaining value = 1.5ms | **Time compression** |
+| Dimension | Model-Free | Model-Based |
+|-----------|-----------|-------------|
+| ✅ Strengths | Simple, stable, low engineering bar | Three advantages above |
+| ❌ Costs | Sample-hungry, fixed inference compute, non-transferable | GPU compute ↑, engineering complex, vulnerable to model errors (model exploitation) |
 
-#### Rough Estimates of the "Efficiency Multipliers"
-
-| Reason | Sample-efficiency improvement in the best case |
-|------|-----------------------|
-| 1. Learning laws → generalization | 5× ~ 50× |
-| 2. Dream data augmentation | 10× ~ 100× |
-| 3. Free-start exploration | 2× ~ 10× |
-| 4. **Analytic gradient** | **100× ~ 1000×** (the most important source in the Dreamer family) |
-| 5. Long-horizon rollout | 5× ~ 50× |
-| **Total multiplier (product)** | **5,000× ~ hundreds of thousands×** in principle |
-
-Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**, matching the estimated order of magnitude.
-
-#### 💡 Intuitive Analogy — Learning to Drive
-
-- 🔴 **Model-Free**: To learn driving in snow, **actual snow must occur**; to learn rollover recovery, **a real rollover must occur**
-- 🟢 **Model-Based**: **Drive for 100 real hours to learn the laws of steering/braking/friction**, then **rehearse 10,000 corner cases in the mind**
-
-#### Real Numerical Comparisons
-
-| Task | Model-Free | Model-Based | Improvement |
-|------|-----------|-------------|-----|
-| Atari Breakout | DQN/Rainbow **200 million frames** | DreamerV3 **20 million frames** | 10× |
-| Atari 100k | Rainbow performs poorly | EfficientZero approaches human level | Large |
-| Crafter | PPO requires tens of millions of steps, ~10 score | DreamerV3 **1 million steps**, ~14 score SOTA | 30×+ |
-| Real-robot grasping | PPO requires months of real-machine data | Dreamer-like methods require **hours** | 1000× |
-
-#### Cost (No Free Lunch)
-
-- ✅ Saves **real samples** (data)
-- ❌ Spends **GPU compute** (training the world model + dreaming)
-- ❌ **Engineering is more complex** and susceptible to model error (model exploitation)
-
-→ **Real robots / autonomous driving** (expensive data): model-based decisively wins
-→ **Atari / simulators / LLM RLHF** (cheap data): model-free is still usable
-
-#### 🎯 In One Sentence
-
-> **The high sample efficiency of Model-Based RL is not "one magic trick," but the compounding effect of five independent mechanisms: law generalization + data augmentation + free-form exploration + analytic gradients + long-horizon rollout. Among them, analytic gradient backpropagation is the Dreamer family's true killer feature — replacing high-variance Monte Carlo estimates with exact backpropagation is a qualitative leap.**
+→ Model-Based **saves real data, spends GPU compute + engineering complexity**.
 
 ### Current Consensus
 
-- **Cheap data** (simulators, games, LLM RLHF) → model-free remains mainstream
-- **Expensive data / need for planning / need for imagination** (robotics, autonomous driving, Agent systems) → world model is the future
+- **Data is cheap** (simulators, games, LLM RLHF) → model-free remains mainstream
+- **Data is expensive / planning needed / imagination needed** (real robots, autonomous driving, agents) → world model is the future
+- **AGI roadmap**: nearly everyone (Sutton, LeCun, Hassabis) agrees that general intelligence **must include a world model**
 
-**In one sentence**: Model-Free RL does not learn the environment; it learns "what to do" purely by trial and error. It is simple and stable but sample-inefficient, so it is increasingly replaced by model-based / world model methods in real-world scenarios.
+### 🎯 One-Sentence Summary
+
+> **Model-Free RL learns "what to do in this task"; Model-Based learns "how the world works". This single fundamental difference yields three root advantages: ① 100–1000× sample efficiency, ② test-time compute scaling, ③ cross-task transfer — all three are manifestations of one and the same thing. Simple and stable Model-Free remains dominant where data is cheap, but Model-Based / World Model is the necessary path for robotics, autonomous driving, and AGI.**
 
 </details>
 
