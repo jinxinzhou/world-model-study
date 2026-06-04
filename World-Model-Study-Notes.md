@@ -878,7 +878,7 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
    #### 🔍 What Are B and D in Step ①?
 
    $B$ and $D$ are the **eigendecomposition** of covariance matrix $C$:
-   <p align="center"><img src="asset/formulas/f11.png" alt="formula"/></p>
+   <p align="center"><img src="asset/formulas/f12.png" alt="formula"/></p>
 
    - **B**: orthogonal matrix (eigenvectors of C) — geometrically a **rotation** that turns standard coordinate axes to the principal-axis directions of the C ellipsoid
    - **D**: diagonal matrix (square roots of C's eigenvalues) — geometrically **scaling along coordinate axes**
@@ -894,11 +894,69 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
 
    #### Adaptation of Covariance C (the Core of CMA)
 
-   Two signals indicate how C should change:
-   - **Rank-μ Update**: covariance of the selected samples in the current generation → where good solutions are concentrated, C becomes wider in that direction
-   - **Rank-1 Update**: accumulation of historical mean-movement directions (evolution path) → if several consecutive generations move in the same direction, reinforce it
+   > ⚠️ **Clarifying a common confusion**: this subsection is about **how to update C**, which is **a different step** from the earlier "`C = B·D²·Bᵀ` eigendecomposition":
+   > - **Sampling phase** (per-generation steps ①②): extract B, D from C, and use `x = m + σ·B·D·z` to generate candidates
+   > - **Update phase** (per-generation step ⑤, this subsection): use the feedback from the current generation to **modify C itself**
+   > - The two phases connect sequentially: use the old C's B, D to sample → evaluate → update C → next generation decomposes the new C
 
-   <p align="center"><img src="asset/formulas/f12.png" alt="formula"/></p>
+   CMA-ES does not update C arbitrarily. Instead, it collects **two independent pieces of evidence** and combines them to make a small adjustment to C.
+
+   ##### Signal 1: Rank-μ Update — "Where are the top-μ candidates of this generation concentrated?"
+
+   **Intuition**: Look at the μ best candidates selected in the current generation. In which direction are they concentrated? Make C wider along that direction.
+
+   **Math**:
+   <p align="center"><img src="asset/cma-es/06_rank_mu_formula.png" alt="rank-mu" width="450"/></p>
+
+   - $x_i$: the i-th top candidate
+   - $(x_i - m)(x_i - m)^\top$: **outer product**, turning a direction into a matrix
+   - $w_i$: rank weight (highest for top-1, decreasing)
+
+   ##### Signal 2: Rank-1 Update — "In which direction has the mean been moving historically?"
+
+   **Intuition**: Beyond the current generation, also look at the **accumulated direction of historical mean movement** (evolution path $p_c$). If several consecutive generations move in the same direction, this is a strong signal → reinforce C along that long-term direction.
+
+   **Math** — first maintain the evolution path (exponential moving average):
+   <p align="center"><img src="asset/cma-es/07_pc_formula.png" alt="pc-update" width="500"/></p>
+
+   Then take its outer product as C's contribution:
+   <p align="center"><img src="asset/cma-es/08_rank1_formula.png" alt="rank-1" width="280"/></p>
+
+   ##### The Two Signals Are Complementary
+
+   | Signal | Pros | Cons |
+   |--------|------|------|
+   | **Rank-μ** | Uses μ samples, **rich information / good for width** | High per-generation noise, can chase randomness |
+   | **Rank-1** | **Historical accumulation, smooth and stable** | Uses only 1 direction (the evolution path), limited width info |
+
+   → **Combined**: Rank-μ provides "width", Rank-1 provides "long-term directional stability"; together they complement each other.
+
+   ##### 🖼️ Geometric Meaning of the Two Signals
+
+   <p align="center">
+     <img src="asset/cma-es/04_rank_mu_rank_1.png" width="900"/><br/>
+     <i>① Left: Rank-μ uses the sample covariance of top-μ candidates (yellow circles) to construct an ellipse (blue), making C wider along that concentration direction; ② Middle: Rank-1 accumulates historical mean movements m₀ → m₅ into the evolution path p_c (thick red arrow); its outer product yields a "rod-shaped" contribution along that direction; ③ Right: new C (thick green) = old C (dashed) + Rank-μ (blue dotted) + Rank-1 (red dash-dotted), weighted fusion of all three.</i>
+   </p>
+
+   ##### Full Update Formula for C
+
+   <p align="center"><img src="asset/formulas/f13.png" alt="C update formula"/></p>
+
+   - First term $(1 - c_1 - c_\mu) C$: **preserves most of the old C** (prevents drastic oscillations)
+   - Second term $c_1 \cdot p_c p_c^\top$: Rank-1 contribution
+   - Third term $c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top$: Rank-μ contribution
+   - $c_1, c_\mu$ are small weights (typically on the order of 0.01), ensuring the sum remains positive-definite
+
+   ##### 🖼️ Complete Per-Generation 6-Step Flow
+
+   Connecting the "sampling" and "update" phases, CMA-ES actually has 6 steps per generation (the earlier 5-step diagram was a simplification; here is the complete version):
+
+   <p align="center">
+     <img src="asset/cma-es/05_6step_loop.png" width="950"/><br/>
+     <i>Full per-generation flow: ① Eigendecompose C → obtain B, D ② Use B, D to sample λ candidates ③ Evaluate and rank ④ Update mean m and evolution path p_c ⑤ Use Rank-μ + Rank-1 to update C ⑥ Update global step size σ. The next generation returns to ① and decomposes the new C.</i>
+   </p>
+
+   **Key insight**: **"the B, D for sampling" and "the C being updated" are two faces of the same matrix** — the update phase modifies C itself, and the next generation's sampling phase extracts B, D from the new C for candidate generation. `C = B·D²·Bᵀ` is a "translation tool", whereas `C ← ...` is the actual "learning behavior".
 
    ---
 
