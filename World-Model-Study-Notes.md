@@ -1108,7 +1108,7 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
    **🎯 Objective**: run the trained C in the real environment and test whether transfer succeeds. At this stage, **V and M are no longer updated, but they continue to be used online** (V provides perceptual compression; M provides temporal memory h).
 
    **Core formula**:
-   <p align="center"><img src="asset/formulas/f13.png" alt="formula"/></p>
+   <p align="center"><img src="asset/formulas/f11.png" alt="formula"/></p>
 
    - Note: **real $z_t$** is used to update $h$ (not the sampled $\hat{z}$ from M)
    - This is equivalent to M "running alongside" the real environment and maintaining expectations about the future

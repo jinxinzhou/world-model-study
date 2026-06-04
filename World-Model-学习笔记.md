@@ -1108,7 +1108,7 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    **🎯 目的**:把训好的 C 拿到真实环境跑,看是否能迁移成功。此阶段**V 和 M 不再更新,但继续在线使用**(V 提供感知压缩,M 提供时序记忆 h)。
 
    **核心公式**:
-   <p align="center"><img src="asset/formulas/f13.png" alt="formula"/></p>
+   <p align="center"><img src="asset/formulas/f11.png" alt="formula"/></p>
 
    - 注意:**用真实 $z_t$** 更新 $h$(不是用 M sample 的 $\hat{z}$)
    - 这相当于 M 在真实环境里"陪跑",维护对未来的预期
