@@ -11,10 +11,10 @@
 | 文件 | 主题 | 提炼来源 |
 |------|------|---------|
 | [Abstract-Writing-ZH.md](Abstract-Writing-ZH.md) / [EN](Abstract-Writing-EN.md) | Abstract 5 步走结构 + 案例拆解 | PlaNet (2019) |
+| [Introduction-Writing-ZH.md](Introduction-Writing-ZH.md) / [EN](Introduction-Writing-EN.md) | Introduction 6 段叙事弧线 + 案例 | PlaNet (2019) |
 
 ## 规划中
 
-- Introduction 的 3 段式结构
 - Related Work 的"对比叙事"
 - 实验章节的"假设 → 验证"组织
 - 数字呈现的视觉规范
