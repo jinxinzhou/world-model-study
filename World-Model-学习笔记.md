@@ -673,23 +673,33 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
 
    **阶段 1**:随机动作收集 10000 局回放数据
 
-   $$\mathcal{D} = \{(o_t, a_t)\}_{t=1}^{T}, \quad a_t \sim \text{Uniform}(\mathcal{A})$$
+   ```math
+   \mathcal{D} = \{(o_t, a_t)\}_{t=1}^{T}, \quad a_t \sim \text{Uniform}(\mathcal{A})
+   ```
 
    **阶段 2(a)**:训 VAE(只看图像)→ V
 
-   $$\mathcal{L}_{\text{VAE}} = \mathbb{E}_{q(z|o)}\big[\|o - \hat{o}\|^2\big] + \beta \cdot \text{KL}\big(q(z|o) \,\|\, \mathcal{N}(0, I)\big)$$
+   ```math
+   \mathcal{L}_{\text{VAE}} = \mathbb{E}_{q(z|o)}\big[\|o - \hat{o}\|^2\big] + \beta \cdot \text{KL}\big(q(z|o) \,\|\, \mathcal{N}(0, I)\big)
+   ```
 
    **阶段 2(b)**:训 MDN-RNN(看 z 和 a 的序列)→ M
 
-   $$\mathcal{L}_{M} = -\sum_t \log P(z_{t+1} \mid z_t, a_t, h_t) + \sum_t \text{BCE}(\text{done}_t^{\text{pred}}, \text{done}_t^{\text{real}})$$
+   ```math
+   \mathcal{L}_{M} = -\sum_t \log P(z_{t+1} \mid z_t, a_t, h_t) + \sum_t \text{BCE}(\text{done}_t^{\text{pred}}, \text{done}_t^{\text{real}})
+   ```
 
    **阶段 3**:冻结 V 和 M,CMA-ES 训 Controller
 
-   $$\theta_C^* = \arg\max_{\theta_C} \; \mathbb{E}_{\text{dream rollout}}\Big[\sum_{t=0}^{T} r_t\Big] \quad \text{(无梯度黑盒优化)}$$
+   ```math
+   \theta_C^* = \arg\max_{\theta_C} \; \mathbb{E}_{\text{dream rollout}}\Big[\sum_{t=0}^{T} r_t\Big] \quad \text{(无梯度黑盒优化)}
+   ```
 
    **阶段 4**(部署 / 推理):把训好的 C 放回真实环境
 
-   $$a_t = C\big([z_t,\, h_t]\big), \quad z_t = V_{\text{encode}}(o_t), \quad h_{t+1} = M_{\text{RNN}}(a_t, z_t, h_t)$$
+   ```math
+   a_t = C\big([z_t,\, h_t]\big), \quad z_t = V_{\text{encode}}(o_t), \quad h_{t+1} = M_{\text{RNN}}(a_t, z_t, h_t)
+   ```
 
    下面逐阶段详细解释。
 
@@ -698,7 +708,9 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    **🎯 目的**:让世界模型见过尽可能多样的状态(包括死亡、碰撞等边角情况),所以**用随机策略**而不是强策略。
 
    **核心公式**:
-   $$\mathcal{D} = \{(o_t, a_t)\}_{t=1}^{T}, \quad a_t \sim \text{Uniform}(\mathcal{A})$$
+   ```math
+   \mathcal{D} = \{(o_t, a_t)\}_{t=1}^{T}, \quad a_t \sim \text{Uniform}(\mathcal{A})
+   ```
 
    即:在真实环境中按均匀随机策略采样,收集 (观察, 动作) 序列。
 
@@ -724,7 +736,9 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    **🎯 目的**:学一个**压缩-重建**模型,把 64×64×3 像素压成 32 维 latent z,作为后续 M 和 C 的输入特征。
 
    **核心公式**(VAE ELBO):
-   $$\mathcal{L}_{\text{VAE}} = \underbrace{\mathbb{E}_{q(z|o)}[\|o - \hat{o}\|^2]}_{\text{重建损失}} + \underbrace{\beta \cdot \text{KL}\big(q(z|o) \,\|\, \mathcal{N}(0, I)\big)}_{\text{KL 正则,逼近标准高斯先验}}$$
+   ```math
+   \mathcal{L}_{\text{VAE}} = \underbrace{\mathbb{E}_{q(z|o)}[\|o - \hat{o}\|^2]}_{\text{重建损失}} + \underbrace{\beta \cdot \text{KL}\big(q(z|o) \,\|\, \mathcal{N}(0, I)\big)}_{\text{KL 正则,逼近标准高斯先验}}
+   ```
 
    - 编码器:`q(z|o) = N(μ_φ(o), σ_φ(o)²)` —— 把图像编码成高斯分布
    - 解码器:`p(o|z)` —— 从 z 重建图像
@@ -751,10 +765,14 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    **🎯 目的**:学一个**时序预测**模型,让 M 能根据 `(当前 z, 当前动作, 历史记忆 h)` 预测**下一个 z 的概率分布**以及是否结束。
 
    **核心公式**:
-   $$\mathcal{L}_{\text{M}} = \underbrace{-\sum_t \log P(z_{t+1} \mid z_t, a_t, h_t)}_{\text{MDN 负对数似然(高斯混合)}} \;+\; \underbrace{\sum_t \text{BCE}(\text{done}_t^{\text{pred}}, \text{done}_t^{\text{real}})}_{\text{结束概率二元交叉熵}}$$
+   ```math
+   \mathcal{L}_{\text{M}} = \underbrace{-\sum_t \log P(z_{t+1} \mid z_t, a_t, h_t)}_{\text{MDN 负对数似然(高斯混合)}} \;+\; \underbrace{\sum_t \text{BCE}(\text{done}_t^{\text{pred}}, \text{done}_t^{\text{real}})}_{\text{结束概率二元交叉熵}}
+   ```
 
    其中 z 的预测分布是 K 个高斯的混合:
-   $$P(z_{t+1} \mid \cdot) = \sum_{k=1}^{K} \pi_k \cdot \mathcal{N}(z_{t+1}; \mu_k, \sigma_k^2)$$
+   ```math
+   P(z_{t+1} \mid \cdot) = \sum_{k=1}^{K} \pi_k \cdot \mathcal{N}(z_{t+1}; \mu_k, \sigma_k^2)
+   ```
 
    - LSTM 输出 `(π, μ, σ)` 作为混合分布参数
    - 训练目标:让真实的 `z_{t+1}` 在这个分布下概率最大
@@ -784,7 +802,9 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    **🎯 目的**:让 Controller 学会"在梦里能拿高分"的策略 —— 完全不碰真实环境,只用 V+M 构成的虚拟世界来训。这是 **VizDoom Take Cover** 的做法(CarRacing 用真实环境训,见下文)。
 
    **核心公式**:
-   $$\theta_C^* = \arg\max_{\theta_C} \; \mathbb{E}_{\text{dream rollout}} \Big[\sum_{t=0}^{T} r_t\Big]$$
+   ```math
+   \theta_C^* = \arg\max_{\theta_C} \; \mathbb{E}_{\text{dream rollout}} \Big[\sum_{t=0}^{T} r_t\Big]
+   ```
 
    - 目标:找到使**梦境累积奖励**最大的 Controller 参数
    - `r_t = +1`(每存活一帧,VizDoom 的奖励规则)
@@ -876,7 +896,9 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    #### 🔍 步骤①里的 B 和 D 是什么?
 
    $B$ 和 $D$ 是协方差矩阵 $C$ 的**特征分解**:
-   $$C = B \cdot D^2 \cdot B^\top$$
+   ```math
+   C = B \cdot D^2 \cdot B^\top
+   ```
 
    - **B**:正交矩阵(C 的特征向量) —— 几何上是**旋转**,把标准坐标轴转到 C 椭球的主轴方向
    - **D**:对角矩阵(C 特征值的平方根) —— 几何上是**沿坐标轴方向缩放**
@@ -896,7 +918,9 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    - **Rank-μ Update**:本代选优的样本协方差 → 最优解集中在哪个方向,C 在那个方向变粗
    - **Rank-1 Update**:历代均值移动方向的累积(进化路径) → 连续几代往同方向走就加强它
 
-   $$C \leftarrow (1 - c_1 - c_\mu) C + c_1 \cdot p_c p_c^\top + c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top$$
+   ```math
+   C \leftarrow (1 - c_1 - c_\mu) C + c_1 \cdot p_c p_c^\top + c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top
+   ```
 
    ---
 
@@ -1046,7 +1070,9 @@ V_λ = γ^0·r_0 + γ^1·r_1 + ... + γ^14·r_14  +  γ^15·V(s_15)
    **🎯 目的**:把训好的 C 拿到真实环境跑,看是否能迁移成功。此阶段**V 和 M 不再更新,但继续在线使用**(V 提供感知压缩,M 提供时序记忆 h)。
 
    **核心公式**:
-   $$a_t = C\big([\,z_t,\; h_t\,]\big), \quad z_t = V_{\text{encode}}(o_t), \quad h_{t+1} = M_{\text{RNN}}(a_t, z_t, h_t)$$
+   ```math
+   a_t = C\big([\,z_t,\; h_t\,]\big), \quad z_t = V_{\text{encode}}(o_t), \quad h_{t+1} = M_{\text{RNN}}(a_t, z_t, h_t)
+   ```
 
    - 注意:**用真实 $z_t$** 更新 $h$(不是用 M sample 的 $\hat{z}$)
    - 这相当于 M 在真实环境里"陪跑",维护对未来的预期
