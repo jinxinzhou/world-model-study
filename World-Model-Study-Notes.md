@@ -835,13 +835,15 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
 
    **CMA-ES** = Covariance Matrix Adaptation Evolution Strategy, proposed by Nikolaus Hansen in 1996. It is one of the most successful evolutionary algorithms for **black-box continuous optimization**.
 
+   > ⚠️ **Notation convention**: standard CMA-ES literature uses **C** for the covariance matrix, but in the World Models paper **C** is already taken as the symbol for the **Controller**. To avoid confusion, this section uses **Σ** (the standard symbol from probability/statistics) for the covariance matrix. So "Controller C" and "covariance Σ" are two completely different objects.
+
    ---
 
    ### Part 1: What Is CMA-ES? — The Principle in Three Sentences
 
-   1. **Maintain a multivariate Gaussian distribution** $\mathcal{N}(m, \sigma^2 C)$ describing "where the currently estimated optimum is likely located"
+   1. **Maintain a multivariate Gaussian distribution** $\mathcal{N}(m, \sigma^2 \Sigma)$ describing "where the currently estimated optimum is likely located"
    2. **Sample λ candidates each generation and select the best μ candidates** (μ ≈ λ/2)
-   3. **Update mean m, covariance C, and step size σ**, so the distribution gradually "aims" at the optimal region
+   3. **Update mean m, covariance Σ, and step size σ**, so the distribution gradually "aims" at the optimal region
 
    **Analogy — finding a mountain summit while blindfolded**: scatter a group of people around the current location → have them report altitude → identify the direction of the highest few people → move the group in that direction → meanwhile adjust the scattering shape (ellipsoid) and range (step size).
 
@@ -849,7 +851,7 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
 
    <p align="center">
      <img src="asset/cma-es/02_generations_evolution.png" width="900"/><br/>
-     <i>Evolution of CMA-ES on the 2D objective function f(x,y) = −((x−3)² + 5(y+1)²). The green triangle is the true optimum (3, −1), the red star is the current mean m, the red ellipse is the current 2σ range of N(m, σ²C), white dots are sampled candidates, and yellow circles are the selected top-μ candidates. It converges reliably to the optimum within 20 generations.</i>
+     <i>Evolution of CMA-ES on the 2D objective function f(x,y) = −((x−3)² + 5(y+1)²). The green triangle is the true optimum (3, −1), the red star is the current mean m, the red ellipse is the current 2σ range of N(m, σ²Σ), white dots are sampled candidates, and yellow circles are the selected top-μ candidates. It converges reliably to the optimum within 20 generations.</i>
    </p>
 
    Observe:
@@ -870,40 +872,40 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
    ② Evaluation: compute f(x_i)
    ③ Sorting:    sort by fitness and select the top μ
    ④ Mean update: m_new = Σ w_i · x_i
-   ⑤ Update covariance C and step size σ (using evolution paths)
+   ⑤ Update covariance Σ and step size σ (using evolution paths)
    ```
 
    Key hyperparameters: **λ** (population) = 16~64, **μ** = λ/2, initial **σ** = 0.1, number of generations = hundreds to thousands.
 
    #### 🔍 What Are B and D in Step ①?
 
-   $B$ and $D$ are the **eigendecomposition** of covariance matrix $C$:
+   $B$ and $D$ are the **eigendecomposition** of covariance matrix $\Sigma$:
    <p align="center"><img src="asset/formulas/f12.png" alt="formula"/></p>
 
-   - **B**: orthogonal matrix (eigenvectors of C) — geometrically a **rotation** that turns standard coordinate axes to the principal-axis directions of the C ellipsoid
-   - **D**: diagonal matrix (square roots of C's eigenvalues) — geometrically **scaling along coordinate axes**
+   - **B**: orthogonal matrix (eigenvectors of Σ) — geometrically a **rotation** that turns standard coordinate axes to the principal-axis directions of the Σ ellipsoid
+   - **D**: diagonal matrix (square roots of Σ's eigenvalues) — geometrically **scaling along coordinate axes**
 
-   **Why decompose C into B·D²·Bᵀ?** Because computers can only generate standard normal noise $z \sim \mathcal{N}(0, I)$; this noise must be transformed into samples following the $\mathcal{N}(m, \sigma^2 C)$ distribution. The figure below decomposes the full process into four intuitive steps:
+   **Why decompose Σ into B·D²·Bᵀ?** Because computers can only generate standard normal noise $z \sim \mathcal{N}(0, I)$; this noise must be transformed into samples following the $\mathcal{N}(m, \sigma^2 \Sigma)$ distribution. The figure below decomposes the full process into four intuitive steps:
 
    <p align="center">
      <img src="asset/cma-es/01_BD_decomposition.png" width="900"/><br/>
-     <i>Geometric decomposition of the sampling formula x = m + σ·B·D·z: ① start from standard spherical noise z → ② D stretches it along coordinate axes into an ellipsoid → ③ B rotates it to the principal-axis direction of C → ④ σ scales it and translates it to position m. Blue dots are 200 samples; the red ellipse is the 2σ range.</i>
+     <i>Geometric decomposition of the sampling formula x = m + σ·B·D·z: ① start from standard spherical noise z → ② D stretches it along coordinate axes into an ellipsoid → ③ B rotates it to the principal-axis direction of Σ → ④ σ scales it and translates it to position m. Blue dots are 200 samples; the red ellipse is the 2σ range.</i>
    </p>
 
-   **Tip**: B and D are recomputed only once per generation after C is updated (`eigendecompose(C)`), then reused for all λ samples in that generation, which is computationally efficient.
+   **Tip**: B and D are recomputed only once per generation after Σ is updated (`eigendecompose(Σ)`), then reused for all λ samples in that generation, which is computationally efficient.
 
-   #### Adaptation of Covariance C (the Core of CMA)
+   #### Adaptation of Covariance Σ (the Core of CMA)
 
-   > ⚠️ **Clarifying a common confusion**: this subsection is about **how to update C**, which is **a different step** from the earlier "`C = B·D²·Bᵀ` eigendecomposition":
-   > - **Sampling phase** (per-generation steps ①②): extract B, D from C, and use `x = m + σ·B·D·z` to generate candidates
-   > - **Update phase** (per-generation step ⑤, this subsection): use the feedback from the current generation to **modify C itself**
-   > - The two phases connect sequentially: use the old C's B, D to sample → evaluate → update C → next generation decomposes the new C
+   > ⚠️ **Clarifying a common confusion**: this subsection is about **how to update Σ**, which is **a different step** from the earlier "`Σ = B·D²·Bᵀ` eigendecomposition":
+   > - **Sampling phase** (per-generation steps ①②): extract B, D from Σ, and use `x = m + σ·B·D·z` to generate candidates
+   > - **Update phase** (per-generation step ⑤, this subsection): use the feedback from the current generation to **modify Σ itself**
+   > - The two phases connect sequentially: use the old Σ's B, D to sample → evaluate → update Σ → next generation decomposes the new Σ
 
-   CMA-ES does not update C arbitrarily. Instead, it collects **two independent pieces of evidence** and combines them to make a small adjustment to C.
+   CMA-ES does not update Σ arbitrarily. Instead, it collects **two independent pieces of evidence** and combines them to make a small adjustment to Σ.
 
    ##### Signal 1: Rank-μ Update — "Where are the top-μ candidates of this generation concentrated?"
 
-   **Intuition**: Look at the μ best candidates selected in the current generation. In which direction are they concentrated? Make C wider along that direction.
+   **Intuition**: Look at the μ best candidates selected in the current generation. In which direction are they concentrated? Make Σ wider along that direction.
 
    **Math**:
    <p align="center"><img src="asset/cma-es/06_rank_mu_formula.png" alt="rank-mu" width="450"/></p>
@@ -914,7 +916,7 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
 
    ##### Signal 2: Rank-1 Update — "In which direction has the mean been moving historically?"
 
-   **Intuition**: Beyond the current generation, also look at the **accumulated direction of historical mean movement** (evolution path $p_c$). If several consecutive generations move in the same direction, this is a strong signal → reinforce C along that long-term direction.
+   **Intuition**: Beyond the current generation, also look at the **accumulated direction of historical mean movement** (evolution path $p_c$). If several consecutive generations move in the same direction, this is a strong signal → reinforce Σ along that long-term direction.
 
    **Math** — first maintain the evolution path (exponential moving average):
    <p align="center"><img src="asset/cma-es/07_pc_formula.png" alt="pc-update" width="500"/></p>
@@ -935,14 +937,14 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
 
    <p align="center">
      <img src="asset/cma-es/04_rank_mu_rank_1.png" width="900"/><br/>
-     <i>① Left: Rank-μ uses the sample covariance of top-μ candidates (yellow circles) to construct an ellipse (blue), making C wider along that concentration direction; ② Middle: Rank-1 accumulates historical mean movements m₀ → m₅ into the evolution path p_c (thick red arrow); its outer product yields a "rod-shaped" contribution along that direction; ③ Right: new C (thick green) = old C (dashed) + Rank-μ (blue dotted) + Rank-1 (red dash-dotted), weighted fusion of all three.</i>
+     <i>① Left: Rank-μ uses the sample covariance of top-μ candidates (yellow circles) to construct an ellipse (blue), making Σ wider along that concentration direction; ② Middle: Rank-1 accumulates historical mean movements m₀ → m₅ into the evolution path p_c (thick red arrow); its outer product yields a "rod-shaped" contribution along that direction; ③ Right: new Σ (thick green) = old Σ (dashed) + Rank-μ (blue dotted) + Rank-1 (red dash-dotted), weighted fusion of all three.</i>
    </p>
 
-   ##### Full Update Formula for C
+   ##### Full Update Formula for Σ
 
-   <p align="center"><img src="asset/formulas/f13.png" alt="C update formula"/></p>
+   <p align="center"><img src="asset/formulas/f13.png" alt="Σ update formula"/></p>
 
-   - First term $(1 - c_1 - c_\mu) C$: **preserves most of the old C** (prevents drastic oscillations)
+   - First term $(1 - c_1 - c_\mu) \Sigma$: **preserves most of the old Σ** (prevents drastic oscillations)
    - Second term $c_1 \cdot p_c p_c^\top$: Rank-1 contribution
    - Third term $c_\mu \cdot \sum w_i (x_i - m)(x_i - m)^\top$: Rank-μ contribution
    - $c_1, c_\mu$ are small weights (typically on the order of 0.01), ensuring the sum remains positive-definite
@@ -953,10 +955,10 @@ Empirically, Dreamer improves Atari by **10×~100×** and robotics by **1000×**
 
    <p align="center">
      <img src="asset/cma-es/05_6step_loop.png" width="950"/><br/>
-     <i>Full per-generation flow: ① Eigendecompose C → obtain B, D ② Use B, D to sample λ candidates ③ Evaluate and rank ④ Update mean m and evolution path p_c ⑤ Use Rank-μ + Rank-1 to update C ⑥ Update global step size σ. The next generation returns to ① and decomposes the new C.</i>
+     <i>Full per-generation flow: ① Eigendecompose Σ → obtain B, D ② Use B, D to sample λ candidates ③ Evaluate and rank ④ Update mean m and evolution path p_c ⑤ Use Rank-μ + Rank-1 to update Σ ⑥ Update global step size σ. The next generation returns to ① and decomposes the new Σ.</i>
    </p>
 
-   **Key insight**: **"the B, D for sampling" and "the C being updated" are two faces of the same matrix** — the update phase modifies C itself, and the next generation's sampling phase extracts B, D from the new C for candidate generation. `C = B·D²·Bᵀ` is a "translation tool", whereas `C ← ...` is the actual "learning behavior".
+   **Key insight**: **"the B, D for sampling" and "the Σ being updated" are two faces of the same matrix** — the update phase modifies Σ itself, and the next generation's sampling phase extracts B, D from the new Σ for candidate generation. `Σ = B·D²·Bᵀ` is a "translation tool", whereas `Σ ← ...` is the actual "learning behavior".
 
    ---
 
