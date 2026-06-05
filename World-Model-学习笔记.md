@@ -1467,6 +1467,21 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 
 </details>
 
+#### 问题定义
+
+假定实际的环境是一个 **POMDP**(部分可观测马尔可夫决策过程):
+
+<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
+
+- **Transition function**:真实环境的隐状态 $s_t$ 由前一步的状态和动作决定(随机)
+- **Observation function**:agent 拿不到 $s_t$,只能拿到一帧观测 $o_t$(像素图像)—— 这就是"部分可观测"
+- **Reward function**:奖励也只依赖隐状态 $s_t$,而不是直接由 agent 行为给出
+- **Policy**:由于无法看到 $s_t$,policy 只能基于**历史观测和动作** $(o_{\le t}, a_{<t})$ 来决策
+
+目标是学习一个策略,最大化期望累积回报 $\mathbb{E}\big[\sum_t r_t\big]$。
+
+> 💡 **PlaNet 的特别之处**:它不**显式学习** policy,而是先学一个能模拟 POMDP 的世界模型(transition / observation / reward 三个网络),再在 latent 空间用 **CEM 实时规划** 当场算出 $a_t$ —— 等价于"world model + 规划器"代替了传统的 policy 网络。
+
 #### 整体架构
 
 ```mermaid

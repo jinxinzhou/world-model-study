@@ -1468,6 +1468,21 @@ The "true state" of the real environment includes positions, velocities, masses,
 
 </details>
 
+#### Problem Setup
+
+The actual environment is assumed to be a **POMDP** (Partially Observable Markov Decision Process):
+
+<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
+
+- **Transition function**: The real environment's latent state $s_t$ is determined stochastically by the previous state and action
+- **Observation function**: The agent cannot access $s_t$ — it only receives a frame of observation $o_t$ (a pixel image) — this is what "partial observability" means
+- **Reward function**: Reward depends only on the latent state $s_t$, not directly on the agent's action
+- **Policy**: Since $s_t$ is hidden, the policy must decide based on **observation and action history** $(o_{\le t}, a_{<t})$
+
+The goal is to learn a policy that maximizes expected cumulative return $\mathbb{E}\big[\sum_t r_t\big]$.
+
+> 💡 **What's special about PlaNet**: it does NOT **explicitly learn** a policy. Instead, it first learns a world model that simulates the POMDP (transition / observation / reward — three networks), then uses **CEM real-time planning** in latent space to compute $a_t$ on the spot — effectively replacing the traditional policy network with "world model + planner".
+
 #### Overall Architecture
 
 ```mermaid
