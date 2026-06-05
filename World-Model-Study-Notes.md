@@ -1419,8 +1419,6 @@ The "true state" of the real environment includes positions, velocities, masses,
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **only sees the current frame**; history goes through MDN-RNN's deterministic h as a side channel; **[z, h] is never combined into "a probabilistic belief over the true state"** | Encoder/Posterior q(s_t ∣ h_t, o_t), where h_t carries the history — **a genuine POMDP belief**: a Gaussian distribution pulled toward the prior via KL |
 | **Training Objective**: max ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) | **VAE's ELBO + MDN-RNN's NLL**, two independent losses trained in separate stages — **never combined into "a lower bound on the POMDP joint likelihood"** | **Single ELBO** (lower bound on the log-likelihood of the entire trajectory), **naturally derived** from the POMDP joint likelihood via variational inference; reconstruction / reward / KL live in the same formula with coupled gradients |
 
-And the training objective **ELBO is not patched together heuristically** — it is **naturally derived** from "the POMDP is a latent variable model + use variational inference to learn it" (the equations in §3). Every loss term has clear mathematical meaning rather than being an empirically weighted multi-task loss.
-
 ##### 3. Component-by-component deep dive: why "implicit vs explicit"
 
 **🔹 Component 1: Transition**

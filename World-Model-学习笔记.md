@@ -1418,8 +1418,6 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **只看当前帧**,历史靠 MDN-RNN 的确定性 h 旁路;**[z,h] 从未被合成"对真实状态的概率 belief"** | Encoder/Posterior q(s_t ∣ h_t, o_t),其中 h_t 携带历史 —— **真正的 POMDP belief**:高斯分布,通过 KL 拉向 prior |
 | **训练目标**: max ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) | **VAE 的 ELBO + MDN-RNN 的 NLL**,两段独立、分阶段训练 —— **从未合成"对 POMDP 联合似然的下界"** | **单一 ELBO**(对整段轨迹的对数似然下界),由变分推断从 POMDP 联合似然**自然推导**;重建 / reward / KL 在同一公式里,梯度协同 |
 
-而且训练目标 **ELBO 不是拍脑袋拼出来的**,而是从「POMDP 是一个 latent variable model + 用变分推断学它」**自然推导**出来的(§3 那一坨公式)。每一项 loss 都有明确的数学含义,而不是经验主义的多任务加权。
-
 ##### 3. 逐组件深入:为什么是"隐式 vs 显式"
 
 **🔹 组件 1:Transition(转移函数)**
