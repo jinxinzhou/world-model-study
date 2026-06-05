@@ -1409,18 +1409,7 @@ This paper is the **direct predecessor of the Dreamer series** and Hafner's firs
 
 The "true state" of the real environment includes positions, velocities, masses, joint angles, etc.; what the agent actually receives is just an RGB image — a single static frame **loses velocity, depth, what's behind occlusion, and numerical precision**. So **whenever an agent learns control from pixels, the problem is necessarily a POMDP**: it must maintain an internal latent representation to "fill in" what cannot be observed. This is dictated by physics, not by modeling choice.
 
-##### 2. What "implicit" looks like in World Models
-
-The World Models paper **never uses the word POMDP**. The VAE's z is called "a compressed representation of the frame"; the MDN-RNN's h is called "memory of the past" — **neither is declared to be a belief over the environment's true state**. The two representations each have their own, POMDP-unrelated objectives:
-
-- z's objective = reconstruct the image (VAE reconstruction loss)
-- h's objective = predict the next z (MDN-RNN autoregressive loss)
-
-**There is no unified "I am learning a POMDP" optimization objective**. The result is that the model working ≠ it learning a POMDP — z + h just happens to contain "enough information" when concatenated.
-
-##### 3. What "explicit" looks like in PlaNet — architecture 1:1 mapped to POMDP
-
-PlaNet §2 opens with "We consider a discrete-time POMDP defined by …", and its four networks correspond one-to-one with the four POMDP components. The table below also includes **World Models' counterpart approach** so the "implicit vs explicit" gap on each component is visible at a glance:
+##### 2. Side-by-side architecture: World Models' "implicit" vs PlaNet's "explicit"
 
 | POMDP Component (theory) | World Models (implicit / incomplete) | PlaNet (explicit / 1:1 mapped) |
 |---|---|---|
@@ -1432,7 +1421,7 @@ PlaNet §2 opens with "We consider a discrete-time POMDP defined by …", and it
 
 And the training objective **ELBO is not patched together heuristically** — it is **naturally derived** from "the POMDP is a latent variable model + use variational inference to learn it" (the equations in §3). Every loss term has clear mathematical meaning rather than being an empirically weighted multi-task loss.
 
-##### 3.5 Component-by-component deep dive: why "implicit vs explicit"
+##### 3. Component-by-component deep dive: why "implicit vs explicit"
 
 **🔹 Component 1: Transition**
 

@@ -1408,18 +1408,7 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 
 真实环境的"真实状态"是所有物体的位置、速度、质量、关节角度等;而 agent 拿到的只有 RGB 图像 —— 一帧静态图丢失了**速度、深度、遮挡背后的信息、数值精度**。所以**只要 agent 从像素学控制,问题就一定是 POMDP**,必须在内部维护一个 latent 表示来"补全"观测不到的部分。这件事是物理决定的,不是建模选择。
 
-##### 2. World Models 的"隐式"具体体现
-
-World Models 全文**没出现 POMDP 这个词**。VAE 的 z 被称为"图像的压缩表示",MDN-RNN 的 h 被称为"对过去的记忆",**都没有被宣称是"对环境真实状态的 belief"**。两个表示各有各的目标:
-
-- z 的目标 = 把图像重建好(VAE 重建 loss)
-- h 的目标 = 预测下一个 z(MDN-RNN 自回归 loss)
-
-**没有统一的"我在学一个 POMDP"作为优化目标**。结果是模型工作 ≠ 在学 POMDP,只是凑巧 z + h 拼起来"信息量够用"。
-
-##### 3. PlaNet 的"显式"具体体现 —— 架构 1:1 对应 POMDP
-
-PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然后模型的 4 个网络与 POMDP 的 4 个组件一一对应。下表把 **World Models 的对应做法** 也放进来对比,可以直观看出"隐式 vs 显式"在每个组件上的具体差异:
+##### 2. 架构对照 —— World Models 的"隐式" vs PlaNet 的"显式"
 
 | POMDP 组件(理论) | World Models(隐式 / 不完整) | PlaNet(显式 / 1:1 对应) |
 |---|---|---|
@@ -1431,7 +1420,7 @@ PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然
 
 而且训练目标 **ELBO 不是拍脑袋拼出来的**,而是从「POMDP 是一个 latent variable model + 用变分推断学它」**自然推导**出来的(§3 那一坨公式)。每一项 loss 都有明确的数学含义,而不是经验主义的多任务加权。
 
-##### 3.5 逐组件深入:为什么是"隐式 vs 显式"
+##### 3. 逐组件深入:为什么是"隐式 vs 显式"
 
 **🔹 组件 1:Transition(转移函数)**
 
