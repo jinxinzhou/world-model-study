@@ -1389,14 +1389,17 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 
 ### 📖 核心思想
 
-#### 解决 World Models 的三个痛点
+#### 解决 World Models 的核心痛点
 
-| World Models 的痛点 | PlaNet 的回应 |
+| World Models 的痛点 / 局限 | PlaNet 的回应 |
 |--------------------|--------------|
-| V 和 M 分开训 → VAE 学的特征未必对决策有用 | **端到端联合训练**(同一个 ELBO 损失) |
-| MDN-RNN 长程不稳 | **RSSM(确定性 + 随机性双路)** |
-| CMA-ES 训 Controller,扩展性差 | **CEM 在线规划**(无 Controller 网络) |
-| 只在 Doom/CarRacing demo | **DeepMind Control Suite**(6 个连续控制任务,像素输入) |
+| 形式化模糊,只隐式处理部分可观测性 | 显式建模为 **POMDP**,世界模型即学习该 POMDP 的动力学与观测函数 |
+| V 和 M 分阶段独立训 → VAE 学的特征未必对决策有用 | **端到端联合训练**(encoder / transition / decoder / reward 共享一个 ELBO 损失) |
+| MDN-RNN 长程不稳,确定性记忆与随机性预测未解耦 | **RSSM**:确定性 GRU(h) + 随机性高斯(z) **双路并存**,区别于纯确定性 RNN 与纯随机性 SSM |
+| 仅训单步预测,多步预测误差累积无显式约束 | **Latent overshooting**:在隐空间对所有跨度的多步预测施加 KL 正则,**无需解码回图像** |
+| 决策依赖 CMA-ES 进化出的 Controller,换任务需重训 | **无 Policy 网络**,直接用学到的世界模型 + **CEM 在 latent 中在线规划**(MPC) |
+| 一次性随机采集数据,无法随模型改善 | **在线数据采集**:边训边用当前模型 + 规划主动探索,数据分布随模型变好而改善 |
+| 只在 Doom / CarRacing 这类玩具环境 demo | **DeepMind Control Suite**(6 个连续控制任务,像素输入) |
 
 #### 整体架构
 
