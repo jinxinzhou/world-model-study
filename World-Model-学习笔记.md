@@ -1458,7 +1458,7 @@ PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然
 - **World Models 的隐式表现**:loss = VAE 的 ELBO **+** MDN-RNN 的 NLL,**两段独立、分阶段串行训**。两个 loss 没有共同的概率根基 —— VAE 的 ELBO 是对图像 p(o) 的下界,MDN-RNN 的 NLL 是对 z 序列 p(z_{1:T} ∣ a_{1:T}) 的下界,这两个目标**从未被合成"对 POMDP 联合似然的下界"**。结果是:想加新约束就必须再拍个 loss 进来加权,**没有理论依据告诉你该加什么、权重该取多少**。
 - **PlaNet 的显式表现**:loss = 对整段轨迹的 ELBO
 
-  ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) ≥ Σ_t [ ln p(o_t ∣ s_t) + ln p(r_t ∣ s_t) − KL[ q(s_t ∣ h_t, o_t) ∥ p(s_t ∣ s_{t-1}, a_{t-1}) ] ]
+  <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
 
   这**直接就是把 POMDP 当作 latent variable model 做变分推断的结果**。重建、reward、belief 对齐动力学三件事在**同一个公式里**,梯度自动协同 —— encoder 会主动把"对动力学有用"和"对预测 reward 有用"的信息都塞进 s_t。**想加新约束?** 沿着同一个变分推导继续推:**Latent Overshooting 正是这样从"单步 ELBO"自然推广到"多步 ELBO"得到的(§4)**,理论一脉相承,没有任何拍脑袋。
 

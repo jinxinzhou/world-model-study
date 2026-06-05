@@ -1459,7 +1459,7 @@ And the training objective **ELBO is not patched together heuristically** — it
 - **World Models — implicit**: loss = VAE's ELBO **+** MDN-RNN's NLL, **two independent losses trained sequentially in separate stages**. The two losses share no common probabilistic foundation — the VAE ELBO is a lower bound on the image likelihood p(o), and the MDN-RNN NLL is a lower bound on the z-sequence likelihood p(z_{1:T} ∣ a_{1:T}); **these two were never combined into "a lower bound on the POMDP joint likelihood"**. As a result, to add a new constraint one must heuristically tack on yet another loss with hand-tuned weighting — **there is no theory to tell what to add or how to weight it**.
 - **PlaNet — explicit**: loss = ELBO over the entire trajectory
 
-  ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) ≥ Σ_t [ ln p(o_t ∣ s_t) + ln p(r_t ∣ s_t) − KL[ q(s_t ∣ h_t, o_t) ∥ p(s_t ∣ s_{t-1}, a_{t-1}) ] ]
+  <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
 
   This **is precisely the result of treating the POMDP as a latent variable model and applying variational inference**. Reconstruction, reward, and belief–dynamics alignment all live in the **same formula**, with gradients automatically coupled — the encoder is forced to embed into s_t whatever is useful for both dynamics and reward prediction. **Want to add a new constraint?** Just continue the variational derivation: **Latent Overshooting is precisely what you get by generalizing from "single-step ELBO" to "multi-step ELBO" (§4)** — a single theoretical lineage with no heuristic patches.
 
