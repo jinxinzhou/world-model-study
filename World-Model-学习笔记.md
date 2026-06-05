@@ -1423,7 +1423,7 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 **🔹 组件 1:Transition(转移函数)**
 
 - **World Models 的隐式表现**:MDN-RNN 用 LSTM 维持隐状态 h,转移写成 p(z_{t+1} ∣ z_t, a_t, h_t)。问题是 —— **"POMDP 的状态"到底是什么?论文从未给出答案**。如果状态是 z,那 h 凭什么出现在条件里?如果状态是 (z, h),那为什么 h 不参与重建、也不参与 KL?这是个**形式上不闭合**的设计。
-- **PlaNet 的显式表现**:论文 §3 在引入 RSSM 时(方程 4)**用文字明说**:"we can understand this model as **splitting the state into a stochastic part s_t and a deterministic part h_t**"。虽然论文**没有给完整状态起一个 tuple 符号**,但方程 4 把两部分的演化全部显式列出 —— 确定性 h_t = f(h_{t-1}, s_{t-1}, a_{t-1}),随机 s_t ~ p(s_t ∣ h_t);更关键的是**观测、奖励、prior、posterior 这 4 个网络都同时以 (h_t, s_t) 为输入**,没有任何一个网络"只用 h 不用 s"或反过来。这就让 POMDP 状态在形式上被完全确定:就是这一对变量,各司其职、协同被训。不存在 World Models 那种"h 凭什么出现"的歧义。
+- **PlaNet 的显式表现**:状态被**正式拆为两部分** —— 确定性的 h_t 和随机性的 z_t,且观测、奖励、prior、posterior 这 4 个网络都同时以 (h_t, z_t) 为输入,没有任何一个网络"只用 h 不用 z"或反过来。POMDP 的状态在形式上被完全确定:就是这一对变量,各司其职、协同被训。不存在 World Models 那种"h 凭什么出现"的歧义。
 
 > 📝 **符号说明**:PlaNet 论文用 `s_t` 表示"随机部分",和后续 Dreamer 系列(本笔记沿用)的 `z_t = 随机部分、(h_t, z_t) 一起作为完整状态` 的习惯不一致。本笔记在表格和深入分析里使用 Dreamer 习惯,与论文原文符号对照时请注意这点差异。
 
