@@ -1500,6 +1500,26 @@ flowchart TD
   <i>PlaNet overall algorithm (paper Figure 2). Left: training phase collects data from the real env and trains RSSM with end-to-end ELBO. Right: planning phase rolls out multiple trajectories in latent space from the current state and uses CEM to pick the best first action</i>
 </p>
 
+#### Decision Loop (MPC inference loop)
+
+At deployment time, PlaNet executes three steps per time step, forming a standard **receding-horizon MPC** loop:
+
+| Step | What it does | Component used |
+|---|---|---|
+| **① Observe** | Feed current observation $o_t$ together with history into the encoder; obtain the current belief $q(s_t \mid h_t, o_t)$ | Encoder + RSSM's h |
+| **② Predict & Plan** | Starting from the belief, use CEM to roll out 1000 candidate action sequences in latent space, refine over 10 iterations, and pick the one with the highest cumulative reward | Transition + Reward (runs in latent, **never touches the real env**) |
+| **③ Act** | Execute only the **first action** $a_t$ of the optimal sequence, then return to ① and replan | — |
+
+> ⚠️ **Key: replanning happens at every step**, the remaining sequence from the previous step is not reused — this is the essence of MPC vs open-loop control (executing $a_t$ yields a new observation, and that fresh information lets the next plan be even better).
+
+##### Action Repeat (R) trick
+
+In practice, PlaNet **repeats each action** $a_t$ **R times** (typically R = 2–4 on DMC):
+- Sums the rewards over those R steps as the "effective reward" of the decision
+- Uses the observation at step R as the next $o_{t+1}$
+
+**Purpose**: effectively compresses the planning horizon by R× (from 50 raw steps down to 12–25), making CEM computationally feasible while preserving physical time resolution. This is a **"paper does not emphasize, but the code must have"** engineering practice — and the Dreamer family inherits it.
+
 #### Key Innovations Compared
 
 | Dimension | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
@@ -1544,6 +1564,12 @@ flowchart TD
 **Effect of latent overshooting**:
 - Only 1-step KL → short-term predictions OK, severe long-term drift
 - Adding D=50 step overshooting → **long-term predictions significantly more stable**
+
+**World model vs true simulator (quality upper bound)**:
+- CEM + **true simulator** (oracle, upper bound) → best
+- CEM + **PlaNet world model** → **only slightly below oracle**
+
+→ This comparison is **the most direct evidence of world-model quality**: PlaNet's learned latent dynamics is good enough that "planning in the head" ≈ "planning in the real env". If the world model were poor, these two curves would differ by an order of magnitude.
 
 **Effect of planning horizon H**:
 - H=1 → degenerates to greedy, poor

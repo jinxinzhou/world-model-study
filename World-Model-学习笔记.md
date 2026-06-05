@@ -1499,6 +1499,26 @@ flowchart TD
   <i>PlaNet 算法整体流程(来自论文 Figure 2):左侧训练阶段从真实环境采数据训 RSSM(端到端 ELBO),右侧规划阶段从当前 state 出发,用 RSSM 在 latent 空间 rollout 出多个轨迹,CEM 挑选最优首步动作</i>
 </p>
 
+#### 决策循环(MPC inference loop)
+
+PlaNet 部署时每个 time step 走三步,构成一个标准的 **receding-horizon MPC** 循环:
+
+| 步骤 | 在做什么 | 用到哪个组件 |
+|---|---|---|
+| **① Observe** | 把当前观测 $o_t$ 和历史一起送入 encoder,得到当前 belief $q(s_t \mid h_t, o_t)$ | Encoder + RSSM 的 h |
+| **② Predict & Plan** | 从 belief 出发,用 CEM 在 latent 中 rollout 1000 条候选动作序列,迭代 10 次精化,选出累积 reward 最高的序列 | Transition + Reward(在 latent 里跑,**不接触真环境**) |
+| **③ Act** | 只执行最优序列的**第一个动作** $a_t$,然后回到 ① 重新规划 | — |
+
+> ⚠️ **关键:每一步都重新规划**,不复用上一步的剩余序列 —— 这是 MPC 与开环控制的本质区别(因为执行 $a_t$ 后会拿到新观测,这条新信息会让规划得到更好的结果)。
+
+##### Action Repeat (R) trick
+
+实现中,PlaNet 把每个动作 $a_t$ **重复执行 R 次**(DMC 上典型 R = 2~4):
+- 把 R 步的 reward 累加,作为该决策的"effective reward"
+- 把第 R 步的观测作为下一时刻的 $o_{t+1}$
+
+**作用**:把规划长度从原始 50 步**有效压缩 R 倍**(压到 12~25 步),让 CEM 在计算上可行,同时保持物理时间分辨率。这是一个**论文不强调、但代码必有**的工程实践 —— 后续 Dreamer 系列也都沿用。
+
 #### 关键创新对比
 
 | 维度 | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
@@ -1543,6 +1563,12 @@ flowchart TD
 **Latent overshooting 的作用**:
 - 只用 1 步 KL → 短程预测可以,长程严重漂移
 - 加入 D=50 步 overshooting → **长程预测显著稳定**
+
+**世界模型 vs 真模拟器(质量上限对比)**:
+- CEM + **真模拟器**(oracle,上限) → 最好
+- CEM + **PlaNet 世界模型** → **仅略低于 oracle**
+
+→ 这条对比是**对世界模型质量最直接的证据**:PlaNet 学到的 latent 动力学好到让"脑内规划"几乎等于"真环境规划"。如果世界模型差,这两条曲线会有数量级的差距。
 
 **规划 horizon H 的影响**:
 - H=1 → 退化成贪心,差
