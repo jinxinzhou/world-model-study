@@ -1413,7 +1413,7 @@ The "true state" of the real environment includes positions, velocities, masses,
 
 | POMDP Component (theory) | World Models (implicit / incomplete) | PlaNet (explicit / 1:1 mapped) |
 |---|---|---|
-| **Transition T**: p(s_t ∣ s_{t-1}, a_{t-1}) | MDN-RNN: p(z_{t+1} ∣ z_t, a_t, h_t) — h is a side-channel memory; **what counts as "the state" — z or (z, h) — is never specified** | RSSM: p(s_t ∣ s_{t-1}, a_{t-1}), where s_t = (h_t, z_t) — **the state is clearly defined; the transition is exactly the POMDP's transition** |
+| **Transition T**: p(s_t ∣ s_{t-1}, a_{t-1}) | MDN-RNN: p(z_{t+1} ∣ z_t, a_t, h_t) — h is a side-channel memory; **what counts as "the state" — z or (z, h) — is never specified** | RSSM (Eq. 4): paper says "splitting the state into a stochastic part s_t and a deterministic part h_t", **the state is explicitly decomposed into (h_t, s_t)**, all four networks take this pair as input — no ambiguity |
 | **Observation Z**: p(o_t ∣ s_t) | VAE Decoder: p(o_t ∣ z_t) — **just a by-product of "finding a compression code for the image"; not the POMDP's observation function** | Decoder: p(o_t ∣ s_t) — **is the POMDP's observation function**, jointly trained as one term of the ELBO |
 | **Reward R**: r(s_t) | ❌ **Does not exist**. Reward comes from the real environment (CarRacing track judgment / Doom survival flag) | Reward model: r̂(s_t), a small MLP — because CEM rolls out inside the head without touching the real env, **the model itself must predict reward** |
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **only sees the current frame**; history goes through MDN-RNN's deterministic h as a side channel; **[z, h] is never combined into "a probabilistic belief over the true state"** | Encoder/Posterior q(s_t ∣ h_t, o_t), where h_t carries the history — **a genuine POMDP belief**: a Gaussian distribution pulled toward the prior via KL |
@@ -1424,7 +1424,9 @@ The "true state" of the real environment includes positions, velocities, masses,
 **🔹 Component 1: Transition**
 
 - **World Models — implicit**: MDN-RNN maintains a hidden state h via an LSTM, and the transition is written as p(z_{t+1} ∣ z_t, a_t, h_t). The problem — **what is "the POMDP state"? The paper never answers**. If the state is z, why does h appear in the conditioning? If the state is (z, h), why is h not part of reconstruction or KL? This is a **formally non-closed** design.
-- **PlaNet — explicit**: Explicitly writes down s_t = (h_t, z_t) as the state, with the transition p(s_t ∣ s_{t-1}, a_{t-1}) matching the POMDP transition function exactly. h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1}) is the deterministic part of the state, z_t ~ N(μ(h_t), σ(h_t)) is the stochastic part — **together they are the POMDP state**.
+- **PlaNet — explicit**: PlaNet §3 (when introducing RSSM in Eq. 4) **says it in plain text**: "we can understand this model as **splitting the state into a stochastic part s_t and a deterministic part h_t**". Although the paper **does not assign a single tuple symbol to the full state**, Eq. 4 explicitly writes out the evolution of both parts — deterministic h_t = f(h_{t-1}, s_{t-1}, a_{t-1}), stochastic s_t ~ p(s_t ∣ h_t); more importantly, **all 4 networks (observation, reward, prior, posterior) take (h_t, s_t) jointly as input**, none uses only h or only s. This pins down the POMDP state formally: it is this pair of variables, each with a defined role, trained jointly. There is no World-Models-style ambiguity of "why does h show up here?".
+
+> 📝 **Notation note**: PlaNet's paper uses `s_t` for the *stochastic part*, which differs from the subsequent Dreamer-family convention (followed in this note): `z_t = stochastic part`, `(h_t, z_t) together = the full state`. When cross-referencing the paper, keep this symbol mismatch in mind.
 
 **🔹 Component 2: Observation**
 

@@ -1412,7 +1412,7 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 
 | POMDP 组件(理论) | World Models(隐式 / 不完整) | PlaNet(显式 / 1:1 对应) |
 |---|---|---|
-| **转移 T**: p(s_t ∣ s_{t-1}, a_{t-1}) | MDN-RNN: p(z_{t+1} ∣ z_t, a_t, h_t) —— h 是旁路记忆,**"状态"到底是 z 还是 (z,h),论文从未明确** | RSSM: p(s_t ∣ s_{t-1}, a_{t-1}),其中 s_t = (h_t, z_t) —— **状态定义清晰,转移即 POMDP 的转移** |
+| **转移 T**: p(s_t ∣ s_{t-1}, a_{t-1}) | MDN-RNN: p(z_{t+1} ∣ z_t, a_t, h_t) —— h 是旁路记忆,**"状态"到底是 z 还是 (z,h),论文从未明确** | RSSM(方程 4):论文原文 "splitting the state into a stochastic part s_t and a deterministic part h_t",**状态被显式拆为(h_t, s_t)两部分**,四个网络都以这一对变量为输入 —— 无歧义 |
 | **观测 Z**: p(o_t ∣ s_t) | VAE Decoder: p(o_t ∣ z_t) —— **只是"给图像找压缩码"的副产品,不是 POMDP 的观测函数** | Decoder: p(o_t ∣ s_t) —— **就是 POMDP 的观测函数**,作为 ELBO 的一项被联合训 |
 | **奖励 R**: r(s_t) | ❌ **不存在**。reward 由真实环境给出(CarRacing 赛道判定 / Doom 存活判定) | Reward model: r̂(s_t),小 MLP —— 因为 CEM 在脑内 rollout 不接触真环境,**必须由模型自己预测奖励** |
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **只看当前帧**,历史靠 MDN-RNN 的确定性 h 旁路;**[z,h] 从未被合成"对真实状态的概率 belief"** | Encoder/Posterior q(s_t ∣ h_t, o_t),其中 h_t 携带历史 —— **真正的 POMDP belief**:高斯分布,通过 KL 拉向 prior |
@@ -1422,8 +1422,10 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 
 **🔹 组件 1:Transition(转移函数)**
 
-- **World Models 的隐式表现**:MDN-RNN 用 LSTM 维持隐状态 h,转移写成 p(z_{t+1} ∣ z_t, a_t, h_t)。问题是 —— **"POMDP 的状态" 到底是什么? 论文从未给出答案**。如果状态是 z,那 h 凭什么出现在条件里?如果状态是 (z, h),那为什么 h 不参与重建、也不参与 KL?这是个**形式上不闭合**的设计。
-- **PlaNet 的显式表现**:明确写下 s_t = (h_t, z_t) 是状态,转移 p(s_t ∣ s_{t-1}, a_{t-1}) 完全符合 POMDP 转移函数的定义。h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1}) 是状态的确定性部分,z_t ~ N(μ(h_t), σ(h_t)) 是状态的随机部分 —— **两部分一起就是 POMDP 的状态**。
+- **World Models 的隐式表现**:MDN-RNN 用 LSTM 维持隐状态 h,转移写成 p(z_{t+1} ∣ z_t, a_t, h_t)。问题是 —— **"POMDP 的状态"到底是什么?论文从未给出答案**。如果状态是 z,那 h 凭什么出现在条件里?如果状态是 (z, h),那为什么 h 不参与重建、也不参与 KL?这是个**形式上不闭合**的设计。
+- **PlaNet 的显式表现**:论文 §3 在引入 RSSM 时(方程 4)**用文字明说**:"we can understand this model as **splitting the state into a stochastic part s_t and a deterministic part h_t**"。虽然论文**没有给完整状态起一个 tuple 符号**,但方程 4 把两部分的演化全部显式列出 —— 确定性 h_t = f(h_{t-1}, s_{t-1}, a_{t-1}),随机 s_t ~ p(s_t ∣ h_t);更关键的是**观测、奖励、prior、posterior 这 4 个网络都同时以 (h_t, s_t) 为输入**,没有任何一个网络"只用 h 不用 s"或反过来。这就让 POMDP 状态在形式上被完全确定:就是这一对变量,各司其职、协同被训。不存在 World Models 那种"h 凭什么出现"的歧义。
+
+> 📝 **符号说明**:PlaNet 论文用 `s_t` 表示"随机部分",和后续 Dreamer 系列(本笔记沿用)的 `z_t = 随机部分、(h_t, z_t) 一起作为完整状态` 的习惯不一致。本笔记在表格和深入分析里使用 Dreamer 习惯,与论文原文符号对照时请注意这点差异。
 
 **🔹 组件 2:Observation(观测函数)**
 
