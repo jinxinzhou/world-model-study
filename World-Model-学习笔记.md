@@ -1427,6 +1427,7 @@ PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然
 | **观测 Z**: p(o_t ∣ s_t) | VAE Decoder: p(o_t ∣ z_t) —— **只是"给图像找压缩码"的副产品,不是 POMDP 的观测函数** | Decoder: p(o_t ∣ s_t) —— **就是 POMDP 的观测函数**,作为 ELBO 的一项被联合训 |
 | **奖励 R**: r(s_t) | ❌ **不存在**。reward 由真实环境给出(CarRacing 赛道判定 / Doom 存活判定) | Reward model: r̂(s_t),小 MLP —— 因为 CEM 在脑内 rollout 不接触真环境,**必须由模型自己预测奖励** |
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **只看当前帧**,历史靠 MDN-RNN 的确定性 h 旁路;**[z,h] 从未被合成"对真实状态的概率 belief"** | Encoder/Posterior q(s_t ∣ h_t, o_t),其中 h_t 携带历史 —— **真正的 POMDP belief**:高斯分布,通过 KL 拉向 prior |
+| **训练目标**: max ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) | **VAE 的 ELBO + MDN-RNN 的 NLL**,两段独立、分阶段训练 —— **从未合成"对 POMDP 联合似然的下界"** | **单一 ELBO**(对整段轨迹的对数似然下界),由变分推断从 POMDP 联合似然**自然推导**;重建 / reward / KL 在同一公式里,梯度协同 |
 
 而且训练目标 **ELBO 不是拍脑袋拼出来的**,而是从「POMDP 是一个 latent variable model + 用变分推断学它」**自然推导**出来的(§3 那一坨公式)。每一项 loss 都有明确的数学含义,而不是经验主义的多任务加权。
 
@@ -1451,6 +1452,15 @@ PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然
 
 - **World Models 的隐式表现**:VAE 的 q(z ∣ o_t) **只看当前一帧**,所以它不可能是"对环境状态的 belief"—— 只是"对这一帧的编码"。历史信息走另一条路:MDN-RNN 的 h(确定性、点估计的)。**两条路从未合并成"对真实状态的一个概率分布"**。Controller 拿到的 [z, h] 只是把两条路的最新切片拼起来,既不是分布、也不是 belief。
 - **PlaNet 的显式表现**:Encoder 同时吃 (h_t, o_t),输出 q(s_t ∣ h_t, o_t) = N(μ, σ²)。h_t 携带历史、o_t 是当前观测,二者一起决定"对当前隐状态的后验"。这是一个**真正的概率分布**,且通过 KL[q ∥ p] 被拉向"用动力学转移过来的预测",**强制 belief 与动力学一致** —— 这正是 POMDP belief update 的定义。
+
+**🔹 组件 5:Training Objective(训练目标)**
+
+- **World Models 的隐式表现**:loss = VAE 的 ELBO **+** MDN-RNN 的 NLL,**两段独立、分阶段串行训**。两个 loss 没有共同的概率根基 —— VAE 的 ELBO 是对图像 p(o) 的下界,MDN-RNN 的 NLL 是对 z 序列 p(z_{1:T} ∣ a_{1:T}) 的下界,这两个目标**从未被合成"对 POMDP 联合似然的下界"**。结果是:想加新约束就必须再拍个 loss 进来加权,**没有理论依据告诉你该加什么、权重该取多少**。
+- **PlaNet 的显式表现**:loss = 对整段轨迹的 ELBO
+
+  ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) ≥ Σ_t [ ln p(o_t ∣ s_t) + ln p(r_t ∣ s_t) − KL[ q(s_t ∣ h_t, o_t) ∥ p(s_t ∣ s_{t-1}, a_{t-1}) ] ]
+
+  这**直接就是把 POMDP 当作 latent variable model 做变分推断的结果**。重建、reward、belief 对齐动力学三件事在**同一个公式里**,梯度自动协同 —— encoder 会主动把"对动力学有用"和"对预测 reward 有用"的信息都塞进 s_t。**想加新约束?** 沿着同一个变分推导继续推:**Latent Overshooting 正是这样从"单步 ELBO"自然推广到"多步 ELBO"得到的(§4)**,理论一脉相承,没有任何拍脑袋。
 
 ##### 4. 显式形式化的真正价值(不只是用词区别)
 

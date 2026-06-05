@@ -1428,6 +1428,7 @@ PlaNet §2 opens with "We consider a discrete-time POMDP defined by …", and it
 | **Observation Z**: p(o_t ∣ s_t) | VAE Decoder: p(o_t ∣ z_t) — **just a by-product of "finding a compression code for the image"; not the POMDP's observation function** | Decoder: p(o_t ∣ s_t) — **is the POMDP's observation function**, jointly trained as one term of the ELBO |
 | **Reward R**: r(s_t) | ❌ **Does not exist**. Reward comes from the real environment (CarRacing track judgment / Doom survival flag) | Reward model: r̂(s_t), a small MLP — because CEM rolls out inside the head without touching the real env, **the model itself must predict reward** |
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **only sees the current frame**; history goes through MDN-RNN's deterministic h as a side channel; **[z, h] is never combined into "a probabilistic belief over the true state"** | Encoder/Posterior q(s_t ∣ h_t, o_t), where h_t carries the history — **a genuine POMDP belief**: a Gaussian distribution pulled toward the prior via KL |
+| **Training Objective**: max ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) | **VAE's ELBO + MDN-RNN's NLL**, two independent losses trained in separate stages — **never combined into "a lower bound on the POMDP joint likelihood"** | **Single ELBO** (lower bound on the log-likelihood of the entire trajectory), **naturally derived** from the POMDP joint likelihood via variational inference; reconstruction / reward / KL live in the same formula with coupled gradients |
 
 And the training objective **ELBO is not patched together heuristically** — it is **naturally derived** from "the POMDP is a latent variable model + use variational inference to learn it" (the equations in §3). Every loss term has clear mathematical meaning rather than being an empirically weighted multi-task loss.
 
@@ -1452,6 +1453,15 @@ And the training objective **ELBO is not patched together heuristically** — it
 
 - **World Models — implicit**: VAE's q(z ∣ o_t) **only looks at the current frame**, so it cannot be a "belief over the environment state" — only an encoding of this single frame. History flows through another path: MDN-RNN's h (deterministic, point estimate). **The two paths are never merged into "a single probability distribution over the true state"**. What the Controller receives — [z, h] — is just the latest slice of two parallel paths concatenated; it is neither a distribution nor a belief.
 - **PlaNet — explicit**: The encoder takes (h_t, o_t) jointly and outputs q(s_t ∣ h_t, o_t) = N(μ, σ²). h_t carries history, o_t is the current observation, and together they determine "the posterior over the current latent state". This is a **genuine probability distribution**, and is pulled via KL[q ∥ p] toward "the prediction propagated forward by the dynamics", **forcing belief consistency with the dynamics** — exactly the definition of a POMDP belief update.
+
+**🔹 Component 5: Training Objective**
+
+- **World Models — implicit**: loss = VAE's ELBO **+** MDN-RNN's NLL, **two independent losses trained sequentially in separate stages**. The two losses share no common probabilistic foundation — the VAE ELBO is a lower bound on the image likelihood p(o), and the MDN-RNN NLL is a lower bound on the z-sequence likelihood p(z_{1:T} ∣ a_{1:T}); **these two were never combined into "a lower bound on the POMDP joint likelihood"**. As a result, to add a new constraint one must heuristically tack on yet another loss with hand-tuned weighting — **there is no theory to tell what to add or how to weight it**.
+- **PlaNet — explicit**: loss = ELBO over the entire trajectory
+
+  ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) ≥ Σ_t [ ln p(o_t ∣ s_t) + ln p(r_t ∣ s_t) − KL[ q(s_t ∣ h_t, o_t) ∥ p(s_t ∣ s_{t-1}, a_{t-1}) ] ]
+
+  This **is precisely the result of treating the POMDP as a latent variable model and applying variational inference**. Reconstruction, reward, and belief–dynamics alignment all live in the **same formula**, with gradients automatically coupled — the encoder is forced to embed into s_t whatever is useful for both dynamics and reward prediction. **Want to add a new constraint?** Just continue the variational derivation: **Latent Overshooting is precisely what you get by generalizing from "single-step ELBO" to "multi-step ELBO" (§4)** — a single theoretical lineage with no heuristic patches.
 
 ##### 4. The real value of explicit formalization (not just terminology)
 
