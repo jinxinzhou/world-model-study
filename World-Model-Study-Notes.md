@@ -1532,6 +1532,108 @@ In practice, PlaNet **repeats each action** $a_t$ **R times** (typically R = 2�
 
 > 💡 **Note**: World Models' M does have an LSTM hidden state h internally, but it is only a "working memory" by-product, **conceptually separate** from VAE's z and trained in different stages (z only learns reconstruction; h only assists in predicting z). PlaNet's RSSM is the first to **treat (h, z) as a unified environment state**, trained jointly, so that z simultaneously captures both visual and dynamic information — this is the truly revolutionary aspect of RSSM.
 
+<details>
+<summary>📖 <b>§3 Reading Map: How to understand Chapter 3</b> (click to expand)</summary>
+
+On a first read, §3 looks like a heap of equations. In reality it is a **4-step progressive story — each step solves the previous step's pain point**. Read in this order, and §3 becomes a tightly structured "mini-paper".
+
+##### Outline
+
+```
+Step 1: Bare-bones latent SSM         [Eq. 2]
+   ↓ "the true posterior is intractable — how do we train?"
+Step 2: Introduce a variational encoder
+   ↓ "what is the training objective?"
+Step 3: Derive the ELBO                [Eq. 3]
+   ↓ "a purely stochastic latent forgets long-range info — what now?"
+Step 4: Add a deterministic path → RSSM  [Eq. 4]
+```
+
+##### Step 1 — The simplest latent state-space model (Eq. 2)
+
+The paper first writes down the simplest "sequence model with latents": Transition / Observation / Reward, three Gaussians parameterized by NNs. **No h yet, no RSSM**.
+
+> Same as the VAE paper, which starts with "latent + Gaussian decoder" before discussing how to train it. Put up the skeleton first.
+
+##### Step 2 — Variational encoder ("the posterior is intractable, what to do")
+
+**Problem**: In theory, training the Step-1 model requires sampling from the true posterior p(s_t ∣ o_{≤t}, a_{<t}). But this posterior is **intractable** (non-linear NNs, no closed-form integration).
+
+**The paper's fix**: Introduce an approximate posterior q, also NN-parameterized:
+
+q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
+
+Three points to note:
+1. This is the VAE's **encoder**, but in **trajectory form**
+2. It is the **filtering posterior** (only looks at o_{≤t}, not the future), since deployment also only has access to the past
+3. PlaNet uses **mean-field**: q is factorized into per-step q(s_t ∣ ...)
+
+> 🔑 Every variational inference method goes through this step — "true posterior won't do, use an approximation".
+
+##### Step 3 — Derive the ELBO (Eq. 3)
+
+**Problem**: Given the encoder, how do we train the model?
+
+**The paper's fix**: Apply Jensen's inequality to get a lower bound on the log-likelihood (the ELBO):
+
+<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO" width="780"/></p>
+
+The **right mental posture** for reading this:
+- **First term (reconstruction)**: can the s_t sampled from the encoder reconstruct the true o_t? → trains the **decoder**
+- **Second term (KL)**: does the encoder's posterior agree with the prior obtained by rolling s_{t-1} forward through the transition model? → trains the **transition + encoder**
+- **The whole ELBO**: unifies "reconstruct obs" and "be consistent with dynamics" in a **single objective**
+
+> 🔑 **The KL term is the soul of §3**. It forces the encoder to stop making s_t up — it must produce s_t in a form "the dynamics agrees with". This is the key to PlaNet's end-to-end training.
+
+> ⚠️ For simplicity the paper writes only the observation term; the **reward term is fully symmetric** — replace ln p(o_t ∣ s_t) with ln p(r_t ∣ s_t).
+
+##### Step 4 — Add a deterministic path → RSSM (Eq. 4)
+
+**Problem**: In the Step-3 model, all information is passed across time through the **stochastic s_t**. But s_t is sampled at every step — **sampling injects noise** — so long-range information is quickly washed out; the model cannot remember "what happened 5 steps ago".
+
+**The paper's fix**: Add a **purely deterministic parallel path** h_t, dedicated to memory:
+
+<p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
+
+**Division of duties**:
+
+| Part | Role | Analogy |
+|---|---|---|
+| **h_t** (deterministic) | Long-range memory, lossless information transport | RNN's hidden state |
+| **s_t** (stochastic) | Express environmental uncertainty, multiple possible futures | VAE's latent |
+
+This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + **S**tate-**S**pace **M**odel (stochastic), **stitched together**.
+
+> 🔑 Figure 2 in the paper says it all: **(a) pure deterministic RNN** = remembers but cannot express uncertainty | **(b) pure stochastic SSM** = expresses uncertainty but cannot remember | **(c) RSSM = a + b** = best of both worlds
+
+##### §3 in one sentence
+
+> **§3 = "I want a latent-space dynamics model that can be trained, remembers, and supports sampling"**
+> - Trainable → needs an encoder (Step 2) + ELBO (Step 3)
+> - Remembers → needs a deterministic h (Step 4)
+> - Samples → needs a stochastic s (Steps 1, 4)
+
+##### Common pitfalls when reading §3
+
+| Sticking point | The truth |
+|---|---|
+| "Is s_t the POMDP state or the stochastic part?" | **The same symbol shifts meaning subtly between Eq. 2 and Eq. 4** — in Eq. 2, s_t is the whole latent; in Eq. 4, s_t is only the **stochastic part**, and the full state is (h_t, s_t). This note follows the Dreamer convention: z_t = stochastic part, to avoid the ambiguity. |
+| "Why is the KL's prior p(s_t ∣ s_{t-1}, a_{t-1}) instead of p(s_t)?" | Because it is a **conditional prior**: the previous step rolled forward through the transition model. Unlike static VAE where p(s) = N(0, I) — here the prior itself is something the model has to learn. |
+| "How is the expectation in Eq. 3 computed?" | Reparameterize a single sample of s_{t-1} and substitute. **Single-sample estimate + reparameterization** is enough. |
+| "Why not just use an RNN as the transition?" | Step 4 already answered: RNNs are deterministic, **they cannot express 'I don't know what comes next'**. In model-based RL, letting the planner know how uncertain the model is **matters a lot**. |
+
+##### Suggested reading order for §3
+
+1. **Look at Figure 2 (a/b/c) first** — 5 minutes for the visual intuition of the 4-step evolution
+2. **Read Eq. 2** — bare SSM, 5 minutes
+3. **Jump to Eq. 4 for the RSSM final form** — see what the destination looks like
+4. **Go back and read the ELBO derivation in Eq. 3** — by then you already know what the prior looks like, and the KL term becomes easy
+5. **Finally read the "Deterministic path" paragraph for motivation** — understand why purely stochastic or purely deterministic alone won't do
+
+Reading §3 top-down is painful because Eq. 3 is written before the paper admits "this model actually does not work well". **See destination (c) first, then come back and fill in the derivation — much more efficient**.
+
+</details>
+
 ### 🧪 Key Experiments
 
 #### Beats Model-Free by 50× on DeepMind Control Suite (Pixel Input)
