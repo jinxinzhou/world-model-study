@@ -1401,6 +1401,51 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 | 一次性随机采集数据,无法随模型改善 | **在线数据采集**:边训边用当前模型 + 规划主动探索,数据分布随模型变好而改善 |
 | 只在 Doom / CarRacing 这类玩具环境 demo | **DeepMind Control Suite**(6 个连续控制任务,像素输入) |
 
+<details>
+<summary>📌 <b>为什么"显式 POMDP 形式化"是 PlaNet 在科学严谨性上的关键进步</b>(点开展开)</summary>
+
+##### 1. 像素 RL 本质就是 POMDP
+
+真实环境的"真实状态"是所有物体的位置、速度、质量、关节角度等;而 agent 拿到的只有 RGB 图像 —— 一帧静态图丢失了**速度、深度、遮挡背后的信息、数值精度**。所以**只要 agent 从像素学控制,问题就一定是 POMDP**,必须在内部维护一个 latent 表示来"补全"观测不到的部分。这件事是物理决定的,不是建模选择。
+
+##### 2. World Models 的"隐式"具体体现
+
+World Models 全文**没出现 POMDP 这个词**。VAE 的 z 被称为"图像的压缩表示",MDN-RNN 的 h 被称为"对过去的记忆",**都没有被宣称是"对环境真实状态的 belief"**。两个表示各有各的目标:
+
+- z 的目标 = 把图像重建好(VAE 重建 loss)
+- h 的目标 = 预测下一个 z(MDN-RNN 自回归 loss)
+
+**没有统一的"我在学一个 POMDP"作为优化目标**。结果是模型工作 ≠ 在学 POMDP,只是凑巧 z + h 拼起来"信息量够用"。
+
+##### 3. PlaNet 的"显式"具体体现 —— 架构 1:1 对应 POMDP
+
+PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然后模型的 4 个网络与 POMDP 的 4 个组件一一对应:
+
+| POMDP 组件(理论) | PlaNet 中的网络(实现) |
+|---|---|
+| 转移函数 T: p(s_t ∣ s_{t-1}, a_{t-1}) | **Transition model**(RSSM 的核心,GRU + 高斯头) |
+| 观测函数 Z: p(o_t ∣ s_t) | **Observation / Decoder model**(反卷积重建图像) |
+| 奖励函数 R: r(s_t) | **Reward model**(小 MLP,从 latent 预测奖励) |
+| Belief 更新 b(s_t ∣ o_{≤t}, a_{<t}) | **Encoder / Posterior** q(s_t ∣ o_{≤t}, a_{<t}) |
+
+而且训练目标 **ELBO 不是拍脑袋拼出来的**,而是从「POMDP 是一个 latent variable model + 用变分推断学它」**自然推导**出来的(§3 那一坨公式)。每一项 loss 都有明确的数学含义,而不是经验主义的多任务加权。
+
+##### 4. 显式形式化的真正价值(不只是用词区别)
+
+- 🎯 **Loss 有源头**:World Models = "VAE loss + MDN-RNN loss"两段独立;PlaNet = ELBO 一步推出。要加新约束(如 latent overshooting)时,可以沿着推导继续加,每一项都还有理论意义。
+- 🎯 **职责可诊断**:Decoder 学坏 → 重建 loss 升;Transition 学坏 → KL 升,可定位。World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,因为职能没按 POMDP 拆开。
+- 🎯 **模块松耦合,可只换一个组件**:Dreamer 1/2/3 完全复用 PlaNet 的 RSSM(POMDP 那 4 个组件不动),只把"CEM 规划"换成"Actor-Critic + 解析梯度"。这种"换决策层不换世界模型"的灵活性,没有 POMDP 形式化是做不出来的。
+- 🎯 **可苹果对苹果比较**:所有 model-based RL 方法(POMCP / DVRL / SLAC / Dreamer ...)都能放在 POMDP 框架下比较 —— 你的 Z 怎么近似?belief 是什么形式?规划用什么算法?
+
+##### 5. 一句话总结
+
+> **World Models** 把"部分可观测"当成**需要绕过去的工程问题**(堆 VAE + RNN 凑表示)。
+> **PlaNet** 把它当成**需要正面建模的科学问题**(写下 POMDP,所有架构和 loss 自然推导出来)。
+>
+> 同样的网络组件,前者是**工程拼装**,后者是**理论实现**。这正是 Dreamer 1/2/3 全都沿用 PlaNet 的形式化、而没人再回到 World Models 的三阶段范式的根本原因。
+
+</details>
+
 #### 整体架构
 
 ```mermaid

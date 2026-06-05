@@ -1402,6 +1402,51 @@ This paper is the **direct predecessor of the Dreamer series** and Hafner's firs
 | One-shot random data collection, unable to improve with the model | **Online data collection**: actively explores using current model + planning while training; data distribution improves as the model improves |
 | Only demoed on toy environments like Doom / CarRacing | **DeepMind Control Suite** (6 continuous-control tasks from pixels) |
 
+<details>
+<summary>📌 <b>Why "explicit POMDP formalization" is PlaNet's key advance in scientific rigor</b> (click to expand)</summary>
+
+##### 1. Pixel-based RL is inherently a POMDP
+
+The "true state" of the real environment includes positions, velocities, masses, joint angles, etc.; what the agent actually receives is just an RGB image — a single static frame **loses velocity, depth, what's behind occlusion, and numerical precision**. So **whenever an agent learns control from pixels, the problem is necessarily a POMDP**: it must maintain an internal latent representation to "fill in" what cannot be observed. This is dictated by physics, not by modeling choice.
+
+##### 2. What "implicit" looks like in World Models
+
+The World Models paper **never uses the word POMDP**. The VAE's z is called "a compressed representation of the frame"; the MDN-RNN's h is called "memory of the past" — **neither is declared to be a belief over the environment's true state**. The two representations each have their own, POMDP-unrelated objectives:
+
+- z's objective = reconstruct the image (VAE reconstruction loss)
+- h's objective = predict the next z (MDN-RNN autoregressive loss)
+
+**There is no unified "I am learning a POMDP" optimization objective**. The result is that the model working ≠ it learning a POMDP — z + h just happens to contain "enough information" when concatenated.
+
+##### 3. What "explicit" looks like in PlaNet — architecture 1:1 mapped to POMDP
+
+PlaNet §2 opens with "We consider a discrete-time POMDP defined by …", and its four networks correspond one-to-one with the four POMDP components:
+
+| POMDP Component (theory) | PlaNet's Network (implementation) |
+|---|---|
+| Transition T: p(s_t ∣ s_{t-1}, a_{t-1}) | **Transition model** (core of RSSM, GRU + Gaussian head) |
+| Observation Z: p(o_t ∣ s_t) | **Observation / Decoder model** (deconv reconstructing the image) |
+| Reward R: r(s_t) | **Reward model** (small MLP predicting reward from latent) |
+| Belief update b(s_t ∣ o_{≤t}, a_{<t}) | **Encoder / Posterior** q(s_t ∣ o_{≤t}, a_{<t}) |
+
+And the training objective **ELBO is not patched together heuristically** — it is **naturally derived** from "the POMDP is a latent variable model + use variational inference to learn it" (the equations in §3). Every loss term has clear mathematical meaning rather than being an empirically weighted multi-task loss.
+
+##### 4. The real value of explicit formalization (not just terminology)
+
+- 🎯 **Loss has a source**: World Models = "VAE loss + MDN-RNN loss" in two independent stages; PlaNet = ELBO derived in one step. When adding new constraints (e.g., latent overshooting), the derivation can be extended naturally — every term still has theoretical meaning.
+- 🎯 **Responsibilities are diagnosable**: Decoder degrades → reconstruction loss rises; Transition degrades → KL rises — locatable. In World Models, a bad z could be the VAE's fault or the MDN-RNN's, because responsibilities weren't split along POMDP lines.
+- 🎯 **Modules are loosely coupled — only one can be replaced**: Dreamer 1/2/3 fully reuse PlaNet's RSSM (those 4 POMDP components unchanged) and only swap "CEM planning" for "Actor-Critic + analytic gradients". This "swap the decision layer without touching the world model" flexibility would not be possible without POMDP formalization.
+- 🎯 **Apples-to-apples comparison**: All model-based RL methods (POMCP / DVRL / SLAC / Dreamer ...) can be compared under the POMDP framework — how do you approximate Z? What form is the belief? What planning algorithm?
+
+##### 5. One-sentence summary
+
+> **World Models** treats "partial observability" as **an engineering problem to work around** (stack VAE + RNN to cobble together a representation).
+> **PlaNet** treats it as **a scientific problem to model head-on** (write down the POMDP; let all architectures and losses derive naturally).
+>
+> The same network components — the former is **engineering assembly**, the latter is **theoretical implementation**. This is precisely why Dreamer 1/2/3 all inherit PlaNet's formalization, and why no one ever returned to World Models' three-stage paradigm.
+
+</details>
+
 #### Overall Architecture
 
 ```mermaid
