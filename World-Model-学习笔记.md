@@ -1419,16 +1419,38 @@ World Models 全文**没出现 POMDP 这个词**。VAE 的 z 被称为"图像的
 
 ##### 3. PlaNet 的"显式"具体体现 —— 架构 1:1 对应 POMDP
 
-PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然后模型的 4 个网络与 POMDP 的 4 个组件一一对应:
+PlaNet §2 开头直接写"We consider a discrete-time POMDP defined by …",然后模型的 4 个网络与 POMDP 的 4 个组件一一对应。下表把 **World Models 的对应做法** 也放进来对比,可以直观看出"隐式 vs 显式"在每个组件上的具体差异:
 
-| POMDP 组件(理论) | PlaNet 中的网络(实现) |
-|---|---|
-| 转移函数 T: p(s_t ∣ s_{t-1}, a_{t-1}) | **Transition model**(RSSM 的核心,GRU + 高斯头) |
-| 观测函数 Z: p(o_t ∣ s_t) | **Observation / Decoder model**(反卷积重建图像) |
-| 奖励函数 R: r(s_t) | **Reward model**(小 MLP,从 latent 预测奖励) |
-| Belief 更新 b(s_t ∣ o_{≤t}, a_{<t}) | **Encoder / Posterior** q(s_t ∣ o_{≤t}, a_{<t}) |
+| POMDP 组件(理论) | World Models(隐式 / 不完整) | PlaNet(显式 / 1:1 对应) |
+|---|---|---|
+| **转移 T**: p(s_t ∣ s_{t-1}, a_{t-1}) | MDN-RNN: p(z_{t+1} ∣ z_t, a_t, h_t) —— h 是旁路记忆,**"状态"到底是 z 还是 (z,h),论文从未明确** | RSSM: p(s_t ∣ s_{t-1}, a_{t-1}),其中 s_t = (h_t, z_t) —— **状态定义清晰,转移即 POMDP 的转移** |
+| **观测 Z**: p(o_t ∣ s_t) | VAE Decoder: p(o_t ∣ z_t) —— **只是"给图像找压缩码"的副产品,不是 POMDP 的观测函数** | Decoder: p(o_t ∣ s_t) —— **就是 POMDP 的观测函数**,作为 ELBO 的一项被联合训 |
+| **奖励 R**: r(s_t) | ❌ **不存在**。reward 由真实环境给出(CarRacing 赛道判定 / Doom 存活判定) | Reward model: r̂(s_t),小 MLP —— 因为 CEM 在脑内 rollout 不接触真环境,**必须由模型自己预测奖励** |
+| **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **只看当前帧**,历史靠 MDN-RNN 的确定性 h 旁路;**[z,h] 从未被合成"对真实状态的概率 belief"** | Encoder/Posterior q(s_t ∣ h_t, o_t),其中 h_t 携带历史 —— **真正的 POMDP belief**:高斯分布,通过 KL 拉向 prior |
 
 而且训练目标 **ELBO 不是拍脑袋拼出来的**,而是从「POMDP 是一个 latent variable model + 用变分推断学它」**自然推导**出来的(§3 那一坨公式)。每一项 loss 都有明确的数学含义,而不是经验主义的多任务加权。
+
+##### 3.5 逐组件深入:为什么是"隐式 vs 显式"
+
+**🔹 组件 1:Transition(转移函数)**
+
+- **World Models 的隐式表现**:MDN-RNN 用 LSTM 维持隐状态 h,转移写成 p(z_{t+1} ∣ z_t, a_t, h_t)。问题是 —— **"POMDP 的状态" 到底是什么? 论文从未给出答案**。如果状态是 z,那 h 凭什么出现在条件里?如果状态是 (z, h),那为什么 h 不参与重建、也不参与 KL?这是个**形式上不闭合**的设计。
+- **PlaNet 的显式表现**:明确写下 s_t = (h_t, z_t) 是状态,转移 p(s_t ∣ s_{t-1}, a_{t-1}) 完全符合 POMDP 转移函数的定义。h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1}) 是状态的确定性部分,z_t ~ N(μ(h_t), σ(h_t)) 是状态的随机部分 —— **两部分一起就是 POMDP 的状态**。
+
+**🔹 组件 2:Observation(观测函数)**
+
+- **World Models 的隐式表现**:VAE 解码器是**单独训练**的,目标是「把这一帧的编码 z 还原成图像」—— 这是图像压缩任务,不是 POMDP 观测函数。事实上,如果 z 缺少对动力学有用的信息(比如速度),VAE 完全不在乎,因为这不影响重建。
+- **PlaNet 的显式表现**:Decoder p(o_t ∣ s_t) 是 ELBO 的一项,**与转移、reward、KL 联合训练**。如果 s_t 缺了什么信息,重建 loss 就会反向把那部分推回 s_t —— 它被「POMDP 的观测函数」这个角色驱动。
+
+**🔹 组件 3:Reward(奖励函数)**
+
+- **World Models 的隐式表现**:**根本没有这个组件**。reward 全程依赖真环境 —— CMA-ES 训 Controller 时把它放回 CarRacing / Doom 真环境跑、用真环境的 reward 评估。所以 World Models 的"世界模型"严格说**不完整**:只学了动力学,没学奖励。
+- **PlaNet 的显式表现**:Reward model r̂(s_t) 是世界模型的一部分,和其他组件一起训。**必要性**:CEM 在 latent 里 rollout 几百条候选动作序列时完全不接触真环境,必须靠模型预测的 reward 来挑选;**附带效果**:reward loss 反向也让 encoder 把"哪些视觉特征与奖励相关"塞进 s_t,这正是 World Models 的 VAE 永远学不到的。
+
+**🔹 组件 4:Belief 更新(后验)**
+
+- **World Models 的隐式表现**:VAE 的 q(z ∣ o_t) **只看当前一帧**,所以它不可能是"对环境状态的 belief"—— 只是"对这一帧的编码"。历史信息走另一条路:MDN-RNN 的 h(确定性、点估计的)。**两条路从未合并成"对真实状态的一个概率分布"**。Controller 拿到的 [z, h] 只是把两条路的最新切片拼起来,既不是分布、也不是 belief。
+- **PlaNet 的显式表现**:Encoder 同时吃 (h_t, o_t),输出 q(s_t ∣ h_t, o_t) = N(μ, σ²)。h_t 携带历史、o_t 是当前观测,二者一起决定"对当前隐状态的后验"。这是一个**真正的概率分布**,且通过 KL[q ∥ p] 被拉向"用动力学转移过来的预测",**强制 belief 与动力学一致** —— 这正是 POMDP belief update 的定义。
 
 ##### 4. 显式形式化的真正价值(不只是用词区别)
 

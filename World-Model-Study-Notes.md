@@ -1420,16 +1420,38 @@ The World Models paper **never uses the word POMDP**. The VAE's z is called "a c
 
 ##### 3. What "explicit" looks like in PlaNet — architecture 1:1 mapped to POMDP
 
-PlaNet §2 opens with "We consider a discrete-time POMDP defined by …", and its four networks correspond one-to-one with the four POMDP components:
+PlaNet §2 opens with "We consider a discrete-time POMDP defined by …", and its four networks correspond one-to-one with the four POMDP components. The table below also includes **World Models' counterpart approach** so the "implicit vs explicit" gap on each component is visible at a glance:
 
-| POMDP Component (theory) | PlaNet's Network (implementation) |
-|---|---|
-| Transition T: p(s_t ∣ s_{t-1}, a_{t-1}) | **Transition model** (core of RSSM, GRU + Gaussian head) |
-| Observation Z: p(o_t ∣ s_t) | **Observation / Decoder model** (deconv reconstructing the image) |
-| Reward R: r(s_t) | **Reward model** (small MLP predicting reward from latent) |
-| Belief update b(s_t ∣ o_{≤t}, a_{<t}) | **Encoder / Posterior** q(s_t ∣ o_{≤t}, a_{<t}) |
+| POMDP Component (theory) | World Models (implicit / incomplete) | PlaNet (explicit / 1:1 mapped) |
+|---|---|---|
+| **Transition T**: p(s_t ∣ s_{t-1}, a_{t-1}) | MDN-RNN: p(z_{t+1} ∣ z_t, a_t, h_t) — h is a side-channel memory; **what counts as "the state" — z or (z, h) — is never specified** | RSSM: p(s_t ∣ s_{t-1}, a_{t-1}), where s_t = (h_t, z_t) — **the state is clearly defined; the transition is exactly the POMDP's transition** |
+| **Observation Z**: p(o_t ∣ s_t) | VAE Decoder: p(o_t ∣ z_t) — **just a by-product of "finding a compression code for the image"; not the POMDP's observation function** | Decoder: p(o_t ∣ s_t) — **is the POMDP's observation function**, jointly trained as one term of the ELBO |
+| **Reward R**: r(s_t) | ❌ **Does not exist**. Reward comes from the real environment (CarRacing track judgment / Doom survival flag) | Reward model: r̂(s_t), a small MLP — because CEM rolls out inside the head without touching the real env, **the model itself must predict reward** |
+| **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **only sees the current frame**; history goes through MDN-RNN's deterministic h as a side channel; **[z, h] is never combined into "a probabilistic belief over the true state"** | Encoder/Posterior q(s_t ∣ h_t, o_t), where h_t carries the history — **a genuine POMDP belief**: a Gaussian distribution pulled toward the prior via KL |
 
 And the training objective **ELBO is not patched together heuristically** — it is **naturally derived** from "the POMDP is a latent variable model + use variational inference to learn it" (the equations in §3). Every loss term has clear mathematical meaning rather than being an empirically weighted multi-task loss.
+
+##### 3.5 Component-by-component deep dive: why "implicit vs explicit"
+
+**🔹 Component 1: Transition**
+
+- **World Models — implicit**: MDN-RNN maintains a hidden state h via an LSTM, and the transition is written as p(z_{t+1} ∣ z_t, a_t, h_t). The problem — **what is "the POMDP state"? The paper never answers**. If the state is z, why does h appear in the conditioning? If the state is (z, h), why is h not part of reconstruction or KL? This is a **formally non-closed** design.
+- **PlaNet — explicit**: Explicitly writes down s_t = (h_t, z_t) as the state, with the transition p(s_t ∣ s_{t-1}, a_{t-1}) matching the POMDP transition function exactly. h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1}) is the deterministic part of the state, z_t ~ N(μ(h_t), σ(h_t)) is the stochastic part — **together they are the POMDP state**.
+
+**🔹 Component 2: Observation**
+
+- **World Models — implicit**: The VAE decoder is trained **separately**, with the goal of "reconstructing the image from this frame's code z" — an image-compression task, not a POMDP observation function. In fact, if z lacks information useful for dynamics (e.g., velocity), the VAE does not care because it does not affect reconstruction.
+- **PlaNet — explicit**: Decoder p(o_t ∣ s_t) is one term of the ELBO and is **jointly trained with the transition, reward, and KL**. If s_t is missing some information, the reconstruction loss pushes it back into s_t — the decoder is driven by its role as the POMDP's observation function.
+
+**🔹 Component 3: Reward**
+
+- **World Models — implicit**: **This component simply does not exist**. Reward depends on the real environment throughout — when training the Controller with CMA-ES, it is run inside the real CarRacing / Doom environment and evaluated against the real reward. So World Models' "world model" is strictly **incomplete**: it has learned the dynamics but not the reward.
+- **PlaNet — explicit**: The reward model r̂(s_t) is part of the world model, trained together with the other components. **Necessity**: when CEM rolls out hundreds of candidate action sequences in latent space without touching the real env, the model must predict reward for selection. **Side benefit**: the reward loss also forces the encoder to embed "which visual features are reward-relevant" into s_t — something the World Models' VAE can never learn.
+
+**🔹 Component 4: Belief update (posterior)**
+
+- **World Models — implicit**: VAE's q(z ∣ o_t) **only looks at the current frame**, so it cannot be a "belief over the environment state" — only an encoding of this single frame. History flows through another path: MDN-RNN's h (deterministic, point estimate). **The two paths are never merged into "a single probability distribution over the true state"**. What the Controller receives — [z, h] — is just the latest slice of two parallel paths concatenated; it is neither a distribution nor a belief.
+- **PlaNet — explicit**: The encoder takes (h_t, o_t) jointly and outputs q(s_t ∣ h_t, o_t) = N(μ, σ²). h_t carries history, o_t is the current observation, and together they determine "the posterior over the current latent state". This is a **genuine probability distribution**, and is pulled via KL[q ∥ p] toward "the prediction propagated forward by the dynamics", **forcing belief consistency with the dynamics** — exactly the definition of a POMDP belief update.
 
 ##### 4. The real value of explicit formalization (not just terminology)
 
