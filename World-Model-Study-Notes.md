@@ -1571,40 +1571,7 @@ To train the Step-1 model, in theory one should sample latent trajectories from 
 
 $$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{true posterior}} \;\xleftarrow{\text{approx.}}\; \underbrace{q(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{approximation}} = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
-Five angles to unpack this step:
-
-**(1) What is q approximating?**
-
-$q$ approximates **the distribution over the full latent state trajectory, conditioned on the full observation and action sequences** — i.e., the true posterior $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$.
-
-| | True posterior $p_\theta$ | Approximate posterior $q$ |
-|---|---|---|
-| Whose | The model's own intrinsic distribution | An extra NN we add (encoder) |
-| Computable | Exists in theory, but **intractable** | Designed to be tractable |
-| Goal | — | Optimize to make $q$ as close to $p_\theta$ as possible |
-
-**(2) Why is the true posterior "intractable"?**
-
-The true posterior is given by Bayes' rule:
-
-$$p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T}) = \frac{p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T})}{p_\theta(o_{1:T} \mid a_{1:T})}$$
-
-The problem is not the numerator (it is just the model's joint distribution, which is writable). The problem is the **denominator** — this marginal likelihood requires integrating out all possible latent trajectories:
-
-$$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) \, ds_{1:T}$$
-
-This integral admits a closed form in only two cases:
-
-- ✅ **Linear + Gaussian**: Kalman filter's analytic solution
-- ✅ **Discrete + small state space**: brute-force enumeration
-
-PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds → no closed-form integral → Monte Carlo estimates have **enormous variance** (in high-dim $s$ space, "right" trajectories are almost never sampled).
-
-> Hence the variational route: **don't compute the true posterior — find a tractable $q$ to approximate it**, and maximize the ELBO to bring $q$ closer to $p_\theta$.
-
-**(3) Why can $q$ be factorized this way?**
-
-The factorization relies on the **chain rule of probability + two simplifying assumptions**.
+**How does this factorization come about?** Via the **chain rule of probability + two simplifying assumptions**.
 
 **Step A — chain rule (exact)**
 
@@ -1635,7 +1602,38 @@ PlaNet picks filtering, key reason: **the $q$ learned at training must be the sa
 
 > 💡 Note: although each $q$ factor's **direct conditioning** is only $(s_{t-1}, a_{t-1}, o_t)$, $s_{t-1}$ is itself sampled from the previous step's $q$, which depended on $s_{t-2}$ and $o_{t-1}$, and so on. So **the entire trajectory's $q$ implicitly depends on $o_{\le t}$**. Chain rule + sequential sampling automatically carries "historical observations" forward through $s$.
 
-**(4) What is this approximation called?**
+Four more angles to unpack:
+
+**(1) What is q approximating?**
+
+$q$ approximates **the distribution over the full latent state trajectory, conditioned on the full observation and action sequences** — i.e., the true posterior $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$.
+
+| | True posterior $p_\theta$ | Approximate posterior $q$ |
+|---|---|---|
+| Whose | The model's own intrinsic distribution | An extra NN we add (encoder) |
+| Computable | Exists in theory, but **intractable** | Designed to be tractable |
+| Goal | — | Optimize to make $q$ as close to $p_\theta$ as possible |
+
+**(2) Why is the true posterior "intractable"?**
+
+The true posterior is given by Bayes' rule:
+
+$$p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T}) = \frac{p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T})}{p_\theta(o_{1:T} \mid a_{1:T})}$$
+
+The problem is not the numerator (it is just the model's joint distribution, which is writable). The problem is the **denominator** — this marginal likelihood requires integrating out all possible latent trajectories:
+
+$$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) \, ds_{1:T}$$
+
+This integral admits a closed form in only two cases:
+
+- ✅ **Linear + Gaussian**: Kalman filter's analytic solution
+- ✅ **Discrete + small state space**: brute-force enumeration
+
+PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds → no closed-form integral → Monte Carlo estimates have **enormous variance** (in high-dim $s$ space, "right" trajectories are almost never sampled).
+
+> Hence the variational route: **don't compute the true posterior — find a tractable $q$ to approximate it**, and maximize the ELBO to bring $q$ closer to $p_\theta$.
+
+**(3) What is this approximation called?**
 
 > ⚠️ Strictly speaking this is **not classical mean-field**. The correct term is **structured mean-field** or **autoregressive variational posterior**.
 
@@ -1644,7 +1642,7 @@ PlaNet picks filtering, key reason: **the $q$ learned at training must be the sa
 
 This "keep temporal structure, but simplify each factor locally" approach is **structured VI** — more expressive than classical mean-field (captures temporal correlations), simpler than fully-expanded smoothing posterior (each factor is small and can be sampled in parallel).
 
-**(5) How is $q$ actually used?**
+**(4) How is $q$ actually used?**
 
 $q$ is not the goal itself — it is a **tool to make the ELBO computable**:
 
