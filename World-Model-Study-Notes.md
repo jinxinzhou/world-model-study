@@ -1403,13 +1403,28 @@ This paper is the **direct predecessor of the Dreamer series** and Hafner's firs
 | Only demoed on toy environments like Doom / CarRacing | **DeepMind Control Suite** (6 continuous-control tasks from pixels) |
 
 <details>
-<summary>📌 <b>Why "explicit POMDP formalization" is PlaNet's key advance in scientific rigor</b> (click to expand)</summary>
+<summary>📌 <b>PlaNet's POMDP perspective: problem setup + comparison with World Models</b> (click to expand)</summary>
 
-##### 1. Pixel-based RL is inherently a POMDP
+##### 1. Problem Setup
+
+The actual environment is assumed to be a **POMDP** (Partially Observable Markov Decision Process):
+
+<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
+
+- **Transition function**: The real environment's latent state $s_t$ is determined stochastically by the previous state and action
+- **Observation function**: The agent cannot access $s_t$ — it only receives a frame of observation $o_t$ (a pixel image) — this is what "partial observability" means
+- **Reward function**: Reward depends only on the latent state $s_t$, not directly on the agent's action
+- **Policy**: Since $s_t$ is hidden, the policy must decide based on **observation and action history** $(o_{\le t}, a_{<t})$
+
+The goal is to learn a policy that maximizes expected cumulative return $\mathbb{E}\big[\sum_t r_t\big]$.
+
+> 💡 **What's special about PlaNet**: it does NOT **explicitly learn** a policy. Instead, it first learns a world model that simulates the POMDP (transition / observation / reward — three networks), then uses **CEM real-time planning** in latent space to compute $a_t$ on the spot — effectively replacing the traditional policy network with "world model + planner".
+
+##### 2. Pixel-based RL is inherently a POMDP
 
 The "true state" of the real environment includes positions, velocities, masses, joint angles, etc.; what the agent actually receives is just an RGB image — a single static frame **loses velocity, depth, what's behind occlusion, and numerical precision**. So **whenever an agent learns control from pixels, the problem is necessarily a POMDP**: it must maintain an internal latent representation to "fill in" what cannot be observed. This is dictated by physics, not by modeling choice.
 
-##### 2. Side-by-side architecture: World Models' "implicit" vs PlaNet's "explicit"
+##### 3. Side-by-side architecture: World Models' "implicit" vs PlaNet's "explicit"
 
 | POMDP Component (theory) | World Models (implicit / incomplete) | PlaNet (explicit / 1:1 mapped) |
 |---|---|---|
@@ -1419,7 +1434,7 @@ The "true state" of the real environment includes positions, velocities, masses,
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **only sees the current frame**; history goes through MDN-RNN's deterministic h as a side channel; **[z, h] is never combined into "a probabilistic belief over the true state"** | Encoder/Posterior q(s_t ∣ h_t, o_t), where h_t carries the history — **a genuine POMDP belief**: a Gaussian distribution pulled toward the prior via KL |
 | **Training Objective**: max ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) | **VAE's ELBO + MDN-RNN's NLL**, two independent losses trained in separate stages — **never combined into "a lower bound on the POMDP joint likelihood"** | **Single ELBO** (lower bound on the log-likelihood of the entire trajectory), **naturally derived** from the POMDP joint likelihood via variational inference; reconstruction / reward / KL live in the same formula with coupled gradients |
 
-##### 3. Component-by-component deep dive: why "implicit vs explicit"
+##### 4. Component-by-component deep dive: why "implicit vs explicit"
 
 **🔹 Component 1: Transition**
 
@@ -1452,14 +1467,14 @@ The "true state" of the real environment includes positions, velocities, masses,
 
   This **is precisely the result of treating the POMDP as a latent variable model and applying variational inference**. Reconstruction, reward, and belief–dynamics alignment all live in the **same formula**, with gradients automatically coupled — the encoder is forced to embed into s_t whatever is useful for both dynamics and reward prediction. **Want to add a new constraint?** Just continue the variational derivation: **Latent Overshooting is precisely what you get by generalizing from "single-step ELBO" to "multi-step ELBO" (§4)** — a single theoretical lineage with no heuristic patches.
 
-##### 4. The real value of explicit formalization (not just terminology)
+##### 5. The real value of explicit formalization (not just terminology)
 
 - 🎯 **Loss has a source**: World Models = "VAE loss + MDN-RNN loss" in two independent stages; PlaNet = ELBO derived in one step. When adding new constraints (e.g., latent overshooting), the derivation can be extended naturally — every term still has theoretical meaning.
 - 🎯 **Responsibilities are diagnosable**: Decoder degrades → reconstruction loss rises; Transition degrades → KL rises — locatable. In World Models, a bad z could be the VAE's fault or the MDN-RNN's, because responsibilities weren't split along POMDP lines.
 - 🎯 **Modules are loosely coupled — only one can be replaced**: Dreamer 1/2/3 fully reuse PlaNet's RSSM (those 4 POMDP components unchanged) and only swap "CEM planning" for "Actor-Critic + analytic gradients". This "swap the decision layer without touching the world model" flexibility would not be possible without POMDP formalization.
 - 🎯 **Apples-to-apples comparison**: All model-based RL methods (POMCP / DVRL / SLAC / Dreamer ...) can be compared under the POMDP framework — how do you approximate Z? What form is the belief? What planning algorithm?
 
-##### 5. One-sentence summary
+##### 6. One-sentence summary
 
 > **World Models** treats "partial observability" as **an engineering problem to work around** (stack VAE + RNN to cobble together a representation).
 > **PlaNet** treats it as **a scientific problem to model head-on** (write down the POMDP; let all architectures and losses derive naturally).
@@ -1467,21 +1482,6 @@ The "true state" of the real environment includes positions, velocities, masses,
 > The same network components — the former is **engineering assembly**, the latter is **theoretical implementation**. This is precisely why Dreamer 1/2/3 all inherit PlaNet's formalization, and why no one ever returned to World Models' three-stage paradigm.
 
 </details>
-
-#### Problem Setup
-
-The actual environment is assumed to be a **POMDP** (Partially Observable Markov Decision Process):
-
-<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
-
-- **Transition function**: The real environment's latent state $s_t$ is determined stochastically by the previous state and action
-- **Observation function**: The agent cannot access $s_t$ — it only receives a frame of observation $o_t$ (a pixel image) — this is what "partial observability" means
-- **Reward function**: Reward depends only on the latent state $s_t$, not directly on the agent's action
-- **Policy**: Since $s_t$ is hidden, the policy must decide based on **observation and action history** $(o_{\le t}, a_{<t})$
-
-The goal is to learn a policy that maximizes expected cumulative return $\mathbb{E}\big[\sum_t r_t\big]$.
-
-> 💡 **What's special about PlaNet**: it does NOT **explicitly learn** a policy. Instead, it first learns a world model that simulates the POMDP (transition / observation / reward — three networks), then uses **CEM real-time planning** in latent space to compute $a_t$ on the spot — effectively replacing the traditional policy network with "world model + planner".
 
 #### Overall Architecture
 

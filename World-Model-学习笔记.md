@@ -1402,13 +1402,28 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 | 只在 Doom / CarRacing 这类玩具环境 demo | **DeepMind Control Suite**(6 个连续控制任务,像素输入) |
 
 <details>
-<summary>📌 <b>为什么"显式 POMDP 形式化"是 PlaNet 在科学严谨性上的关键进步</b>(点开展开)</summary>
+<summary>📌 <b>PlaNet 的 POMDP 视角:问题定义 + 与 World Models 对照</b>(点开展开)</summary>
 
-##### 1. 像素 RL 本质就是 POMDP
+##### 1. 问题定义
+
+假定实际的环境是一个 **POMDP**(部分可观测马尔可夫决策过程):
+
+<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
+
+- **Transition function**:真实环境的隐状态 $s_t$ 由前一步的状态和动作决定(随机)
+- **Observation function**:agent 拿不到 $s_t$,只能拿到一帧观测 $o_t$(像素图像)—— 这就是"部分可观测"
+- **Reward function**:奖励也只依赖隐状态 $s_t$,而不是直接由 agent 行为给出
+- **Policy**:由于无法看到 $s_t$,policy 只能基于**历史观测和动作** $(o_{\le t}, a_{<t})$ 来决策
+
+目标是学习一个策略,最大化期望累积回报 $\mathbb{E}\big[\sum_t r_t\big]$。
+
+> 💡 **PlaNet 的特别之处**:它不**显式学习** policy,而是先学一个能模拟 POMDP 的世界模型(transition / observation / reward 三个网络),再在 latent 空间用 **CEM 实时规划** 当场算出 $a_t$ —— 等价于"world model + 规划器"代替了传统的 policy 网络。
+
+##### 2. 像素 RL 本质就是 POMDP
 
 真实环境的"真实状态"是所有物体的位置、速度、质量、关节角度等;而 agent 拿到的只有 RGB 图像 —— 一帧静态图丢失了**速度、深度、遮挡背后的信息、数值精度**。所以**只要 agent 从像素学控制,问题就一定是 POMDP**,必须在内部维护一个 latent 表示来"补全"观测不到的部分。这件事是物理决定的,不是建模选择。
 
-##### 2. 架构对照 —— World Models 的"隐式" vs PlaNet 的"显式"
+##### 3. 架构对照 —— World Models 的"隐式" vs PlaNet 的"显式"
 
 | POMDP 组件(理论) | World Models(隐式 / 不完整) | PlaNet(显式 / 1:1 对应) |
 |---|---|---|
@@ -1418,7 +1433,7 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 | **Belief**: b(s_t ∣ o_{≤t}, a_{<t}) | VAE encoder q(z ∣ o_t) **只看当前帧**,历史靠 MDN-RNN 的确定性 h 旁路;**[z,h] 从未被合成"对真实状态的概率 belief"** | Encoder/Posterior q(s_t ∣ h_t, o_t),其中 h_t 携带历史 —— **真正的 POMDP belief**:高斯分布,通过 KL 拉向 prior |
 | **训练目标**: max ln p(o_{1:T}, r_{1:T} ∣ a_{1:T}) | **VAE 的 ELBO + MDN-RNN 的 NLL**,两段独立、分阶段训练 —— **从未合成"对 POMDP 联合似然的下界"** | **单一 ELBO**(对整段轨迹的对数似然下界),由变分推断从 POMDP 联合似然**自然推导**;重建 / reward / KL 在同一公式里,梯度协同 |
 
-##### 3. 逐组件深入:为什么是"隐式 vs 显式"
+##### 4. 逐组件深入:为什么是"隐式 vs 显式"
 
 **🔹 组件 1:Transition(转移函数)**
 
@@ -1451,14 +1466,14 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 
   这**直接就是把 POMDP 当作 latent variable model 做变分推断的结果**。重建、reward、belief 对齐动力学三件事在**同一个公式里**,梯度自动协同 —— encoder 会主动把"对动力学有用"和"对预测 reward 有用"的信息都塞进 s_t。**想加新约束?** 沿着同一个变分推导继续推:**Latent Overshooting 正是这样从"单步 ELBO"自然推广到"多步 ELBO"得到的(§4)**,理论一脉相承,没有任何拍脑袋。
 
-##### 4. 显式形式化的真正价值(不只是用词区别)
+##### 5. 显式形式化的真正价值(不只是用词区别)
 
 - 🎯 **Loss 有源头**:World Models = "VAE loss + MDN-RNN loss"两段独立;PlaNet = ELBO 一步推出。要加新约束(如 latent overshooting)时,可以沿着推导继续加,每一项都还有理论意义。
 - 🎯 **职责可诊断**:Decoder 学坏 → 重建 loss 升;Transition 学坏 → KL 升,可定位。World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,因为职能没按 POMDP 拆开。
 - 🎯 **模块松耦合,可只换一个组件**:Dreamer 1/2/3 完全复用 PlaNet 的 RSSM(POMDP 那 4 个组件不动),只把"CEM 规划"换成"Actor-Critic + 解析梯度"。这种"换决策层不换世界模型"的灵活性,没有 POMDP 形式化是做不出来的。
 - 🎯 **可苹果对苹果比较**:所有 model-based RL 方法(POMCP / DVRL / SLAC / Dreamer ...)都能放在 POMDP 框架下比较 —— 你的 Z 怎么近似?belief 是什么形式?规划用什么算法?
 
-##### 5. 一句话总结
+##### 6. 一句话总结
 
 > **World Models** 把"部分可观测"当成**需要绕过去的工程问题**(堆 VAE + RNN 凑表示)。
 > **PlaNet** 把它当成**需要正面建模的科学问题**(写下 POMDP,所有架构和 loss 自然推导出来)。
@@ -1466,21 +1481,6 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 > 同样的网络组件,前者是**工程拼装**,后者是**理论实现**。这正是 Dreamer 1/2/3 全都沿用 PlaNet 的形式化、而没人再回到 World Models 的三阶段范式的根本原因。
 
 </details>
-
-#### 问题定义
-
-假定实际的环境是一个 **POMDP**(部分可观测马尔可夫决策过程):
-
-<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
-
-- **Transition function**:真实环境的隐状态 $s_t$ 由前一步的状态和动作决定(随机)
-- **Observation function**:agent 拿不到 $s_t$,只能拿到一帧观测 $o_t$(像素图像)—— 这就是"部分可观测"
-- **Reward function**:奖励也只依赖隐状态 $s_t$,而不是直接由 agent 行为给出
-- **Policy**:由于无法看到 $s_t$,policy 只能基于**历史观测和动作** $(o_{\le t}, a_{<t})$ 来决策
-
-目标是学习一个策略,最大化期望累积回报 $\mathbb{E}\big[\sum_t r_t\big]$。
-
-> 💡 **PlaNet 的特别之处**:它不**显式学习** policy,而是先学一个能模拟 POMDP 的世界模型(transition / observation / reward 三个网络),再在 latent 空间用 **CEM 实时规划** 当场算出 $a_t$ —— 等价于"world model + 规划器"代替了传统的 policy 网络。
 
 #### 整体架构
 
