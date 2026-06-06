@@ -1542,9 +1542,9 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 > Analogy: have a JPEG-compression expert compress an image, then ask a physicist to predict the object's motion from the compressed code. The compression expert has no idea the physicist needs things like "velocity".
 
-#### 2. PlaNet's fix: share one ELBO
+#### 2. PlaNet's fix: joint optimization
 
-##### Step 1: Vanilla Latent Variable Sequence Model
+##### Starting point: vanilla latent variable sequence model
 
 To end-to-end learn a world model that simulates the POMDP, the simplest form is a **latent variable sequence model** — NN-parameterize the real-environment distribution from §🧭 Problem Setup (upright p) into a learnable world model (italic p_θ):
 
