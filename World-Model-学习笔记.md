@@ -1555,54 +1555,19 @@ PlaNet 把 4 个网络(encoder / transition / decoder / reward)放在**同一个
 
 **所有梯度通过 s_t 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 s_t"。
 
-#### 3. 这样为什么能解决问题:具体对照
+#### 3. 模型骨架:朴素 latent SSM + variational encoder
 
-| 信息类型 | World Models VAE | PlaNet encoder |
-|---|---|---|
-| 静态外观(颜色、形状) | ✅ 重建需要,会学到 | ✅ |
-| 速度(两帧之差) | ❌ 单帧重建不需要,不学 | ✅ transition 需要预测下一帧,通过 KL 反推 |
-| 与 reward 相关的特征 | ❌ 重建不需要,不学 | ✅ reward 项反推 |
-| 物理规律(惯性、碰撞) | ❌ 不学 | ✅ transition 一致性反推 |
+为了让"共享一个 ELBO"真的能训起来,需要先把模型的形式定下来。PlaNet 用的是变分推断里最朴素的一种 setup:一个**隐变量序列模型** + 一个**近似后验**。
 
-#### 4. 副产物:可诊断 + 可扩展
+**(1) 起点:朴素的 latent state-space model**
 
-- **诊断性**:decoder 学坏 → 重建 loss 升;transition 学坏 → KL 升 —— **能定位是哪个组件出问题**(World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,职能未拆开,定位困难)
-- **可扩展性**:想加新约束(如 latent overshooting)直接在 ELBO 后面加项即可,**理论上有依据**(变分推导继续走),而不是 World Models 的"再拍个 loss 加权"
-
-#### 5. 一句话总结
-
-> **World Models 的 VAE 不知道 z 会被拿去干什么 —— 它只想"重建好这一帧"。**
-> **PlaNet 的 encoder 知道:我编出的 s_t 会被 transition 滚向未来、被 reward 预测奖励、被 decoder 还原图像 —— 这三个下游任务的梯度会逼着我把对它们都有用的信息全塞进 s_t。**
-
-### 🧬 RSSM:双路 latent 架构
-
-> 对应 §4.2 痛点表第 3 行的展开:"MDN-RNN 长程不稳,确定性记忆与随机性预测未解耦" → **RSSM(确定性 + 随机性双路)**
-
-RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性的 RNN 记忆"和"随机性的 SSM 不确定性"**缝合**在一起的双路 latent 动力学模型。下面按 4 个递进的步骤展开它的构建过程。
-
-#### 构建路径
-
-```
-Step 1: 朴素的 latent SSM             [起点]
-   ↓ "真后验算不出来,怎么训?"
-Step 2: 引入 variational encoder      [近似后验]
-   ↓ "训练目标是什么?"
-Step 3: 推导 ELBO                     [统一目标]
-   ↓ "纯随机隐变量记不住信息,怎么办?"
-Step 4: 加 deterministic path → RSSM  [终点]
-```
-
-#### Step 1 — 起点:朴素的 latent state-space model
-
-最简单的"有隐变量的序列模型":Transition / Observation / Reward 三个高斯分布,NN 参数化。**此时还没有 h,没有 RSSM**,只是一个最朴素的 SSM。
+最简单的"有隐变量的序列模型"就是 §🧭 问题定义里给出的 POMDP 三件套 —— Transition / Observation / Reward 三个高斯分布,各用一个 NN 参数化:p(s_t ∣ s_{t-1}, a_{t-1})、p(o_t ∣ s_t)、p(r_t ∣ s_t)。**此时还没有 h,没有 RSSM**,只是一个最朴素的隐变量 SSM。
 
 > 类比 VAE:先有"latent + Gaussian decoder"的骨架,再谈训练。这里也是先把模型形式立起来。
 
-#### Step 2 — 引入 variational encoder
+**(2) 真后验不可解 → variational encoder**
 
-**问题**:训练 Step 1 那个模型,理论上应该从真后验 p(s_t ∣ o_{≤t}, a_{<t}) 采样,但这个后验**算不出来**(NN 非线性,没法解析积分)。
-
-**解法**:引入近似后验 q,也用 NN 参数化:
+训练时需要从观测反推 s_t,理论上应该从真后验 p(s_t ∣ o_{≤t}, a_{<t}) 采样,但这个后验**算不出来**(transition / observation 都是 NN,非线性,没法解析积分)。解法是引入一个**近似后验** q,也用 NN 参数化:
 
 q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 
@@ -1611,30 +1576,40 @@ q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 2. 是 **filtering 后验**(只看 o_{≤t},不看未来),因为部署时也只能看到过去
 3. **mean-field** 假设:q 被分解成每一步独立的 q(s_t ∣ ...)
 
-> 🔑 所有变分推断方法都要走这一步 —— "真后验不行,用近似的"。
+> 🔑 有了这个 encoder,上面 §2 那个 ELBO 才能真的训起来 —— 公式里的期望 E_q 就在 q 上取,通过 reparameterization 算梯度。所有变分推断方法都要走这一步 —— "真后验不行,用近似的"。
 
-#### Step 3 — 推导 ELBO(统一训练目标)
+#### 4. 这样为什么能解决问题:具体对照
 
-**问题**:有了 encoder,怎么用它训练整个模型?
+| 信息类型 | World Models VAE | PlaNet encoder |
+|---|---|---|
+| 静态外观(颜色、形状) | ✅ 重建需要,会学到 | ✅ |
+| 速度(两帧之差) | ❌ 单帧重建不需要,不学 | ✅ transition 需要预测下一帧,通过 KL 反推 |
+| 与 reward 相关的特征 | ❌ 重建不需要,不学 | ✅ reward 项反推 |
+| 物理规律(惯性、碰撞) | ❌ 不学 | ✅ transition 一致性反推 |
 
-**解法**:用 Jensen 不等式得到对数似然的下界(ELBO):
+#### 5. 副产物:可诊断 + 可扩展
 
-<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO" width="780"/></p>
+- **诊断性**:decoder 学坏 → 重建 loss 升;transition 学坏 → KL 升 —— **能定位是哪个组件出问题**(World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,职能未拆开,定位困难)
+- **可扩展性**:想加新约束(如 latent overshooting)直接在 ELBO 后面加项即可,**理论上有依据**(变分推导继续走),而不是 World Models 的"再拍个 loss 加权"
 
-读这个公式的**正确姿势**:
-- **第一项(重建)**:从 encoder 采出的 s_t 能不能重建出真实 o_t? → 训练 **decoder**
-- **第二项(KL)**:encoder 推出的后验能不能和"用 transition 模型从 s_{t-1} 滚出来"的先验对齐? → 训练 **transition + encoder**
-- **整个 ELBO**:把"重建 obs"和"动力学一致"统一在**一个目标**里
+#### 6. 一句话总结
 
-> 🔑 **KL 项是 ELBO 的灵魂**。它强迫 encoder 不能乱编 s_t —— 必须编成"动力学认可的形式"。这是 PlaNet 端到端训练的关键。
+> **World Models 的 VAE 不知道 z 会被拿去干什么 —— 它只想"重建好这一帧"。**
+> **PlaNet 的 encoder 知道:我编出的 s_t 会被 transition 滚向未来、被 reward 预测奖励、被 decoder 还原图像 —— 这三个下游任务的梯度会逼着我把对它们都有用的信息全塞进 s_t。**
 
-> ⚠️ 公式为简化只列了 observation 部分,**reward 项完全对称**:把 ln p(o_t ∣ s_t) 换成 ln p(r_t ∣ s_t) 加进去即可。
+### 🧬 RSSM:双路 latent 架构
 
-#### Step 4 — 终点:加 deterministic path → RSSM
+> 对应 §4.2 痛点表第 3 行的展开:"MDN-RNN 长程不稳,确定性记忆与随机性预测未解耦" → **RSSM(确定性 + 随机性双路)**
 
-**问题**:Step 3 那个模型,所有信息靠**随机的 s_t** 在时间上传递。但 s_t 每步要采样 —— **采样引入噪声**,长程信息很快被冲掉,模型记不住"5 步之前发生了什么"。
+RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性的 RNN 记忆"和"随机性的 SSM 不确定性"**缝合**在一起的双路 latent 动力学模型。
 
-**解法**:加一条**纯确定性的并行通路** h_t,专门负责记忆:
+#### 问题:纯随机 SSM 的长程信息会被噪声冲掉
+
+§⚙️ 端到端联合训练里给出的朴素 latent SSM,**所有信息都靠随机的 s_t 在时间上传递**。但 s_t 每步都要采样 —— **采样引入噪声**,长程信息很快被冲掉,模型记不住"5 步之前发生了什么"。
+
+#### 解法:加 deterministic path → RSSM
+
+加一条**纯确定性的并行通路** h_t,专门负责记忆:
 
 <p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
 
@@ -1651,10 +1626,7 @@ q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 
 #### 一句话总结
 
-> **RSSM = "能训 + 能记 + 能采样"的隐空间动力学模型**
-> - 能训 → encoder(Step 2)+ ELBO(Step 3)
-> - 能记 → deterministic h(Step 4)
-> - 能采样 → stochastic s(Step 1, 4)
+> **RSSM = 在朴素 latent SSM 的基础上,加一条确定性记忆通路** —— 用 h 保证长程信息无损传递,用 s 保留表达不确定性的能力。
 
 #### 对照论文符号时的常见卡点
 
@@ -1663,7 +1635,7 @@ q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 | "s_t 是 POMDP 状态还是随机部分?" | **同一个符号在 Eq.2 和 Eq.4 里含义微妙变化** —— Eq.2 里 s_t 是整个 latent;Eq.4 里 s_t 只是**随机部分**,完整 state 是 (h_t, s_t)。本笔记沿用 Dreamer 习惯:z_t = 随机部分,避免歧义。 |
 | "KL 项里 prior 为什么是 p(s_t ∣ s_{t-1}, a_{t-1}) 不是 p(s_t)?" | 因为这是**条件先验**:用 transition 模型从上一步推过来。与静态 VAE 用 p(s) = N(0, I) 不一样 —— 这里 prior 本身就是模型要学的。 |
 | "ELBO 里的期望怎么计算?" | 重参数化采样一个 s_{t-1},再代入。**单样本估计 + reparameterization** 就够了。 |
-| "为什么不直接用 RNN 当 transition?" | Step 4 解释了:RNN 确定性,**不能表达"我不知道下一步是什么"**。在 model-based RL 里,让 planner 知道模型自己有多不确定**至关重要**。 |
+| "为什么不直接用 RNN 当 transition?" | 上面解法已经解释:RNN 确定性,**不能表达"我不知道下一步是什么"**。在 model-based RL 里,让 planner 知道模型自己有多不确定**至关重要**。 |
 
 ### 🧪 关键实验
 
