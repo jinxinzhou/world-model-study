@@ -1574,6 +1574,9 @@ The goal is to learn a policy that maximizes expected cumulative return $\mathbb
 
 #### 3. Component-by-component deep dive: why "implicit vs explicit"
 
+<details>
+<summary>(click to expand — 5 components, one by one)</summary>
+
 **🔹 Component 1: Transition**
 
 - **World Models — implicit**: MDN-RNN maintains a hidden state h via an LSTM, and the transition is written as p(z_{t+1} ∣ z_t, a_t, h_t). The problem — **what is "the POMDP state"? The paper never answers**. If the state is z, why does h appear in the conditioning? If the state is (z, h), why is h not part of reconstruction or KL? This is a **formally non-closed** design.
@@ -1604,6 +1607,8 @@ The goal is to learn a policy that maximizes expected cumulative return $\mathbb
   <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
 
   This **is precisely the result of treating the POMDP as a latent variable model and applying variational inference**. Reconstruction, reward, and belief–dynamics alignment all live in the **same formula**, with gradients automatically coupled — the encoder is forced to embed into s_t whatever is useful for both dynamics and reward prediction. **Want to add a new constraint?** Just continue the variational derivation: **Latent Overshooting is precisely what you get by generalizing from "single-step ELBO" to "multi-step ELBO" (§4)** — a single theoretical lineage with no heuristic patches.
+
+</details>
 
 #### 4. The real value of explicit formalization (not just terminology)
 
