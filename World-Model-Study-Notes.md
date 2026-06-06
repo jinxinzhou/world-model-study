@@ -1603,19 +1603,9 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 
 This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
 
-Four more angles to unpack:
+Three more angles to unpack:
 
-**(1) What is q approximating?**
-
-$q$ approximates **the distribution over the full latent state trajectory, conditioned on the full observation and action sequences** — i.e., the true posterior $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$.
-
-| | True posterior $p_\theta$ | Approximate posterior $q$ |
-|---|---|---|
-| Whose | The model's own intrinsic distribution | An extra NN we add (encoder) |
-| Computable | Exists in theory, but **intractable** | Designed to be tractable |
-| Goal | — | Optimize to make $q$ as close to $p_\theta$ as possible |
-
-**(2) Why is the true posterior "intractable"?**
+**(1) Why is the true posterior "intractable"?**
 
 The true posterior is given by Bayes' rule:
 
@@ -1634,7 +1624,7 @@ PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds �
 
 > Hence the variational route: **don't compute the true posterior — find a tractable $q$ to approximate it**, and maximize the ELBO to bring $q$ closer to $p_\theta$.
 
-**(3) What is this approximation called?**
+**(2) What is this approximation called?**
 
 > ⚠️ Strictly speaking this is **not classical mean-field**. The correct term is **structured mean-field** or **autoregressive variational posterior**.
 
@@ -1643,7 +1633,7 @@ PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds �
 
 This "keep temporal structure, but simplify each factor locally" approach is **structured VI** — more expressive than classical mean-field (captures temporal correlations), simpler than fully-expanded smoothing posterior (each factor is small and can be sampled in parallel).
 
-**(4) How is $q$ actually used?**
+**(3) How is $q$ actually used?**
 
 $q$ is not the goal itself — it is a **tool to make the ELBO computable**:
 
