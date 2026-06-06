@@ -1549,7 +1549,7 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 <p align="center"><img src="asset/formulas/f20.png" width="520"/></p>
 
-> 📝 **符号约定**:本笔记用**直体 p**(如 `p(s_t | ...)`,见 §🧭 问题定义)表示真实环境的分布(POMDP);用**斜体 p_θ**(如 `p_θ(s_t | ...)`)表示 PlaNet 学到的世界模型 —— 训练就是让 p_θ ≈ p。
+> 📝 **符号约定**:本笔记用**直体 p**(如 `p(s_t | ...)`)表示真实环境的分布(POMDP);用**斜体 p_θ**(如 `p_θ(s_t | ...)`)表示 PlaNet 学到的世界模型 —— 训练就是让 p_θ ≈ p。**这一约定与 PlaNet 论文使用的符号习惯一致**。
 
 > 类比 VAE:先有"latent + Gaussian decoder"的骨架,再谈训练。这里也是先把模型形式立起来。
 

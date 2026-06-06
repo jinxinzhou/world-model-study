@@ -1550,7 +1550,7 @@ To end-to-end learn a world model that simulates the POMDP, the simplest form is
 
 <p align="center"><img src="asset/formulas/f20.png" width="520"/></p>
 
-> 📝 **Notation convention**: this note uses **upright p** (e.g., `p(s_t | ...)`, as in §🧭 Problem Setup) for the real-environment distribution (the POMDP), and **italic p_θ** (e.g., `p_θ(s_t | ...)`) for PlaNet's learned world model — training amounts to making p_θ ≈ p.
+> 📝 **Notation convention**: this note uses **upright p** (e.g., `p(s_t | ...)`) for the real-environment distribution (the POMDP), and **italic p_θ** (e.g., `p_θ(s_t | ...)`) for PlaNet's learned world model — training amounts to making p_θ ≈ p. **This convention is consistent with the notation used in the PlaNet paper.**
 
 > Analogous to the VAE: first put up the "latent + Gaussian decoder" skeleton, then talk about training. Same idea here — define the model form first.
 
