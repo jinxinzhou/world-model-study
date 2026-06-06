@@ -1551,6 +1551,8 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 > 📝 **符号约定**:本笔记用**直体 p**(如 `p(s_t | ...)`)表示真实环境的分布(POMDP);用**斜体 p_θ**(如 `p_θ(s_t | ...)`)表示 PlaNet 学到的世界模型 —— 训练就是让 p_θ ≈ p。**这一约定与 PlaNet 论文使用的符号习惯一致**。
 
+##### 步骤2 - 加入 encoder,共享 ELBO 联合训练所有网络
+
 PlaNet 在这基础上再加一个 **encoder**(用于从观测推断 latent s_t,具体见 §3),把 4 个网络(encoder / transition / decoder / reward)放在**同一个目标函数下联合训**:
 
 <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
