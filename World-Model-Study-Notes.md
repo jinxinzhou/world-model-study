@@ -1606,7 +1606,8 @@ To train the Step-1 model, in theory one should sample latent trajectories from 
 
 $$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{true posterior}} \;\xleftarrow{\text{approx.}}\; \underbrace{q(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{approximation}} = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
-**How does this factorization come about?** Via the **chain rule of probability + two simplifying assumptions**.
+<details>
+<summary><b>How does this factorization come about?</b> Chain rule + filtering + Markov (click to expand)</summary>
 
 **Step A — chain rule (exact)**
 
@@ -1637,6 +1638,8 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 2. **Drop distant obs/action history**: $o_{1:t-1}$ and $a_{1:t-2}$ are taken to be **already compressed into $s_{t-1}$**, leaving only the fresh information $o_t$ and $a_{t-1}$
 
 This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
+
+</details>
 
 <details>
 <summary><b>Why the true posterior is "intractable" — and what the encoder is really for</b> (click to expand)</summary>

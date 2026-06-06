@@ -1605,7 +1605,8 @@ $$
 
 $$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{真实后验}} \;\xleftarrow{\text{近似}}\; \underbrace{q(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{近似后验}} = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
-**这个分解怎么来的?** 靠的是**概率链式法则 + 两个简化假设**。
+<details>
+<summary><b>这个分解怎么来的?</b> 链式法则 + filtering + Markov(点开展开)</summary>
 
 **Step A — 链式法则(严格成立)**
 
@@ -1636,6 +1637,8 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 2. **丢掉远期 obs/action 历史**:$o_{1:t-1}$ 和 $a_{1:t-2}$ 都被认为**已经压进了 $s_{t-1}$**,只留新增信息 $o_t$ 和 $a_{t-1}$
 
 这是 PlaNet 做得**最大胆的一步** —— 它假设 $s_{t-1}$ 是对所有过去(包括 s 历史和 obs/action 历史)的**充分统计量**。
+
+</details>
 
 <details>
 <summary><b>为什么真后验"算不出来" — 兼答 encoder 的真正作用</b>(点开展开)</summary>
@@ -1805,9 +1808,8 @@ $$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\b
   <sub>↑ PlaNet 论文 Fig. 2(b):朴素 SSM 的图模型。圆圈 = 随机变量,实线 = 生成方向,虚线 = 推理方向。</sub>
 </p>
 
+而模型其实是定义在**带隐变量 $s$ 的生成模型**上(上图 的朴素 SSM):
 $$\underbrace{p_\theta(o, r \mid a)}_{\text{我们想要的 marginal}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{模型实际定义的联合}} \, ds$$
-
-而模型其实是定义在**带隐变量 $s$ 的生成模型**上(步骤 2 的朴素 SSM):
 
 $$p_\theta(o, r, s \mid a) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
 
