@@ -1799,6 +1799,23 @@ Choosing max log-likelihood as the objective is essentially making the world mod
 
 $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① optimization objective}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② information-theoretic view}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ teleological: world model ≈ env}}$$
 
+Visualization:
+
+```mermaid
+flowchart LR
+    subgraph Real["🌍 Real Environment"]
+        ETrans["true transition<br/>true observation<br/>true reward<br/>—— p_real(o, r | a)"]
+    end
+
+    subgraph Model["📦 PlaNet World Model (inside Agent)"]
+        MTrans["p_θ(s'|s,a)<br/>p_θ(o|s)<br/>p_θ(r|s)<br/>—— p_θ(o, r | a)"]
+    end
+
+    Real == "collect trajectories (o, r, a)" ==> Data[("📊 training data")]
+    Data == "max E[log p_θ]<br/>≡ min KL(p_real ∥ p_θ)" ==> Model
+    Model -. "training goal:<br/>match in KL sense" .-> Real
+```
+
 | Angle | Interpretation |
 |---|---|
 | **① Optimization** | Maximize the log-probability of the data under the model (standard MLE) |

@@ -1798,6 +1798,23 @@ $$
 
 $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① 优化目标}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② 信息论解读}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ 目的论:world model ≈ env}}$$
 
+视觉化:
+
+```mermaid
+flowchart LR
+    subgraph Real["🌍 真实环境 (Environment)"]
+        ETrans["真 transition<br/>真 observation<br/>真 reward<br/>—— p_real(o, r | a)"]
+    end
+
+    subgraph Model["📦 PlaNet World Model (Agent 内部)"]
+        MTrans["p_θ(s'|s,a)<br/>p_θ(o|s)<br/>p_θ(r|s)<br/>—— p_θ(o, r | a)"]
+    end
+
+    Real == "采轨迹 (o, r, a)" ==> Data[("📊 训练数据")]
+    Data == "max E[log p_θ]<br/>≡ min KL(p_real ∥ p_θ)" ==> Model
+    Model -. "训练目标:<br/>在 KL 意义下贴近" .-> Real
+```
+
 | 角度 | 解读 |
 |---|---|
 | **① 优化** | 最大化数据在模型下的对数概率(MLE 的标准做法) |
