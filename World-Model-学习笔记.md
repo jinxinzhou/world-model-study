@@ -1820,7 +1820,42 @@ $$
 
 $$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
 
-但这个 marginal likelihood 需要把 $s$ 积掉,**算不出来**(见步骤2 折叠 section)。**ELBO 是它的一个能算的下界** —— 最大化 ELBO 会自动推高真实 log-likelihood,差距 = $\mathrm{KL}[q \,\|\, \text{真后验}]$,$q$ 越准差距越小。
+**这里 $s$ 在哪?** 表面上公式只有 $o, r, a$,但 $p_\theta(o, r \mid a)$ 这个**符号本身**就是边缘化的简写:
+
+$$\underbrace{p_\theta(o, r \mid a)}_{\text{我们想要的 marginal}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{模型实际定义的联合}} \, ds$$
+
+而模型其实是定义在**带隐变量 $s$ 的生成模型**上(步骤 2 的朴素 SSM):
+
+$$p_\theta(o, r, s \mid a) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
+
+**联合分布能算**(NN 前向),但**积掉 $s$ 没闭式解**(见步骤 2 折叠 section)—— 这就是 marginal likelihood 算不出来的根本原因。
+
+**ELBO 是它的一个能算的下界**:
+
+$$\log p_\theta(o, r \mid a) \;\geq\; \text{ELBO}(\theta, \phi)$$
+
+最大化 ELBO 会自动推高真实 log-likelihood。精确的差距公式:
+
+$$\underbrace{\log p_\theta(o, r \mid a)}_{\text{想最大化}} - \underbrace{\text{ELBO}}_{\text{实际最大化}} = \mathrm{KL}\big[\,q_\phi(s \mid o, a) \;\big\|\; \underbrace{p_\theta(s \mid o, a)}_{\text{真后验}}\,\big]$$
+
+- $q_\phi$ **完美等于真后验** → KL = 0 → ELBO 严格等于 $\log p_\theta$ → 最大化 ELBO ≡ 最大化我们真正想要的
+- $q_\phi$ **离真后验很远** → KL 大 → ELBO 是很松的下界 → 优化 ELBO 不一定推高 log-likelihood
+
+→ **encoder $q_\phi$ 的质量直接决定训练效果**。
+
+```mermaid
+flowchart TB
+    Goal["🎯 想最大化:<br/>log p_θ(o, r | a)<br/>(marginal,算不出)"]
+    Joint["📦 能算的:<br/>log p_θ(o, r, s | a)<br/>(联合,需要 s)"]
+    Issue["❌ ∫ ... ds 没闭式解<br/>且训练数据没有 s 的 ground truth"]
+    Sol["✅ 引入 q_φ(s | o, a)<br/>构造 ELBO ≤ log p_θ"]
+    Gap["差距 = KL[q_φ ∥ p_θ(s | o, a)]<br/>q 越准 → gap 越小 → ELBO 越紧"]
+
+    Goal --> Issue
+    Joint --> Issue
+    Issue --> Sol
+    Sol --> Gap
+```
 
 **推导:ELBO 是怎么来的(5 步)**
 
