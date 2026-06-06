@@ -1750,6 +1750,47 @@ $$
 
 **All gradients flow back to the encoder through the shared variable $s_t$** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into $s_t$".
 
+**Why log-likelihood?**
+
+Before discussing the ELBO, answer a more foundational question: **why maximize $\log p_\theta(o, r \mid a)$ in the first place?**
+
+**(1) The essence of MLE**
+
+Find a $\theta$ that makes the model **think** the real data is "most likely". Intuition: if the real environment is $p_{\text{real}}$ and our model $p_\theta \approx p_{\text{real}}$, then real samples should also have high probability under $p_\theta$. Conversely — whichever $\theta$ makes the data look most reasonable is the $\theta$ closest to the real environment.
+
+It can be shown (law of large numbers + KL definition):
+
+$$\arg\max_\theta \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big] \;\;\Leftrightarrow\;\; \arg\min_\theta \mathrm{KL}\big[p_{\text{real}}(o, r \mid a) \,\|\, p_\theta(o, r \mid a)\big]$$
+
+→ **MLE = making $p_\theta$ approach the real environment in KL sense**; with enough data, $\theta_{\text{MLE}}$ is asymptotically unbiased and consistent.
+
+**(2) Why not other losses?**
+
+| Candidate | Problem |
+|---|---|
+| **MSE** (used by World Models' VAE) | Implicit single-mode Gaussian; **cannot express multi-modal futures** (ball left or right? MSE averages → predicts "blurry ball") |
+| **Pure RL reward signal** | Doesn't use observations as supervision; **sample efficiency is 100× worse** (the core gap between model-based and model-free) |
+| **Contrastive learning** | Only learns representations, not a full generative distribution → cannot "imagine", CEM cannot plan |
+| **MLE / log-likelihood** ⭐ | Uses both $o$ and $r$; probability distribution captures multi-modality; has asymptotic theoretical guarantees |
+
+**(3) Why this particular form?**
+
+Three notable details in the formula:
+
+- **$a$ in the conditioning (not the joint)**: PlaNet learns a **world model, not a policy**. $a$ is an external input (from agent decisions / data buffer / random policy); the model only handles "given $a$, how does the env respond with $(o, r)$". This matches the POMDP formalization: model = (transition, observation, reward), **policy not included**.
+- **Both $o$ and $r$**: $o$ supervises dynamics + representation quality; $r$ lets the model produce reward scores during latent rollouts — **CEM planning never touches the real env and must rely on model-predicted reward to pick the best action sequence**. Only $o$ → cannot plan; only $r$ → cannot do long-horizon prediction.
+- **Trajectory-level, not frame-level**: dynamics is temporal; the core thing to learn is "how the state evolves" — must look at adjacent frames. Frame-level learning degenerates into a VAE, dropping transition learning — this is exactly **World Models' problem**.
+
+**(4) Why log?**
+
+| Property | Purpose |
+|---|---|
+| Monotonic | $\arg\max \log p = \arg\max p$, optimum unchanged |
+| Product → sum | $\log \prod_t p_t = \sum_t \log p_t$ — numerically stable (avoids multiplying many small numbers), gradients easy |
+| Natural information-theoretic unit | $-\log p$ is "information" (bits or nats), so NLL = cross-entropy |
+
+> 💡 **Summary**: **MLE = making the model find the data most natural = approaching the real environment in KL sense**. This specific form is chosen because: $a$ is external input not to be learned, $o + r$ jointly supervise dynamics and planning, trajectory-level supervises the transition, and $\log$ is the engineering standard for numerical stability + gradient computation.
+
 **Objective: why ELBO?**
 
 What we really want to maximize is the model's log-likelihood of the real data:

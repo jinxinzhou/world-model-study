@@ -1749,6 +1749,47 @@ $$
 
 **所有梯度通过 $s_t$ 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 $s_t$"。
 
+**为什么是 log-likelihood?**
+
+在讲 ELBO 之前,先回答一个更基础的问题:**为什么要最大化 $\log p_\theta(o, r \mid a)$ 这个东西**?
+
+**(1) MLE 的本质**
+
+找一个 $\theta$ 让模型**觉得**真实数据"最可能出现"。直觉:如果真环境就是 $p_{\text{real}}$,而我们的模型 $p_\theta \approx p_{\text{real}}$,那真实采到的数据自然在 $p_\theta$ 下也是高概率的。反过来推 —— 哪个 $\theta$ 让数据看起来最合理,那个 $\theta$ 最接近真实环境。
+
+可以证明(大数定律 + KL 定义展开):
+
+$$\arg\max_\theta \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big] \;\;\Leftrightarrow\;\; \arg\min_\theta \mathrm{KL}\big[p_{\text{real}}(o, r \mid a) \,\|\, p_\theta(o, r \mid a)\big]$$
+
+→ **MLE = 让 $p_\theta$ 在 KL 意义下贴近真实环境**,数据足够多时 $\theta_{\text{MLE}}$ 渐进无偏、一致。
+
+**(2) 为什么不用其他 loss?**
+
+| 候选 | 问题 |
+|---|---|
+| **MSE**(World Models 的 VAE 用的) | 隐含单峰高斯,**无法表达多模态未来**(球往左 or 往右 → 预测出"模糊的球") |
+| **纯 RL reward 信号** | 不用观测做监督,**样本效率低 100×**(model-based vs model-free 的核心差距) |
+| **对比学习** | 只学表征,不学完整生成分布 → 不能"想象",CEM 没法规划 |
+| **MLE / log-likelihood** ⭐ | 同时利用 $o$ + $r$,概率分布表达多模态,有渐进理论保证 |
+
+**(3) 为什么是这个特定形式?**
+
+注意公式的三个细节:
+
+- **$a$ 在条件里(不在联合里)**:PlaNet 学的是**世界模型不是 policy**。$a$ 是外部输入(来自 agent 决策 / data buffer / random policy),模型只负责"给定 $a$,环境如何回应 $(o, r)$"。这正是 POMDP 的形式化:模型 = (transition, observation, reward),**不包括 policy**。
+- **$o$ 和 $r$ 都要**:$o$ 监督动力学 + 表征质量;$r$ 让模型能在 latent rollout 时给出 reward 评分 —— **CEM 规划完全不接触真环境,必须靠模型预测的 reward 来挑选最优动作序列**。只学 $o$ 没法规划,只学 $r$ 没法长程预测。
+- **轨迹级而非单帧**:动力学是时序的,要学的核心是"状态怎么演化"——必须看相邻帧。如果按单帧学就退化成 VAE,丢掉 transition 学习,这正是 **World Models 的问题**。
+
+**(4) 为什么取 log?**
+
+| 性质 | 作用 |
+|---|---|
+| 单调 | $\arg\max \log p = \arg\max p$,不改变最优解 |
+| 乘积 → 求和 | $\log \prod_t p_t = \sum_t \log p_t$ —— 数值稳定(避免乘很多小数下溢)、梯度好算 |
+| 信息论自然单位 | $-\log p$ 就是"信息量"(bits 或 nats),所以 NLL = cross-entropy |
+
+> 💡 **总结**:**MLE = 让模型觉得数据最自然 = 在 KL 意义下贴近真实环境**。选这个特定形式是因为:$a$ 是外部输入不学,$o + r$ 共同监督动力学和规划,轨迹级让 transition 被训,$\log$ 是数值稳定 + 梯度计算的工程标配。
+
 **目标:为什么是 ELBO?**
 
 我们真正想最大化的是模型对真实数据的 log-likelihood:
