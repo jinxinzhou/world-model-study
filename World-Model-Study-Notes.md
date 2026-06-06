@@ -1603,7 +1603,8 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 
 This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
 
-**One final note: why is the true posterior "intractable"?**
+<details>
+<summary><b>Why the true posterior is "intractable"</b> (click to expand)</summary>
 
 The true posterior is given by Bayes' rule:
 
@@ -1621,6 +1622,8 @@ This integral admits a closed form in only two cases:
 PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds → no closed-form integral → Monte Carlo estimates have **enormous variance** (in high-dim $s$ space, "right" trajectories are almost never sampled).
 
 > Hence the variational route: **don't compute the true posterior — find a tractable $q$ to approximate it**, and maximize the ELBO to bring $q$ closer to $p_\theta$.
+
+</details>
 
 ##### Step 3 - Jointly train all networks with the shared ELBO
 
