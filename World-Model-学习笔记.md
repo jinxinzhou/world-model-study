@@ -1801,7 +1801,7 @@ $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\lo
 $$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\big[\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})\big]$$
 
 <p align="center">
-  <img src="asset/planet-2019/ssm.png" alt="PlaNet 论文 Fig. 2(b) Stochastic State-Space Model" width="38%"/><br/>
+  <img src="asset/planet-2019/ssm.png" alt="PlaNet 论文 Fig. 2(b) Stochastic State-Space Model" width="28%"/><br/>
   <sub>↑ PlaNet 论文 Fig. 2(b):朴素 SSM 的图模型。圆圈 = 随机变量,实线 = 生成方向,虚线 = 推理方向。</sub>
 </p>
 
