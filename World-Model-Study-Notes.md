@@ -1451,98 +1451,6 @@ In practice, PlaNet **repeats each action** $a_t$ **R times** (typically R = 2�
 
 > 💡 **Note**: World Models' M does have an LSTM hidden state h internally, but it is only a "working memory" by-product, **conceptually separate** from VAE's z and trained in different stages (z only learns reconstruction; h only assists in predicting z). PlaNet's RSSM is the first to **treat (h, z) as a unified environment state**, trained jointly, so that z simultaneously captures both visual and dynamic information — this is the truly revolutionary aspect of RSSM.
 
-<details>
-<summary>📖 <b>RSSM Structure Walkthrough</b> (click to expand)</summary>
-
-RSSM (Recurrent State-Space Model) is the core architecture of PlaNet — a dual-path latent dynamics model that **stitches together** "deterministic RNN memory" and "stochastic SSM uncertainty". Below, its construction is unfolded in 4 progressive steps.
-
-##### Construction path
-
-```
-Step 1: Bare-bones latent SSM         [start]
-   ↓ "true posterior is intractable — how do we train?"
-Step 2: Introduce a variational encoder   [approx. posterior]
-   ↓ "what is the training objective?"
-Step 3: Derive the ELBO                    [unified objective]
-   ↓ "a purely stochastic latent forgets long-range info — what now?"
-Step 4: Add a deterministic path → RSSM    [endpoint]
-```
-
-##### Step 1 — Start: the simplest latent state-space model
-
-The simplest "sequence model with latents": Transition / Observation / Reward, three Gaussians parameterized by NNs. **No h yet, no RSSM** — just a bare SSM.
-
-> Same as the VAE: first put up the "latent + Gaussian decoder" skeleton, then discuss training. Same idea here.
-
-##### Step 2 — Introduce a variational encoder
-
-**Problem**: In theory, training the Step-1 model requires sampling from the true posterior p(s_t ∣ o_{≤t}, a_{<t}). But this posterior is **intractable** (non-linear NNs, no closed-form integration).
-
-**Fix**: Introduce an approximate posterior q, also NN-parameterized:
-
-q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
-
-Three key points:
-1. This is the VAE's **encoder**, but in **trajectory form**
-2. It is the **filtering posterior** (only looks at o_{≤t}, not the future), since deployment also only has access to the past
-3. **Mean-field** assumption: q is factorized into per-step q(s_t ∣ ...)
-
-> 🔑 Every variational inference method goes through this step — "true posterior won't do, use an approximation".
-
-##### Step 3 — Derive the ELBO (unified training objective)
-
-**Problem**: Given the encoder, how do we train the whole model?
-
-**Fix**: Apply Jensen's inequality to get a lower bound on the log-likelihood (the ELBO):
-
-<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO" width="780"/></p>
-
-The **right mental posture** for reading this:
-- **First term (reconstruction)**: can the s_t sampled from the encoder reconstruct the true o_t? → trains the **decoder**
-- **Second term (KL)**: does the encoder's posterior agree with the prior obtained by rolling s_{t-1} forward through the transition model? → trains the **transition + encoder**
-- **The whole ELBO**: unifies "reconstruct obs" and "be consistent with dynamics" in a **single objective**
-
-> 🔑 **The KL term is the soul of the ELBO**. It forces the encoder to stop making s_t up — it must produce s_t in a form "the dynamics agrees with". This is the key to PlaNet's end-to-end training.
-
-> ⚠️ For simplicity the formula shows only the observation term; the **reward term is fully symmetric** — replace ln p(o_t ∣ s_t) with ln p(r_t ∣ s_t).
-
-##### Step 4 — Endpoint: add a deterministic path → RSSM
-
-**Problem**: In the Step-3 model, all information is passed across time through the **stochastic s_t**. But s_t is sampled at every step — **sampling injects noise** — so long-range information is quickly washed out; the model cannot remember "what happened 5 steps ago".
-
-**Fix**: Add a **purely deterministic parallel path** h_t, dedicated to memory:
-
-<p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
-
-**Dual-path division of duties**:
-
-| Part | Role | Analogy |
-|---|---|---|
-| **h_t** (deterministic) | Long-range memory, lossless information transport | RNN's hidden state |
-| **s_t** (stochastic) | Express environmental uncertainty, multiple possible futures | VAE's latent |
-
-This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + **S**tate-**S**pace **M**odel (stochastic), **stitched together**.
-
-> 🔑 Figure 2 in the paper says it all: **(a) pure deterministic RNN** = remembers but cannot express uncertainty | **(b) pure stochastic SSM** = expresses uncertainty but cannot remember | **(c) RSSM = a + b** = best of both worlds
-
-##### One-sentence summary
-
-> **RSSM = a latent-space dynamics model that "can be trained + remembers + supports sampling"**
-> - Trainable → encoder (Step 2) + ELBO (Step 3)
-> - Remembers → deterministic h (Step 4)
-> - Samples → stochastic s (Steps 1, 4)
-
-##### Common pitfalls when cross-referencing the paper's notation
-
-| Sticking point | The truth |
-|---|---|
-| "Is s_t the POMDP state or the stochastic part?" | **The same symbol shifts meaning subtly between Eq. 2 and Eq. 4** — in Eq. 2, s_t is the whole latent; in Eq. 4, s_t is only the **stochastic part**, and the full state is (h_t, s_t). This note follows the Dreamer convention: z_t = stochastic part, to avoid the ambiguity. |
-| "Why is the KL's prior p(s_t ∣ s_{t-1}, a_{t-1}) instead of p(s_t)?" | Because it is a **conditional prior**: the previous step rolled forward through the transition model. Unlike static VAE where p(s) = N(0, I) — here the prior itself is something the model has to learn. |
-| "How is the expectation in the ELBO computed?" | Reparameterize a single sample of s_{t-1} and substitute. **Single-sample estimate + reparameterization** is enough. |
-| "Why not just use an RNN as the transition?" | Step 4 already answered: RNNs are deterministic, **they cannot express 'I don't know what comes next'**. In model-based RL, letting the planner know how uncertain the model is **matters a lot**. |
-
-</details>
-
 ### 🧭 PlaNet's POMDP perspective: problem setup + comparison with World Models
 
 #### 1. Problem Setup
@@ -1623,6 +1531,142 @@ The goal is to learn a policy that maximizes expected cumulative return $\mathbb
 > **PlaNet** treats it as **a scientific problem to model head-on** (write down the POMDP; let all architectures and losses derive naturally).
 >
 > The same network components — the former is **engineering assembly**, the latter is **theoretical implementation**. This is precisely why Dreamer 1/2/3 all inherit PlaNet's formalization, and why no one ever returned to World Models' three-stage paradigm.
+
+### ⚙️ End-to-End Joint Training: One ELBO to Train Them All
+
+> Expansion of row 2 in the §4.2 pain-points table: "V and M trained separately in stages → VAE features may not be useful for decision-making" → **End-to-end joint training**
+
+#### 1. World Models' problem: the VAE has no idea what z will be used for
+
+World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2 freezes the VAE and trains the MDN-RNN, Stage 3 freezes V + M and evolves the Controller. **Each stage's loss only cares about its own goal — gradients cannot flow back to a previous stage.**
+
+**Key defect**: The VAE's training objective is solely "reconstruct a single frame". If some visual feature is **irrelevant for reconstruction** (e.g., the speed of a ball — invisible from one static frame), the VAE will not encode it into z. Later, when the MDN-RNN tries to predict the next state, **that information is already gone, beyond recovery**.
+
+> Analogy: have a JPEG-compression expert compress an image, then ask a physicist to predict the object's motion from the compressed code. The compression expert has no idea the physicist needs things like "velocity".
+
+#### 2. PlaNet's fix: share one ELBO
+
+PlaNet places all 4 networks (encoder / transition / decoder / reward) under the **same objective function, jointly trained**:
+
+<p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
+
+| Loss term | Trains whom | What it tells the encoder (backward) |
+|---|---|---|
+| Reconstruction ln p(o_t ∣ s_t) | decoder + encoder | "s_t must be enough to reconstruct the image" |
+| Reward ln p(r_t ∣ s_t) | reward model + encoder | "s_t must be enough to predict reward" |
+| KL[q ∥ p] | transition + encoder | "s_t must make the next step predictable" |
+
+**All gradients flow back to the encoder through the shared variable s_t** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into s_t".
+
+#### 3. Why this concretely solves the problem
+
+| Information type | World Models VAE | PlaNet encoder |
+|---|---|---|
+| Static appearance (color, shape) | ✅ Needed for reconstruction, learned | ✅ |
+| Velocity (frame difference) | ❌ Not needed for single-frame reconstruction, not learned | ✅ Transition must predict the next frame; pulled back via KL |
+| Reward-relevant features | ❌ Not needed for reconstruction, not learned | ✅ Pulled back by the reward term |
+| Physical regularities (inertia, collision) | ❌ Not learned | ✅ Pulled back by transition consistency |
+
+#### 4. Side benefits: diagnosability + extensibility
+
+- **Diagnosability**: decoder degrades → reconstruction loss rises; transition degrades → KL rises — **the failing component is locatable** (in World Models, a bad z could be the VAE's fault or the MDN-RNN's; responsibilities aren't split, hard to localize)
+- **Extensibility**: to add a new constraint (e.g., latent overshooting), just append a new term to the ELBO — **there is a theoretical basis** (continue the variational derivation), rather than World Models' "just slap on another loss and weight it"
+
+#### 5. One-sentence summary
+
+> **The World Models VAE has no idea what z will be used for — it just wants to reconstruct this frame well.**
+> **The PlaNet encoder knows: my s_t will be rolled forward by the transition, used to predict reward, and decoded into images — the gradients from these three downstream tasks will force me to pack into s_t whatever is useful for all of them.**
+
+### 🧬 RSSM: Dual-Path Latent Architecture
+
+> Expansion of row 3 in the §4.2 pain-points table: "MDN-RNN unstable over long horizons; deterministic memory and stochastic prediction not decoupled" → **RSSM (deterministic + stochastic dual path)**
+
+RSSM (Recurrent State-Space Model) is the core architecture of PlaNet — a dual-path latent dynamics model that **stitches together** "deterministic RNN memory" and "stochastic SSM uncertainty". Below, its construction is unfolded in 4 progressive steps.
+
+#### Construction path
+
+```
+Step 1: Bare-bones latent SSM         [start]
+   ↓ "true posterior is intractable — how do we train?"
+Step 2: Introduce a variational encoder   [approx. posterior]
+   ↓ "what is the training objective?"
+Step 3: Derive the ELBO                    [unified objective]
+   ↓ "a purely stochastic latent forgets long-range info — what now?"
+Step 4: Add a deterministic path → RSSM    [endpoint]
+```
+
+#### Step 1 — Start: the simplest latent state-space model
+
+The simplest "sequence model with latents": Transition / Observation / Reward, three Gaussians parameterized by NNs. **No h yet, no RSSM** — just a bare SSM.
+
+> Same as the VAE: first put up the "latent + Gaussian decoder" skeleton, then discuss training. Same idea here.
+
+#### Step 2 — Introduce a variational encoder
+
+**Problem**: In theory, training the Step-1 model requires sampling from the true posterior p(s_t ∣ o_{≤t}, a_{<t}). But this posterior is **intractable** (non-linear NNs, no closed-form integration).
+
+**Fix**: Introduce an approximate posterior q, also NN-parameterized:
+
+q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
+
+Three key points:
+1. This is the VAE's **encoder**, but in **trajectory form**
+2. It is the **filtering posterior** (only looks at o_{≤t}, not the future), since deployment also only has access to the past
+3. **Mean-field** assumption: q is factorized into per-step q(s_t ∣ ...)
+
+> 🔑 Every variational inference method goes through this step — "true posterior won't do, use an approximation".
+
+#### Step 3 — Derive the ELBO (unified training objective)
+
+**Problem**: Given the encoder, how do we train the whole model?
+
+**Fix**: Apply Jensen's inequality to get a lower bound on the log-likelihood (the ELBO):
+
+<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO" width="780"/></p>
+
+The **right mental posture** for reading this:
+- **First term (reconstruction)**: can the s_t sampled from the encoder reconstruct the true o_t? → trains the **decoder**
+- **Second term (KL)**: does the encoder's posterior agree with the prior obtained by rolling s_{t-1} forward through the transition model? → trains the **transition + encoder**
+- **The whole ELBO**: unifies "reconstruct obs" and "be consistent with dynamics" in a **single objective**
+
+> 🔑 **The KL term is the soul of the ELBO**. It forces the encoder to stop making s_t up — it must produce s_t in a form "the dynamics agrees with". This is the key to PlaNet's end-to-end training.
+
+> ⚠️ For simplicity the formula shows only the observation term; the **reward term is fully symmetric** — replace ln p(o_t ∣ s_t) with ln p(r_t ∣ s_t).
+
+#### Step 4 — Endpoint: add a deterministic path → RSSM
+
+**Problem**: In the Step-3 model, all information is passed across time through the **stochastic s_t**. But s_t is sampled at every step — **sampling injects noise** — so long-range information is quickly washed out; the model cannot remember "what happened 5 steps ago".
+
+**Fix**: Add a **purely deterministic parallel path** h_t, dedicated to memory:
+
+<p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
+
+**Dual-path division of duties**:
+
+| Part | Role | Analogy |
+|---|---|---|
+| **h_t** (deterministic) | Long-range memory, lossless information transport | RNN's hidden state |
+| **s_t** (stochastic) | Express environmental uncertainty, multiple possible futures | VAE's latent |
+
+This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + **S**tate-**S**pace **M**odel (stochastic), **stitched together**.
+
+> 🔑 Figure 2 in the paper says it all: **(a) pure deterministic RNN** = remembers but cannot express uncertainty | **(b) pure stochastic SSM** = expresses uncertainty but cannot remember | **(c) RSSM = a + b** = best of both worlds
+
+#### One-sentence summary
+
+> **RSSM = a latent-space dynamics model that "can be trained + remembers + supports sampling"**
+> - Trainable → encoder (Step 2) + ELBO (Step 3)
+> - Remembers → deterministic h (Step 4)
+> - Samples → stochastic s (Steps 1, 4)
+
+#### Common pitfalls when cross-referencing the paper's notation
+
+| Sticking point | The truth |
+|---|---|
+| "Is s_t the POMDP state or the stochastic part?" | **The same symbol shifts meaning subtly between Eq. 2 and Eq. 4** — in Eq. 2, s_t is the whole latent; in Eq. 4, s_t is only the **stochastic part**, and the full state is (h_t, s_t). This note follows the Dreamer convention: z_t = stochastic part, to avoid the ambiguity. |
+| "Why is the KL's prior p(s_t ∣ s_{t-1}, a_{t-1}) instead of p(s_t)?" | Because it is a **conditional prior**: the previous step rolled forward through the transition model. Unlike static VAE where p(s) = N(0, I) — here the prior itself is something the model has to learn. |
+| "How is the expectation in the ELBO computed?" | Reparameterize a single sample of s_{t-1} and substitute. **Single-sample estimate + reparameterization** is enough. |
+| "Why not just use an RNN as the transition?" | Step 4 already answered: RNNs are deterministic, **they cannot express 'I don't know what comes next'**. In model-based RL, letting the planner know how uncertain the model is **matters a lot**. |
 
 ### 🧪 Key Experiments
 
