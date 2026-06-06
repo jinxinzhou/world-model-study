@@ -1543,7 +1543,11 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 #### 2. PlaNet 的解法:共享一个 ELBO
 
-PlaNet 把 4 个网络(encoder / transition / decoder / reward)放在**同一个目标函数下联合训**:
+为了**端到端地学一个能模拟 POMDP 的世界模型**,最简单的形式就是一个**有隐变量的序列模型** —— 把 §🧭 问题定义里的 POMDP 三件套各用一个 NN 参数化:p(s_t ∣ s_{t-1}, a_{t-1})、p(o_t ∣ s_t)、p(r_t ∣ s_t),直接去学这个 POMDP 的转移、观测、奖励三个函数。**此时还没有 h,没有 RSSM**,只是一个最朴素的隐变量 SSM。
+
+> 类比 VAE:先有"latent + Gaussian decoder"的骨架,再谈训练。这里也是先把模型形式立起来。
+
+PlaNet 在这基础上再加一个 **encoder**(用于从观测推断 latent s_t,具体见 §3),把 4 个网络(encoder / transition / decoder / reward)放在**同一个目标函数下联合训**:
 
 <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
 
@@ -1555,17 +1559,9 @@ PlaNet 把 4 个网络(encoder / transition / decoder / reward)放在**同一个
 
 **所有梯度通过 s_t 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 s_t"。
 
-#### 3. 模型骨架:朴素 latent SSM + variational encoder
+#### 3. 推理的难题:真后验不可解 → variational encoder
 
-为了让"共享一个 ELBO"真的能训起来,需要先把模型的形式定下来。PlaNet 用的是变分推断里最朴素的一种 setup:一个**隐变量序列模型** + 一个**近似后验**。
-
-**(1) 起点:朴素的 latent state-space model**
-
-最简单的"有隐变量的序列模型"就是 §🧭 问题定义里给出的 POMDP 三件套 —— Transition / Observation / Reward 三个高斯分布,各用一个 NN 参数化:p(s_t ∣ s_{t-1}, a_{t-1})、p(o_t ∣ s_t)、p(r_t ∣ s_t)。**此时还没有 h,没有 RSSM**,只是一个最朴素的隐变量 SSM。
-
-> 类比 VAE:先有"latent + Gaussian decoder"的骨架,再谈训练。这里也是先把模型形式立起来。
-
-**(2) 真后验不可解 → variational encoder**
+§2 提到 4 个网络中有一个是 encoder。**为什么需要这个 encoder?**
 
 训练时需要从观测反推 s_t,理论上应该从真后验 p(s_t ∣ o_{≤t}, a_{<t}) 采样,但这个后验**算不出来**(transition / observation 都是 NN,非线性,没法解析积分)。解法是引入一个**近似后验** q,也用 NN 参数化:
 

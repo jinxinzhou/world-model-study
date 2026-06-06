@@ -1544,7 +1544,11 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 #### 2. PlaNet's fix: share one ELBO
 
-PlaNet places all 4 networks (encoder / transition / decoder / reward) under the **same objective function, jointly trained**:
+To **end-to-end learn a world model that simulates the POMDP**, the simplest form is a **latent variable sequence model** — each of the POMDP triple from §🧭 Problem Setup is parameterized by an NN: p(s_t ∣ s_{t-1}, a_{t-1}), p(o_t ∣ s_t), p(r_t ∣ s_t), directly learning the POMDP's transition, observation, and reward functions. **No h yet, no RSSM** — just the simplest latent SSM.
+
+> Analogous to the VAE: first put up the "latent + Gaussian decoder" skeleton, then talk about training. Same idea here — define the model form first.
+
+On top of this, PlaNet adds an **encoder** (to infer latent s_t from observations; details in §3), and places all 4 networks (encoder / transition / decoder / reward) under the **same objective function, jointly trained**:
 
 <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
 
@@ -1556,17 +1560,9 @@ PlaNet places all 4 networks (encoder / transition / decoder / reward) under the
 
 **All gradients flow back to the encoder through the shared variable s_t** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into s_t".
 
-#### 3. Model skeleton: bare latent SSM + variational encoder
+#### 3. The inference difficulty: intractable posterior → variational encoder
 
-For "shared ELBO" to actually be trainable, the model form must first be pinned down. PlaNet uses the simplest variational-inference setup: a **latent variable sequence model** + an **approximate posterior**.
-
-**(1) Starting point: the bare latent state-space model**
-
-The simplest "sequence model with latents" is exactly the POMDP triple from the §🧭 Problem Setup — Transition / Observation / Reward, three Gaussians, each parameterized by an NN: p(s_t ∣ s_{t-1}, a_{t-1}), p(o_t ∣ s_t), p(r_t ∣ s_t). **No h yet, no RSSM** — just the simplest latent SSM.
-
-> Analogous to the VAE: first put up the "latent + Gaussian decoder" skeleton, then talk about training. Same idea here — define the model form first.
-
-**(2) True posterior intractable → variational encoder**
+§2 mentioned that one of the 4 networks is an encoder. **Why is this encoder needed?**
 
 Training requires inferring s_t from observations; in theory one should sample from the true posterior p(s_t ∣ o_{≤t}, a_{<t}). But this posterior is **intractable** (transition / observation are NNs — nonlinear, no closed-form integration). The fix is to introduce an **approximate posterior** q, also NN-parameterized:
 
