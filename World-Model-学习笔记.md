@@ -1456,7 +1456,20 @@ PlaNet 部署时每个 time step 走三步,构成一个标准的 **receding-hori
 
 真实环境的"真实状态"是所有物体的位置、速度、质量、关节角度等;而 agent 拿到的只有 RGB 图像 —— 一帧静态图丢失了**速度、深度、遮挡背后的信息、数值精度**。所以**只要 agent 从像素学控制,问题就一定是 POMDP**,必须在内部维护一个 latent 表示来"补全"观测不到的部分。这件事是物理决定的,不是建模选择。
 
-假定实际的环境是一个 **POMDP**(部分可观测马尔可夫决策过程):
+整个 RL 设置可以用最经典的**agent–environment 互动循环**来概括(Sutton & Barto 教科书第一张图):
+
+```mermaid
+flowchart LR
+    Agent("🤖 <b>Agent</b><br/>policy π")
+    Env("🌍 <b>Environment</b><br/>POMDP")
+    Agent -- "action <i>aₜ</i>" --> Env
+    Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> Agent
+```
+
+- **Environment**:输入 action,输出 (observation, reward)。背后是 POMDP 的 transition / observation / reward 三个函数
+- **Agent**:输入 observation(+ 内部维护的 belief),输出 action
+
+把这张图形式化,就是 PlaNet 论文 §2 写下的 POMDP 四件套:
 
 $$
 \begin{aligned}
@@ -1475,6 +1488,32 @@ $$
 目标是学习一个策略,最大化期望累积回报 $\mathbb{E}\big[\sum_t r_t\big]$。
 
 > 💡 **PlaNet 的特别之处**:它不**显式学习** policy,而是先学一个能模拟 POMDP 的世界模型(transition / observation / reward 三个网络),再在 latent 空间用 **CEM 实时规划** 当场算出 $a_t$ —— 等价于"world model + 规划器"代替了传统的 policy 网络。
+
+**PlaNet agent 内部展开**:在标准 RL 循环图里,PlaNet 把右边 "Agent" 那个方块换成下面这套组合:
+
+```mermaid
+flowchart LR
+    subgraph A["🤖 PlaNet Agent"]
+        direction TB
+        Enc["Encoder<br/>(belief)"]
+        WM["World Model<br/>(RSSM + reward head)"]
+        CEM["CEM 规划器<br/>(在 latent rollout)"]
+        Enc --> CEM
+        CEM -.uses.-> WM
+    end
+    Env("🌍 <b>Environment</b><br/>POMDP")
+    A -- "action <i>aₜ</i>" --> Env
+    Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
+```
+
+跟其它范式对比:
+
+| 范式 | Agent 内部长什么样 |
+|---|---|
+| **经典 model-free RL**(DQN, PPO 等) | 一个 NN policy / Q 函数 |
+| **World Models** | VAE encoder + MDN-RNN + 小 Controller(显式 policy) |
+| **PlaNet** ⭐ | Encoder + RSSM 世界模型 + **CEM 规划器**(**没有 policy 网络**) |
+| **Dreamer** | Encoder + RSSM 世界模型 + Actor + Critic |
 
 #### 2. 架构对照 —— World Models 的"隐式" vs PlaNet 的"显式"
 

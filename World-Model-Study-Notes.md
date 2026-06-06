@@ -1457,7 +1457,20 @@ In practice, PlaNet **repeats each action** $a_t$ **R times** (typically R = 2�
 
 The "true state" of the real environment includes positions, velocities, masses, joint angles, etc.; what the agent actually receives is just an RGB image — a single static frame **loses velocity, depth, what's behind occlusion, and numerical precision**. So **whenever an agent learns control from pixels, the problem is necessarily a POMDP**: it must maintain an internal latent representation to "fill in" what cannot be observed. This is dictated by physics, not by modeling choice.
 
-The actual environment is assumed to be a **POMDP** (Partially Observable Markov Decision Process):
+The whole RL setup can be summarized by the classic **agent–environment interaction loop** (the first figure in Sutton & Barto):
+
+```mermaid
+flowchart LR
+    Agent("🤖 <b>Agent</b><br/>policy π")
+    Env("🌍 <b>Environment</b><br/>POMDP")
+    Agent -- "action <i>aₜ</i>" --> Env
+    Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> Agent
+```
+
+- **Environment**: input action, output (observation, reward). Backed by the POMDP's transition / observation / reward functions.
+- **Agent**: input observation (+ internally maintained belief), output action.
+
+Formalizing this diagram gives the POMDP four-tuple PlaNet writes down in §2:
 
 $$
 \begin{aligned}
@@ -1476,6 +1489,32 @@ $$
 The goal is to learn a policy that maximizes expected cumulative return $\mathbb{E}\big[\sum_t r_t\big]$.
 
 > 💡 **What's special about PlaNet**: it does NOT **explicitly learn** a policy. Instead, it first learns a world model that simulates the POMDP (transition / observation / reward — three networks), then uses **CEM real-time planning** in latent space to compute $a_t$ on the spot — effectively replacing the traditional policy network with "world model + planner".
+
+**Unfolding PlaNet's agent**: in the standard RL loop above, PlaNet replaces the right-hand "Agent" block with the following composition:
+
+```mermaid
+flowchart LR
+    subgraph A["🤖 PlaNet Agent"]
+        direction TB
+        Enc["Encoder<br/>(belief)"]
+        WM["World Model<br/>(RSSM + reward head)"]
+        CEM["CEM planner<br/>(rolls out in latent)"]
+        Enc --> CEM
+        CEM -.uses.-> WM
+    end
+    Env("🌍 <b>Environment</b><br/>POMDP")
+    A -- "action <i>aₜ</i>" --> Env
+    Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
+```
+
+Comparison with other paradigms:
+
+| Paradigm | What the agent internally looks like |
+|---|---|
+| **Classic model-free RL** (DQN, PPO, ...) | A single NN policy / Q function |
+| **World Models** | VAE encoder + MDN-RNN + small Controller (explicit policy) |
+| **PlaNet** ⭐ | Encoder + RSSM world model + **CEM planner** (**no policy network**) |
+| **Dreamer** | Encoder + RSSM world model + Actor + Critic |
 
 #### 2. Side-by-side architecture: World Models' "implicit" vs PlaNet's "explicit"
 
