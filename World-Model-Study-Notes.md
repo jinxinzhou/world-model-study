@@ -1502,10 +1502,9 @@ flowchart LR
         Enc --> CEM
         CEM -.uses.-> WM
     end
-    Env("🌍 <b>Environment</b><br/>POMDP / p_real(o, r | a)")
+    Env("🌍 <b>Environment</b><br/>POMDP")
     A -- "action <i>aₜ</i>" --> Env
     Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
-    WM -. "training goal: approximate<br/>min KL(p_real ∥ p_θ)" .-> Env
 ```
 
 Comparison with other paradigms:
@@ -1778,6 +1777,24 @@ The Monte Carlo estimator here **needs to sample $s$ from some distribution**. W
 
 All 4 networks are now in place (encoder + transition + decoder + reward). PlaNet places them under the **same objective function, jointly trained**:
 
+```mermaid
+flowchart LR
+    subgraph A["🤖 PlaNet Agent"]
+        direction TB
+        Enc["Encoder<br/>(belief)"]
+        WM["World Model<br/>(RSSM + reward head)"]
+        CEM["CEM planner<br/>(rolls out in latent)"]
+        Enc --> CEM
+        CEM -.uses.-> WM
+    end
+    Env("🌍 <b>Environment</b><br/>POMDP / p_real(o, r | a)")
+    A -- "action <i>aₜ</i>" --> Env
+    Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
+    WM -. "training goal: approximate<br/>min KL(p_real ∥ p_θ)" .-> Env
+```
+
+Written mathematically:
+
 $$
 \ln p(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p(o_t \mid s_t) + \ln p(r_t \mid s_t) - \mathrm{KL}\!\left[\,q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
@@ -1806,7 +1823,7 @@ $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\lo
 | **② Information-theoretic** | Minimize the KL divergence from the real-environment distribution to the model distribution — asymptotically unbiased and consistent |
 | **③ Teleological** | **Make the agent's internal world model resemble the real environment** — the three are mathematically equivalent |
 
-> Visually, this corresponds to the dashed arrow `World Model -. approximates .-> Environment` in the PlaNet Agent diagram in §🧭 Problem Setup — pulling the right-hand environment toward the left-hand world model.
+> Visually, this corresponds to the dashed arrow `World Model -. approximates .-> Environment` in the PlaNet Agent diagram at the top of this step — pulling the right-hand environment toward the left-hand world model.
 
 > 💡 **Note**: "$\approx$" means close in the KL sense, not pointwise equal. MLE **prioritizes fitting high-density regions** (states the data visits frequently) and is less attentive to low-density regions — this is precisely the source of the **model-exploitation problem** (CEM finds model bugs in rare states and ruthlessly exploits them).
 

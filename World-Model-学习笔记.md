@@ -1501,10 +1501,9 @@ flowchart LR
         Enc --> CEM
         CEM -.uses.-> WM
     end
-    Env("🌍 <b>Environment</b><br/>POMDP / p_real(o, r | a)")
+    Env("🌍 <b>Environment</b><br/>POMDP")
     A -- "action <i>aₜ</i>" --> Env
     Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
-    WM -. "训练目标:近似<br/>min KL(p_real ∥ p_θ)" .-> Env
 ```
 
 跟其它范式对比:
@@ -1777,6 +1776,24 @@ $$\log p_\theta(o \mid a) \;\geq\; \mathbb{E}_{s \sim q_\phi(s \mid o, a)} \big[
 
 至此 4 个网络(encoder + transition + decoder + reward)全部到位。PlaNet 把它们放在**同一个目标函数下联合训**:
 
+```mermaid
+flowchart LR
+    subgraph A["🤖 PlaNet Agent"]
+        direction TB
+        Enc["Encoder<br/>(belief)"]
+        WM["World Model<br/>(RSSM + reward head)"]
+        CEM["CEM 规划器<br/>(在 latent rollout)"]
+        Enc --> CEM
+        CEM -.uses.-> WM
+    end
+    Env("🌍 <b>Environment</b><br/>POMDP / p_real(o, r | a)")
+    A -- "action <i>aₜ</i>" --> Env
+    Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
+    WM -. "训练目标:近似<br/>min KL(p_real ∥ p_θ)" .-> Env
+```
+
+写成数学就是:
+
 $$
 \ln p(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p(o_t \mid s_t) + \ln p(r_t \mid s_t) - \mathrm{KL}\!\left[\,q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
@@ -1805,7 +1822,7 @@ $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\lo
 | **② 信息论** | 最小化"真实环境分布"到"模型分布"的 KL 散度,渐进无偏 + 一致 |
 | **③ 目的论** | **让 agent 内部的 world model 像真实环境** —— 三者数学上完全等价 |
 
-> 视觉化对应到 §🧭 问题定义里的 PlaNet Agent 图中的虚线箭头 `World Model -. 近似 .-> Environment` —— 就是把右边的 environment 拉到左边的 world model 上。
+> 视觉化对应到本节顶部 PlaNet Agent 图中的虚线箭头 `World Model -. 近似 .-> Environment` —— 就是把右边的 environment 拉到左边的 world model 上。
 
 > 💡 **注意**:"$\approx$"是 KL 意义下贴近,不是逐点相等。MLE 会**优先拟合高密度区域**(数据频繁出现的状态)、对低密度区域不太在意 —— 这正是 **model exploitation 问题**(CEM 找到 model 在罕见状态的 bug 后疯狂利用)的根源。
 
