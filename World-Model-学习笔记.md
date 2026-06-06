@@ -1568,7 +1568,7 @@ $$
 
 要训练步骤1 的模型,理论上需要从**真后验** $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$ 采样隐状态轨迹,但这个后验**算不出来**。解法是引入一个**近似后验** $q$(也是 NN 参数化的)作为 **encoder**:
 
-$$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+$$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{真实后验}} \;\xleftarrow{\text{近似}}\; \underbrace{q(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{近似后验}} = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
 下面从五个维度展开这一步的来龙去脉。
 

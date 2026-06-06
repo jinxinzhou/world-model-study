@@ -1569,7 +1569,7 @@ $$
 
 To train the Step-1 model, in theory one should sample latent trajectories from the **true posterior** $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$. But this posterior is **intractable**. The fix is to introduce an **approximate posterior** $q$ (also NN-parameterized) as an **encoder**:
 
-$$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+$$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{true posterior}} \;\xleftarrow{\text{approx.}}\; \underbrace{q(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{approximation}} = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
 Five angles to unpack this step:
 
