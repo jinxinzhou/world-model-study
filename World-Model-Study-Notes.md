@@ -1502,9 +1502,10 @@ flowchart LR
         Enc --> CEM
         CEM -.uses.-> WM
     end
-    Env("🌍 <b>Environment</b><br/>POMDP")
+    Env("🌍 <b>Environment</b><br/>POMDP / p_real(o, r | a)")
     A -- "action <i>aₜ</i>" --> Env
     Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
+    WM -. "training goal: approximate<br/>min KL(p_real ∥ p_θ)" .-> Env
 ```
 
 Comparison with other paradigms:
@@ -1799,24 +1800,13 @@ Choosing max log-likelihood as the objective is essentially making the world mod
 
 $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① optimization objective}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② information-theoretic view}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ teleological: world model ≈ env}}$$
 
-Visualization:
-
-```mermaid
-flowchart TB
-    Real["🌍 <b>Real Environment</b><br/>p_real(o, r | a)"]
-    Data[("📊 Training data<br/>(o, r, a) trajectories")]
-    Model["📦 <b>PlaNet World Model</b><br/>p_θ(o, r | a)"]
-
-    Real -->|"collect trajectories"| Data
-    Data -->|"max E[log p_θ] &nbsp;≡&nbsp; min KL(p_real ∥ p_θ)"| Model
-    Model -. "training goal: match in KL sense" .-> Real
-```
-
 | Angle | Interpretation |
 |---|---|
 | **① Optimization** | Maximize the log-probability of the data under the model (standard MLE) |
 | **② Information-theoretic** | Minimize the KL divergence from the real-environment distribution to the model distribution — asymptotically unbiased and consistent |
 | **③ Teleological** | **Make the agent's internal world model resemble the real environment** — the three are mathematically equivalent |
+
+> Visually, this corresponds to the dashed arrow `World Model -. approximates .-> Environment` in the PlaNet Agent diagram in §🧭 Problem Setup — pulling the right-hand environment toward the left-hand world model.
 
 > 💡 **Note**: "$\approx$" means close in the KL sense, not pointwise equal. MLE **prioritizes fitting high-density regions** (states the data visits frequently) and is less attentive to low-density regions — this is precisely the source of the **model-exploitation problem** (CEM finds model bugs in rare states and ruthlessly exploits them).
 
