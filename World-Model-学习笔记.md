@@ -1458,7 +1458,14 @@ PlaNet 部署时每个 time step 走三步,构成一个标准的 **receding-hori
 
 假定实际的环境是一个 **POMDP**(部分可观测马尔可夫决策过程):
 
-<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
+$$
+\begin{aligned}
+\text{Transition function:} \quad & s_t \sim \mathrm{p}(s_t \mid s_{t-1}, a_{t-1}) \\
+\text{Observation function:} \quad & o_t \sim \mathrm{p}(o_t \mid s_t) \\
+\text{Reward function:} \quad & r_t \sim \mathrm{p}(r_t \mid s_t) \\
+\text{Policy:} \quad & a_t \sim \mathrm{p}(a_t \mid o_{\le t}, a_{<t})
+\end{aligned}
+$$
 
 - **Transition function**:真实环境的隐状态 $s_t$ 由前一步的状态和动作决定(随机)
 - **Observation function**:agent 拿不到 $s_t$,只能拿到一帧观测 $o_t$(像素图像)—— 这就是"部分可观测"
@@ -1547,15 +1554,21 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 为了端到端地学一个能模拟 POMDP 的世界模型,最简单的形式就是一个**有隐变量的序列模型**:
 
-<p align="center"><img src="asset/formulas/f20.png" width="520"/></p>
+$$
+\begin{aligned}
+\text{Transition model:} \quad & s_t \sim p_\theta(s_t \mid s_{t-1}, a_{t-1}) \\
+\text{Observation model:} \quad & o_t \sim p_\theta(o_t \mid s_t) \\
+\text{Reward model:} \quad & r_t \sim p_\theta(r_t \mid s_t)
+\end{aligned}
+$$
 
-> 📝 **符号约定**:本笔记用**直体 p**(如 `p(s_t | ...)`)表示真实环境的分布(POMDP);用**斜体 p_θ**(如 `p_θ(s_t | ...)`)表示 PlaNet 学到的世界模型 —— 训练就是让 p_θ ≈ p。**这一约定与 PlaNet 论文使用的符号习惯一致**。
+> 📝 **符号约定**:本笔记用**直体 p**(如 $\mathrm{p}(s_t \mid \cdots)$)表示真实环境的分布(POMDP);用**斜体 p_θ**(如 $p_\theta(s_t \mid \cdots)$)表示 PlaNet 学到的世界模型 —— 训练就是让 $p_\theta \approx \mathrm{p}$。**这一约定与 PlaNet 论文使用的符号习惯一致**。
 
 ##### 步骤2 - 推理的难题:真后验不可解 → variational encoder
 
 要训练步骤1 的模型,理论上应该从真后验 $p_\theta(s_t \mid o_{\le t}, a_{<t})$ 采样来反推 s_t,但这个后验**算不出来**(transition / observation 都是 NN,非线性,没法解析积分)。解法是引入一个**近似后验** q(也是 NN 参数化的)作为 **encoder**:
 
-q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
+$$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
 三个关键点:
 1. 这就是 VAE 里的 **encoder**,但是**轨迹版**
@@ -1568,7 +1581,9 @@ q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 
 至此 4 个网络(encoder + transition + decoder + reward)全部到位。PlaNet 把它们放在**同一个目标函数下联合训**:
 
-<p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
+$$
+\ln p(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p(o_t \mid s_t) + \ln p(r_t \mid s_t) - \mathrm{KL}\!\left[\,q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
+$$
 
 | Loss 项 | 训谁 | 反向告诉 encoder 什么 |
 |---|---|---|

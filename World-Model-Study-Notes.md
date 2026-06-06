@@ -1459,7 +1459,14 @@ The "true state" of the real environment includes positions, velocities, masses,
 
 The actual environment is assumed to be a **POMDP** (Partially Observable Markov Decision Process):
 
-<p align="center"><img src="asset/formulas/f19.png" width="520"/></p>
+$$
+\begin{aligned}
+\text{Transition function:} \quad & s_t \sim \mathrm{p}(s_t \mid s_{t-1}, a_{t-1}) \\
+\text{Observation function:} \quad & o_t \sim \mathrm{p}(o_t \mid s_t) \\
+\text{Reward function:} \quad & r_t \sim \mathrm{p}(r_t \mid s_t) \\
+\text{Policy:} \quad & a_t \sim \mathrm{p}(a_t \mid o_{\le t}, a_{<t})
+\end{aligned}
+$$
 
 - **Transition function**: The real environment's latent state $s_t$ is determined stochastically by the previous state and action
 - **Observation function**: The agent cannot access $s_t$ — it only receives a frame of observation $o_t$ (a pixel image) — this is what "partial observability" means
@@ -1548,15 +1555,21 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 To end-to-end learn a world model that simulates the POMDP, the simplest form is a **latent variable sequence model**:
 
-<p align="center"><img src="asset/formulas/f20.png" width="520"/></p>
+$$
+\begin{aligned}
+\text{Transition model:} \quad & s_t \sim p_\theta(s_t \mid s_{t-1}, a_{t-1}) \\
+\text{Observation model:} \quad & o_t \sim p_\theta(o_t \mid s_t) \\
+\text{Reward model:} \quad & r_t \sim p_\theta(r_t \mid s_t)
+\end{aligned}
+$$
 
-> 📝 **Notation convention**: this note uses **upright p** (e.g., `p(s_t | ...)`) for the real-environment distribution (the POMDP), and **italic p_θ** (e.g., `p_θ(s_t | ...)`) for PlaNet's learned world model — training amounts to making p_θ ≈ p. **This convention is consistent with the notation used in the PlaNet paper.**
+> 📝 **Notation convention**: this note uses **upright p** (e.g., $\mathrm{p}(s_t \mid \cdots)$) for the real-environment distribution (the POMDP), and **italic p_θ** (e.g., $p_\theta(s_t \mid \cdots)$) for PlaNet's learned world model — training amounts to making $p_\theta \approx \mathrm{p}$. **This convention is consistent with the notation used in the PlaNet paper.**
 
 ##### Step 2 - Inference difficulty: intractable true posterior → variational encoder
 
 To train the Step-1 model, in theory one should sample from the true posterior $p_\theta(s_t \mid o_{\le t}, a_{<t})$ to infer s_t. But this posterior is **intractable** (transition / observation are NNs — nonlinear, no closed-form integration). The fix is to introduce an **approximate posterior** q (also NN-parameterized) as an **encoder**:
 
-q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
+$$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
 Three key points:
 1. This is the VAE's **encoder**, but in **trajectory form**
@@ -1569,7 +1582,9 @@ Three key points:
 
 All 4 networks are now in place (encoder + transition + decoder + reward). PlaNet places them under the **same objective function, jointly trained**:
 
-<p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
+$$
+\ln p(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p(o_t \mid s_t) + \ln p(r_t \mid s_t) - \mathrm{KL}\!\left[\,q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
+$$
 
 | Loss term | Trains whom | What it tells the encoder (backward) |
 |---|---|---|
