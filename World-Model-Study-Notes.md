@@ -1534,8 +1534,6 @@ The goal is to learn a policy that maximizes expected cumulative return $\mathbb
 
 ### ⚙️ End-to-End Joint Training: One ELBO to Train Them All
 
-> Expansion of row 2 in the §4.2 pain-points table: "V and M trained separately in stages → VAE features may not be useful for decision-making" → **End-to-end joint training**
-
 #### 1. World Models' problem: the VAE has no idea what z will be used for
 
 World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2 freezes the VAE and trains the MDN-RNN, Stage 3 freezes V + M and evolves the Controller. **Each stage's loss only cares about its own goal — gradients cannot flow back to a previous stage.**

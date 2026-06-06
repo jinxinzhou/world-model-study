@@ -1533,8 +1533,6 @@ PlaNet 部署时每个 time step 走三步,构成一个标准的 **receding-hori
 
 ### ⚙️ 端到端联合训练:一个 ELBO 统管所有网络
 
-> 对应 §4.2 痛点表第 2 行的展开:"V 和 M 分阶段独立训 → VAE 学的特征未必对决策有用" → **端到端联合训练**
-
 #### 1. World Models 的问题:VAE 不知道 z 会被拿去干什么
 
 World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN-RNN,Stage 3 冻住 V + M 进化 Controller。**每一阶段的 loss 只关心自己的目标,梯度不能反向流到上一阶段**。
