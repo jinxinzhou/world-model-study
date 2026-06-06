@@ -1603,14 +1603,6 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 
 This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
 
-**All three steps together — evolution of the conditioning set**
-
-| Stage | Conditioning set |
-|---|---|
-| **Full posterior expansion** (Step A) | $s_{<t}, o_{1:T}, a_{1:T}$ |
-| After Step B (filtering, drop future) | $s_{<t}, o_{1:t}, a_{1:t-1}$ |
-| After Step C (Markov, drop distant past) ⭐ PlaNet's actual form | $s_{t-1}, a_{t-1}, o_t$ |
-
 Four more angles to unpack:
 
 **(1) What is q approximating?**
