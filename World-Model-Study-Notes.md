@@ -1546,7 +1546,7 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 ##### Step 1 - Starting point: vanilla latent variable sequence model
 
-To end-to-end learn a world model that simulates the POMDP, the simplest form is a **latent variable sequence model** — NN-parameterize the real-environment distribution from §🧭 Problem Setup (upright p) into a learnable world model (italic p_θ):
+To end-to-end learn a world model that simulates the POMDP, the simplest form is a **latent variable sequence model**:
 
 <p align="center"><img src="asset/formulas/f20.png" width="520"/></p>
 
