@@ -1826,7 +1826,7 @@ $$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
 $$\underbrace{p_\theta(o, r \mid a)}_{\text{the marginal we want}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{the joint the model defines}} \, ds$$
 
 <p align="center">
-  <img src="asset/planet-2019/ssm.png" alt="PlaNet paper Fig. 2(b) Stochastic State-Space Model" width="55%"/><br/>
+  <img src="asset/planet-2019/ssm.png" alt="PlaNet paper Fig. 2(b) Stochastic State-Space Model" width="38%"/><br/>
   <sub>↑ PlaNet paper Fig. 2(b): graphical model of the bare SSM. Circles = random variables, solid arrows = generative direction, dashed arrows = inference direction.</sub>
 </p>
 
