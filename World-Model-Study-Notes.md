@@ -1793,6 +1793,22 @@ $$
 
 Before discussing the ELBO, answer a more foundational question: **why maximize $\log p_\theta(o, r \mid a)$ in the first place?**
 
+**Essence: this objective is equivalent to "making the world model approximate the real environment"**
+
+Choosing max log-likelihood as the objective is essentially making the world model $p_\theta(o, r \mid a)$ **approach the real environment** $p_{\text{real}}(o, r \mid a)$ under the data distribution. Three equivalent statements:
+
+$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① optimization objective}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② information-theoretic view}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ teleological: world model ≈ env}}$$
+
+| Angle | Interpretation |
+|---|---|
+| **① Optimization** | Maximize the log-probability of the data under the model (standard MLE) |
+| **② Information-theoretic** | Minimize the KL divergence from the real-environment distribution to the model distribution — asymptotically unbiased and consistent |
+| **③ Teleological** | **Make the agent's internal world model resemble the real environment** — the three are mathematically equivalent |
+
+> 💡 **Note**: "$\approx$" means close in the KL sense, not pointwise equal. MLE **prioritizes fitting high-density regions** (states the data visits frequently) and is less attentive to low-density regions — this is precisely the source of the **model-exploitation problem** (CEM finds model bugs in rare states and ruthlessly exploits them).
+
+The next three points unpack why this specific form and why taking the log.
+
 **(1) Why this particular form?**
 
 Three notable details in the formula:

@@ -1792,6 +1792,22 @@ $$
 
 在讲 ELBO 之前,先回答一个更基础的问题:**为什么要最大化 $\log p_\theta(o, r \mid a)$ 这个东西**?
 
+**本质:这个目标等价于"让 world model 近似真实环境"**
+
+选 max log-likelihood 作为目标,本质就是让 world model $p_\theta(o, r \mid a)$ 在数据分布下**贴近真实环境** $p_{\text{real}}(o, r \mid a)$。三种等价表述:
+
+$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① 优化目标}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② 信息论解读}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ 目的论:world model ≈ env}}$$
+
+| 角度 | 解读 |
+|---|---|
+| **① 优化** | 最大化数据在模型下的对数概率(MLE 的标准做法) |
+| **② 信息论** | 最小化"真实环境分布"到"模型分布"的 KL 散度,渐进无偏 + 一致 |
+| **③ 目的论** | **让 agent 内部的 world model 像真实环境** —— 三者数学上完全等价 |
+
+> 💡 **注意**:"$\approx$"是 KL 意义下贴近,不是逐点相等。MLE 会**优先拟合高密度区域**(数据频繁出现的状态)、对低密度区域不太在意 —— 这正是 **model exploitation 问题**(CEM 找到 model 在罕见状态的 bug 后疯狂利用)的根源。
+
+下面三个小问题展开为什么是这个特定的形式 + 为什么取 log。
+
 **(1) 为什么是这个特定形式?**
 
 注意公式的三个细节:
