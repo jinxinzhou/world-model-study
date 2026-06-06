@@ -1495,7 +1495,7 @@ The goal is to learn a policy that maximizes expected cumulative return $\mathbb
 ```mermaid
 flowchart LR
     subgraph A["🤖 PlaNet Agent"]
-        direction TB
+        direction LR
         Enc["Encoder<br/>(belief)"]
         WM["World Model<br/>(RSSM + reward head)"]
         CEM["CEM planner<br/>(rolls out in latent)"]

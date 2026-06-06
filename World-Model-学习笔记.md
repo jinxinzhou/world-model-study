@@ -1494,7 +1494,7 @@ $$
 ```mermaid
 flowchart LR
     subgraph A["🤖 PlaNet Agent"]
-        direction TB
+        direction LR
         Enc["Encoder<br/>(belief)"]
         WM["World Model<br/>(RSSM + reward head)"]
         CEM["CEM 规划器<br/>(在 latent rollout)"]
