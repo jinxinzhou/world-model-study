@@ -1604,24 +1604,98 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
 
 <details>
-<summary><b>Why the true posterior is "intractable"</b> (click to expand)</summary>
+<summary><b>Why the true posterior is "intractable" — and what the encoder is really for</b> (click to expand)</summary>
+
+**Bayes decomposition**
 
 The true posterior is given by Bayes' rule:
 
 $$p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T}) = \frac{p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T})}{p_\theta(o_{1:T} \mid a_{1:T})}$$
 
-The problem is not the numerator (it is just the model's joint distribution, which is writable). The problem is the **denominator** — this marginal likelihood requires integrating out all possible latent trajectories:
+The problem is not the numerator (it is the model's joint distribution and can be **written down directly**); the problem is the **denominator** — this marginal likelihood requires integrating out all possible latent trajectories:
 
 $$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) \, ds_{1:T}$$
 
-This integral admits a closed form in only two cases:
+But we need to be careful: "computable" is itself ambiguous.
 
-- ✅ **Linear + Gaussian**: Kalman filter's analytic solution
+**"Computable" is a fuzzy word**
+
+In ML, "$p(x)$ is computable" has at least three independent meanings:
+
+| Capability | Meaning | Example |
+|---|---|---|
+| **① Evaluate** | Given a specific $x$, return the value $p(x)$ | "what's $p(x=3)$?" |
+| **② Sample** | Produce $x \sim p$ | "give me 100 samples from $p$" |
+| **③ Integrate** | Compute $\int p(x) dx$ or expectations $\mathbb{E}_p[f]$ | "marginals / posteriors" |
+
+For PlaNet:
+
+| Quantity | ① Evaluate | ② Sample | ③ Integrate |
+|---|---|---|---|
+| Joint $p_\theta(s, o \mid a)$ (numerator) | ✅ **yes** | ✅ (ancestral) | ❌ |
+| Marginal $p_\theta(o \mid a)$ (denominator) | ❌ **no** | ✅ (drop s) | — |
+| True posterior $p_\theta(s \mid o, a)$ | ❌ | ❌ | — |
+| Approximate posterior $q_\phi(s \mid o, a)$ | ✅ | ✅ | — |
+
+> ⭐ Key: **the numerator is ① evaluable — and no encoder is needed for that.**
+
+**How the numerator is "computable" concretely (no encoder needed)**
+
+By the RSSM graphical model, the joint factorizes by the chain rule:
+
+$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} \underbrace{p_\theta(s_t \mid s_{t-1}, a_{t-1})}_{\text{transition NN}} \cdot \underbrace{p_\theta(o_t \mid s_t)}_{\text{decoder NN}}$$
+
+Each factor is Gaussian with mean / variance produced by an NN:
+
+- **Transition**: input $(s_{t-1}, a_{t-1})$ → NN outputs $\mu, \sigma$ → $p_\theta(s_t \mid \cdots) = \mathcal{N}(s_t; \mu, \sigma^2)$
+- **Decoder**: input $s_t$ → NN outputs pixel mean $\hat{o}_t$ → $p_\theta(o_t \mid s_t) = \mathcal{N}(o_t; \hat{o}_t, I)$
+
+→ Given a triple $(s_{1:T}, o_{1:T}, a_{1:T})$, plug numbers into each Gaussian factor and you get the joint density value, **using only forward passes of two NNs, no encoder involved**.
+
+> Analogy with the VAE: given $(x, z)$ you can compute $p(x \mid z) p(z)$ — no encoder needed. The encoder only enters when you ask "where do I get $z$?".
+
+**Why the denominator is intractable**
+
+The integrand (numerator) is evaluable, but the **integral itself has no closed form**.
+
+- High-dim: $s_t$ has ~30 dims, sequence length $T$ ~50 → 1500-dim integration space
+- Nonlinear: transitions are NNs, no longer linear-Gaussian
+- Monte Carlo estimates have **enormous variance** (in high dim, "right" trajectories are almost never sampled)
+
+Only two special cases admit closed-form integration:
+
+- ✅ **Linear + Gaussian**: Kalman filter
 - ✅ **Discrete + small state space**: brute-force enumeration
 
-PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds → no closed-form integral → Monte Carlo estimates have **enormous variance** (in high-dim $s$ space, "right" trajectories are almost never sampled).
+PlaNet satisfies neither, so the denominator **can only be approximated**.
 
-> Hence the variational route: **don't compute the true posterior — find a tractable $q$ to approximate it**, and maximize the ELBO to bring $q$ closer to $p_\theta$.
+**So what is the encoder actually for?**
+
+> 🔴 **The encoder doesn't solve "make the numerator computable" — it solves "training only sees $o$, not the ground-truth $s$ — so how do we train?"**
+
+Listing every scenario where $s$ is needed:
+
+| Scenario | Encoder needed? | Note |
+|---|---|---|
+| Evaluate numerator $p_\theta(s, o \mid a)$ at given $(s, o, a)$ | ❌ | $s$ is already in hand, just plug in |
+| Ancestral-sample an imagined trajectory $(s, o)$ | ❌ | From prior: $s_t \sim p_\theta(\cdot \mid s_{t-1}, a)$ → $o_t \sim p_\theta(\cdot \mid s_t)$. This is exactly what CEM planning uses |
+| **Training: only real $o$ given, need to infer $s$** | ✅ **yes** | This is the encoder's real job |
+
+Training data is $(o_{1:T}, a_{1:T})$ — **no ground-truth $s$**. We want to maximize $\log p_\theta(o \mid a)$, but this log-likelihood involves the intractable denominator integral. The ELBO route:
+
+$$\log p_\theta(o \mid a) \;\geq\; \mathbb{E}_{s \sim q_\phi(s \mid o, a)} \big[\log p_\theta(o, s \mid a) - \log q_\phi(s \mid o, a)\big]$$
+
+The Monte Carlo estimator here **needs to sample $s$ from some distribution**. Which?
+
+| Candidate | Can we sample? | Effect |
+|---|---|---|
+| True posterior $p_\theta(s \mid o, a)$ | ❌ intractable | — |
+| Prior $\prod p_\theta(s_t \mid s_{t-1}, a)$ | ✅ yes | Sampled $s$ is **independent of $o$** → variance explodes |
+| **Encoder $q_\phi(s \mid o, a)$** | ✅ yes | Samples are conditional on $o$ — they already "correspond to" the observation ⭐ |
+
+> 💡 **One sentence**: **the encoder isn't there to make the numerator computable; it is there to let us, without knowing $s$, estimate the ELBO via sampling — and that's the objective we can actually optimize.**
+
+> 📝 The VAE's encoder is the same idea: in vanilla VAE, $x$ is data, $z$ is latent; the decoder $p(x \mid z)$ can both evaluate and sample. But at training time we are given $x$ and need to recover $z$ → enter the encoder $q(z \mid x)$. PlaNet just extends this from "single image" to "trajectory".
 
 </details>
 

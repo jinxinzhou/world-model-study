@@ -1603,24 +1603,98 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 这是 PlaNet 做得**最大胆的一步** —— 它假设 $s_{t-1}$ 是对所有过去(包括 s 历史和 obs/action 历史)的**充分统计量**。
 
 <details>
-<summary><b>为什么真后验"算不出来"</b>(点开展开)</summary>
+<summary><b>为什么真后验"算不出来" — 兼答 encoder 的真正作用</b>(点开展开)</summary>
+
+**Bayes 拆分**
 
 真后验由贝叶斯公式给出:
 
 $$p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T}) = \frac{p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T})}{p_\theta(o_{1:T} \mid a_{1:T})}$$
 
-问题不在分子(分子就是模型联合分布,可以写出来),问题在**分母** —— 这个 marginal likelihood 需要把所有可能的隐状态轨迹积掉:
+问题不在分子(分子是模型联合分布,可以**直接写出**),问题在**分母** —— 这个 marginal likelihood 需要把所有可能的隐状态轨迹积掉:
 
 $$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) \, ds_{1:T}$$
 
-这个积分只在两种情况下能算:
+但这里要小心:"能算"这个词本身就有歧义。
+
+**"能算"其实是个模糊词**
+
+机器学习里"能算 $p(x)$"至少有三层不同含义,**完全独立**:
+
+| 能力 | 含义 | 举例 |
+|---|---|---|
+| **① Evaluate** | 给定具体 $x$,算出 $p(x)$ 的数值 | "$p(x=3)$ 等于多少" |
+| **② Sample** | 产生符合分布的 $x$ | "请给我 100 个 $x \sim p$" |
+| **③ Integrate** | 算积分 $\int p(x) dx$ 或期望 $\mathbb{E}_p[f]$ | "marginal / 后验" |
+
+回到 PlaNet:
+
+| 量 | ① Evaluate | ② Sample | ③ Integrate |
+|---|---|---|---|
+| 联合分布 $p_\theta(s, o \mid a)$(分子) | ✅ **能** | ✅(祖先采样) | ❌ |
+| Marginal $p_\theta(o \mid a)$(分母) | ❌ **不能** | ✅(扔掉 s) | — |
+| 真后验 $p_\theta(s \mid o, a)$ | ❌ | ❌ | — |
+| 近似后验 $q_\phi(s \mid o, a)$ | ✅ | ✅ | — |
+
+> ⭐ 关键:**分子能 ① evaluate,但不需要任何 encoder**。
+
+**分子具体怎么"能算"(无需 encoder)**
+
+由 RSSM 的图模型,联合分布按时间链式分解:
+
+$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} \underbrace{p_\theta(s_t \mid s_{t-1}, a_{t-1})}_{\text{transition NN}} \cdot \underbrace{p_\theta(o_t \mid s_t)}_{\text{decoder NN}}$$
+
+每个因子都是高斯,均值/方差由 NN 给出:
+
+- **Transition**:输入 $(s_{t-1}, a_{t-1})$ → NN 输出 $\mu, \sigma$ → $p_\theta(s_t \mid \cdots) = \mathcal{N}(s_t; \mu, \sigma^2)$
+- **Decoder**:输入 $s_t$ → NN 输出像素均值 $\hat{o}_t$ → $p_\theta(o_t \mid s_t) = \mathcal{N}(o_t; \hat{o}_t, I)$
+
+→ 给定 $(s_{1:T}, o_{1:T}, a_{1:T})$ 三元组,每个高斯因子代入数值就能算,**只需 forward pass 两个 NN,完全不需要 encoder**。
+
+> 类比 VAE:给定 $(x, z)$ 你可以算 $p(x \mid z) p(z)$ —— 不需要 encoder。encoder 只在你想"从哪里得到 z"时才出现。
+
+**分母为什么算不出来**
+
+被积函数($=$ 分子)能算,但**积分本身没有闭式**。
+
+- 高维:$s_t$ 维度约 30,序列长 $T$ 约 50 → 积分空间 1500 维
+- 非线性:transition 是 NN,不再是线性高斯
+- 蒙特卡洛估计**方差极大**(高维空间几乎采不到"对"的轨迹)
+
+只有两种特殊情况能解析积出:
 
 - ✅ **线性 + 高斯**:Kalman filter 的解析解
 - ✅ **离散 + 小状态空间**:暴力穷举
 
-PlaNet 是**非线性 NN + 连续高斯**,两个条件都不满足 → 积分**没有闭式解** → 蒙特卡洛估计**方差极大**(在高维 $s$ 空间里几乎采不到"对"的轨迹)。
+PlaNet 两个都不满足,所以分母**只能近似**。
 
-> 所以走变分路线:**不算真后验,而是找一个能算的 $q$ 去近似它**,并通过最大化 ELBO 让 $q$ 越来越接近 $p_\theta$。
+**那 encoder 究竟是干嘛用的?**
+
+> 🔴 **encoder 解决的不是"分子能算",而是"训练时只有 o,没有 ground truth s,怎么训?"**
+
+把"什么时候需要 $s$"的场景列出来:
+
+| 场景 | 需要 encoder 吗? | 备注 |
+|---|---|---|
+| 给定 $(s, o, a)$ 评估分子 $p_\theta(s, o \mid a)$ | ❌ | $s$ 已经在手,代入即可 |
+| 祖先采样一条想象轨迹 $(s, o)$ | ❌ | 从 prior 链式采:$s_t \sim p_\theta(\cdot \mid s_{t-1}, a)$ → $o_t \sim p_\theta(\cdot \mid s_t)$。CEM 规划就靠这个 |
+| **训练:只有真实 $o$,反推 $s$** | ✅ **需要** | 这才是 encoder 的用武之地 |
+
+训练数据是 $(o_{1:T}, a_{1:T})$,**没有 $s$ 的 ground truth**。我们想最大化 $\log p_\theta(o \mid a)$,但这个 log-likelihood 涉及分母那个积不出来的积分。走 ELBO:
+
+$$\log p_\theta(o \mid a) \;\geq\; \mathbb{E}_{s \sim q_\phi(s \mid o, a)} \big[\log p_\theta(o, s \mid a) - \log q_\phi(s \mid o, a)\big]$$
+
+这里 Monte Carlo 估计**需要从某个分布采 $s$**。选谁?
+
+| 候选 | 能不能采? | 效果 |
+|---|---|---|
+| 真后验 $p_\theta(s \mid o, a)$ | ❌ 算不出 | — |
+| Prior $\prod p_\theta(s_t \mid s_{t-1}, a)$ | ✅ 能 | 采到的 $s$ **跟 $o$ 完全无关**,方差爆炸 |
+| **Encoder $q_\phi(s \mid o, a)$** | ✅ 能 | 从 $o$ 反向条件采,**这些 $s$ 已经"对应了"观测** ⭐ |
+
+> 💡 **一句话**:**encoder 不是为了让分子可算,而是为了在不知道 $s$ 的情况下,通过采样估计 ELBO 这个能优化的目标**。
+
+> 📝 类比 VAE 的 encoder 也是同一回事:静态 VAE 里,$x$ 是数据,$z$ 是隐变量,decoder $p(x \mid z)$ 能 evaluate、能 sample。但训练时给的是 $x$,要反推 $z$ → encoder $q(z \mid x)$ 出场。PlaNet 只是把它从"单张图像"推广到了"轨迹"。
 
 </details>
 
