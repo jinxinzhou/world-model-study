@@ -1581,15 +1581,9 @@ $$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q\big(s_t \mid s_{<t}, o_{1
 
 No approximation yet — pure mathematical identity.
 
-**Step B — Markov approximation (drop distant $s$ history)**
+**Step B — filtering approximation (drop future observations / actions)**
 
-$$q(s_t \mid s_{<t}, \cdots) \;\approx\; q(s_t \mid s_{t-1}, \cdots)$$
-
-**Reason**: **The generative model is itself Markov** (transition depends only on $s_{t-1}, a_{t-1}$). Since $p_\theta$ is Markov, having $q$ keep the same chain structure is the most natural way to **preserve the model's symmetry**.
-
-**Step C — filtering approximation (drop future observations / actions)**
-
-$$q(s_t \mid s_{t-1}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{t-1}, o_{1:t}, a_{1:t-1})$$
+$$q(s_t \mid s_{<t}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1})$$
 
 **Reason**: at inference (deployment / planning) only past obs/actions are available — **there is no future $o, a$**. The $q$ learned at training must be the same $q$ used at deployment; peeking at future would make it unusable at test time.
 
@@ -1598,33 +1592,35 @@ $$q(s_t \mid s_{t-1}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{t-1}, o_{1:t},
 | Only see $o_{\le t}$ | **filtering posterior** ⭐ | Inference can only see the past — PlaNet's choice |
 | See full $o_{1:T}$ | **smoothing posterior** | Training has the full trajectory; more info per $s_t$ |
 
-**Step D — encoder's Markov sufficiency (compress past obs/action history into $s_{t-1}$)**
+**Step C — Markov approximation (compress all past into $s_{t-1}$)**
 
-$$q(s_t \mid s_{t-1}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+$$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
-**Key assumption**: $s_{t-1}$ is already a **sufficient statistic** of all past obs/actions, so $o_{1:t-1}$ and $a_{1:t-2}$ can be dropped from the conditioning — **only the fresh information** $o_t$ and $a_{t-1}$ remains. This is PlaNet's **boldest simplification**.
+**This step does two things at once** (both are Markov sufficiency assumptions):
+
+1. **Drop distant $s$ history**: $s_{<t-1}$ is redundant given $s_{t-1}$ — because the generative model is itself Markov
+2. **Drop distant obs/action history**: $o_{1:t-1}$ and $a_{1:t-2}$ are taken to be **already compressed into $s_{t-1}$**, leaving only the fresh information $o_t$ and $a_{t-1}$
+
+This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
 
 **Why is this reasonable?**
 
 | Angle | Explanation |
 |---|---|
-| **Design intent** | RSSM's whole point is to make $s_t$ "a compressed representation of history". When training succeeds, $s_{t-1}$ **should** carry all relevant info from $o_{1:t-1}, a_{1:t-2}$ |
-| **Structural symmetry** | Mirrors the generative model's Markov property — generation $s_{t-1} \to s_t$ ignores $s_{<t-1}$; inference $s_{t-1} \to s_t$ likewise ignores $o_{<t}, a_{<t-1}$ |
+| **Design intent** | RSSM designs $s_t$ as "a compressed representation of history". When training succeeds, $s_{t-1}$ carries all relevant info from both $s_{<t-1}$ and $o_{1:t-1}, a_{1:t-2}$ |
+| **Model symmetry** | The generative model is itself Markov (transition depends only on $s_{t-1}, a_{t-1}$); keeping $q$ in the same Markov form is the most natural choice |
 | **Engineering necessity** | Otherwise the encoder would have to consume the full history $o_{1:t}$ every step — $O(T^2)$ in time and memory |
-| **Implicit info flow** | Recursively: $s_{t-1}$ was computed from $s_{t-2}$ and $o_{t-1}$, $s_{t-2}$ from $s_{t-3}$ and $o_{t-2}$, ... So $o_{1:t-1}$ **flows into $s_{t-1}$ through the $s$ chain** |
+| **Implicit info flow** | Recursively: $s_{t-1}$ was computed from $s_{t-2}$ + $o_{t-1}$, $s_{t-2}$ from $s_{t-3}$ + $o_{t-2}$, ... So $o_{<t}$ **flows into $s_{t-1}$ through the $s$ chain** |
 
 > ⚠️ **Does this assumption have risk?** Yes — but ELBO optimization itself corrects it. If $s_{t-1}$ isn't sufficient (e.g., undertrained), the approximation degrades and the ELBO becomes loose; the KL term then back-propagates pressure on the encoder to pack more "future-useful" info into $s_{t-1}$. This is exactly why **encoder + transition must be trained jointly**.
 
-> 💡 Note: although each $q$ factor's **direct conditioning** is only $(s_{t-1}, a_{t-1}, o_t)$, $s_{t-1}$ is itself sampled from the previous step's $q$, which depended on $s_{t-2}$ and $o_{t-1}$, and so on. So **the entire trajectory's $q$ implicitly depends on $o_{\le t}$**. Chain rule + sequential sampling automatically carries "historical observations" forward through $s$.
-
-**All four steps together — evolution of the conditioning set**
+**All three steps together — evolution of the conditioning set**
 
 | Stage | Conditioning set |
 |---|---|
 | **Full posterior expansion** (Step A) | $s_{<t}, o_{1:T}, a_{1:T}$ |
-| After Step B (Markov on s) | $s_{t-1}, o_{1:T}, a_{1:T}$ |
-| After Step C (filtering) | $s_{t-1}, o_{1:t}, a_{1:t-1}$ |
-| After Step D (encoder Markov) ⭐ PlaNet's actual form | $s_{t-1}, a_{t-1}, o_t$ |
+| After Step B (filtering, drop future) | $s_{<t}, o_{1:t}, a_{1:t-1}$ |
+| After Step C (Markov, drop distant past) ⭐ PlaNet's actual form | $s_{t-1}, a_{t-1}, o_t$ |
 
 Four more angles to unpack:
 
