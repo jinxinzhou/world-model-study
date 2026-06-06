@@ -1824,6 +1824,11 @@ $$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
 
 $$\underbrace{p_\theta(o, r \mid a)}_{\text{我们想要的 marginal}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{模型实际定义的联合}} \, ds$$
 
+<p align="center">
+  <img src="asset/planet-2019/ssm.png" alt="PlaNet 论文 Fig. 2(b) Stochastic State-Space Model" width="55%"/><br/>
+  <sub>↑ PlaNet 论文 Fig. 2(b):朴素 SSM 的图模型。圆圈 = 随机变量,实线 = 生成方向,虚线 = 推理方向。</sub>
+</p>
+
 而模型其实是定义在**带隐变量 $s$ 的生成模型**上(步骤 2 的朴素 SSM):
 
 $$p_\theta(o, r, s \mid a) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
