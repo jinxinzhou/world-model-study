@@ -1553,7 +1553,7 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 ##### 步骤2 - 推理的难题:真后验不可解 → variational encoder
 
-要训练步骤1 的模型,理论上应该从真后验 p(s_t ∣ o_{≤t}, a_{<t}) 采样来反推 s_t,但这个后验**算不出来**(transition / observation 都是 NN,非线性,没法解析积分)。解法是引入一个**近似后验** q(也是 NN 参数化的)作为 **encoder**:
+要训练步骤1 的模型,理论上应该从真后验 <img src="asset/formulas/f21.png" height="20" valign="middle"/> 采样来反推 s_t,但这个后验**算不出来**(transition / observation 都是 NN,非线性,没法解析积分)。解法是引入一个**近似后验** q(也是 NN 参数化的)作为 **encoder**:
 
 q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 

@@ -1554,7 +1554,7 @@ To end-to-end learn a world model that simulates the POMDP, the simplest form is
 
 ##### Step 2 - Inference difficulty: intractable true posterior → variational encoder
 
-To train the Step-1 model, in theory one should sample from the true posterior p(s_t ∣ o_{≤t}, a_{<t}) to infer s_t. But this posterior is **intractable** (transition / observation are NNs — nonlinear, no closed-form integration). The fix is to introduce an **approximate posterior** q (also NN-parameterized) as an **encoder**:
+To train the Step-1 model, in theory one should sample from the true posterior <img src="asset/formulas/f21.png" height="20" valign="middle"/> to infer s_t. But this posterior is **intractable** (transition / observation are NNs — nonlinear, no closed-form integration). The fix is to introduce an **approximate posterior** q (also NN-parameterized) as an **encoder**:
 
 q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 
