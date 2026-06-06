@@ -1770,7 +1770,7 @@ $$\log p_\theta(o \mid a) \;\geq\; \mathbb{E}_{s \sim q_\phi(s \mid o, a)} \big[
 
 ##### 步骤3 - 共享 ELBO 联合训练所有网络
 
-至此 4 个网络(encoder + transition + decoder + reward)全部到位。PlaNet 把它们放在**同一个目标函数下联合训**:
+至此 4 个网络(encoder + transition + decoder + reward)全部到位。
 
 ```mermaid
 flowchart LR
@@ -1783,6 +1783,22 @@ flowchart LR
     Env -- "observation <i>oₜ₊₁</i><br/>reward <i>rₜ</i>" --> A
     WM -. "训练目标:近似<br/>min KL(p_real ∥ p_θ)" .-> Env
 ```
+
+PlaNet 的本质就是让 world model $p_\theta(o, r \mid a)$ 在数据分布下**贴近真实环境** $p_{\text{real}}(o, r \mid a)$。三种等价表述:
+
+$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① 优化目标}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② 信息论解读}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ 目的论:world model ≈ env}}$$
+
+| 角度 | 解读 |
+|---|---|
+| **① 优化** | 最大化数据在模型下的对数概率(MLE 的标准做法) |
+| **② 信息论** | 最小化"真实环境分布"到"模型分布"的 KL 散度,渐进无偏 + 一致 |
+| **③ 目的论** | **让 agent 内部的 world model 像真实环境** —— 三者数学上完全等价 |
+
+> 💡 **注意**:"$\approx$"是 KL 意义下贴近,不是逐点相等。MLE 会**优先拟合高密度区域**(数据频繁出现的状态)、对低密度区域不太在意 —— 这正是 **model exploitation 问题**(CEM 找到 model 在罕见状态的 bug 后疯狂利用)的根源。
+
+因此 **PlaNet 的训练目标就是最大化** 世界模型对真实数据的 log-likelihood:
+
+$$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\big[\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})\big]$$
 
 写成数学就是:
 
@@ -1797,46 +1813,6 @@ $$
 | $\mathrm{KL}[q \,\|\, p]$ | transition + encoder | "$s_t$ 要让下一步可预测" |
 
 **所有梯度通过 $s_t$ 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 $s_t$"。
-
-**为什么是 log-likelihood?**
-
-在讲 ELBO 之前,先回答一个更基础的问题:**为什么要最大化 $\log p_\theta(o, r \mid a)$ 这个东西**?
-
-**本质:这个目标等价于"让 world model 近似真实环境"**
-
-选 max log-likelihood 作为目标,本质就是让 world model $p_\theta(o, r \mid a)$ 在数据分布下**贴近真实环境** $p_{\text{real}}(o, r \mid a)$。三种等价表述:
-
-$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① 优化目标}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② 信息论解读}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ 目的论:world model ≈ env}}$$
-
-| 角度 | 解读 |
-|---|---|
-| **① 优化** | 最大化数据在模型下的对数概率(MLE 的标准做法) |
-| **② 信息论** | 最小化"真实环境分布"到"模型分布"的 KL 散度,渐进无偏 + 一致 |
-| **③ 目的论** | **让 agent 内部的 world model 像真实环境** —— 三者数学上完全等价 |
-
-> 视觉化对应到本节顶部 PlaNet Agent 图中的虚线箭头 `World Model -. 近似 .-> Environment` —— 就是把右边的 environment 拉到左边的 world model 上。
-
-> 💡 **注意**:"$\approx$"是 KL 意义下贴近,不是逐点相等。MLE 会**优先拟合高密度区域**(数据频繁出现的状态)、对低密度区域不太在意 —— 这正是 **model exploitation 问题**(CEM 找到 model 在罕见状态的 bug 后疯狂利用)的根源。
-
-下面三个小问题展开为什么是这个特定的形式 + 为什么取 log。
-
-**(1) 为什么是这个特定形式?**
-
-注意公式的三个细节:
-
-- **$a$ 在条件里(不在联合里)**:PlaNet 学的是**世界模型不是 policy**。$a$ 是外部输入(来自 agent 决策 / data buffer / random policy),模型只负责"给定 $a$,环境如何回应 $(o, r)$"。这正是 POMDP 的形式化:模型 = (transition, observation, reward),**不包括 policy**。
-- **$o$ 和 $r$ 都要**:$o$ 监督动力学 + 表征质量;$r$ 让模型能在 latent rollout 时给出 reward 评分 —— **CEM 规划完全不接触真环境,必须靠模型预测的 reward 来挑选最优动作序列**。只学 $o$ 没法规划,只学 $r$ 没法长程预测。
-- **轨迹级而非单帧**:动力学是时序的,要学的核心是"状态怎么演化"——必须看相邻帧。如果按单帧学就退化成 VAE,丢掉 transition 学习,这正是 **World Models 的问题**。
-
-**(2) 为什么取 log?**
-
-| 性质 | 作用 |
-|---|---|
-| 单调 | $\arg\max \log p = \arg\max p$,不改变最优解 |
-| 乘积 → 求和 | $\log \prod_t p_t = \sum_t \log p_t$ —— 数值稳定(避免乘很多小数下溢)、梯度好算 |
-| 信息论自然单位 | $-\log p$ 就是"信息量"(bits 或 nats),所以 NLL = cross-entropy |
-
-> 💡 **总结**:**MLE = 让模型觉得数据最自然 = 在 KL 意义下贴近真实环境**。选这个特定形式是因为:$a$ 是外部输入不学,$o + r$ 共同监督动力学和规划,轨迹级让 transition 被训,$\log$ 是数值稳定 + 梯度计算的工程标配。
 
 **目标:为什么是 ELBO?**
 

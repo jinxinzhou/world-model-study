@@ -1771,7 +1771,7 @@ The Monte Carlo estimator here **needs to sample $s$ from some distribution**. W
 
 ##### Step 3 - Jointly train all networks with the shared ELBO
 
-All 4 networks are now in place (encoder + transition + decoder + reward). PlaNet places them under the **same objective function, jointly trained**:
+All 4 networks are now in place (encoder + transition + decoder + reward).
 
 ```mermaid
 flowchart LR
@@ -1785,7 +1785,23 @@ flowchart LR
     WM -. "training goal: approximate<br/>min KL(p_real ∥ p_θ)" .-> Env
 ```
 
-Written mathematically:
+The essence of PlaNet is to make the world model $p_\theta(o, r \mid a)$ **approach the real environment** $p_{\text{real}}(o, r \mid a)$ under the data distribution. Three equivalent statements:
+
+$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① optimization objective}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② information-theoretic view}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ teleological: world model ≈ env}}$$
+
+| Angle | Interpretation |
+|---|---|
+| **① Optimization** | Maximize the log-probability of the data under the model (standard MLE) |
+| **② Information-theoretic** | Minimize the KL divergence from the real-environment distribution to the model distribution — asymptotically unbiased and consistent |
+| **③ Teleological** | **Make the agent's internal world model resemble the real environment** — the three are mathematically equivalent |
+
+> 💡 **Note**: "$\approx$" means close in the KL sense, not pointwise equal. MLE **prioritizes fitting high-density regions** (states the data visits frequently) and is less attentive to low-density regions — this is precisely the source of the **model-exploitation problem** (CEM finds model bugs in rare states and ruthlessly exploits them).
+
+Therefore, **PlaNet's training objective is to maximize** the world model's log-likelihood on real data:
+
+$$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\big[\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})\big]$$
+
+Written in concrete form:
 
 $$
 \ln p(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p(o_t \mid s_t) + \ln p(r_t \mid s_t) - \mathrm{KL}\!\left[\,q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
@@ -1798,46 +1814,6 @@ $$
 | $\mathrm{KL}[q \,\|\, p]$ | transition + encoder | "$s_t$ must make the next step predictable" |
 
 **All gradients flow back to the encoder through the shared variable $s_t$** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into $s_t$".
-
-**Why log-likelihood?**
-
-Before discussing the ELBO, answer a more foundational question: **why maximize $\log p_\theta(o, r \mid a)$ in the first place?**
-
-**Essence: this objective is equivalent to "making the world model approximate the real environment"**
-
-Choosing max log-likelihood as the objective is essentially making the world model $p_\theta(o, r \mid a)$ **approach the real environment** $p_{\text{real}}(o, r \mid a)$ under the data distribution. Three equivalent statements:
-
-$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① optimization objective}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② information-theoretic view}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ teleological: world model ≈ env}}$$
-
-| Angle | Interpretation |
-|---|---|
-| **① Optimization** | Maximize the log-probability of the data under the model (standard MLE) |
-| **② Information-theoretic** | Minimize the KL divergence from the real-environment distribution to the model distribution — asymptotically unbiased and consistent |
-| **③ Teleological** | **Make the agent's internal world model resemble the real environment** — the three are mathematically equivalent |
-
-> Visually, this corresponds to the dashed arrow `World Model -. approximates .-> Environment` in the PlaNet Agent diagram at the top of this step — pulling the right-hand environment toward the left-hand world model.
-
-> 💡 **Note**: "$\approx$" means close in the KL sense, not pointwise equal. MLE **prioritizes fitting high-density regions** (states the data visits frequently) and is less attentive to low-density regions — this is precisely the source of the **model-exploitation problem** (CEM finds model bugs in rare states and ruthlessly exploits them).
-
-The next three points unpack why this specific form and why taking the log.
-
-**(1) Why this particular form?**
-
-Three notable details in the formula:
-
-- **$a$ in the conditioning (not the joint)**: PlaNet learns a **world model, not a policy**. $a$ is an external input (from agent decisions / data buffer / random policy); the model only handles "given $a$, how does the env respond with $(o, r)$". This matches the POMDP formalization: model = (transition, observation, reward), **policy not included**.
-- **Both $o$ and $r$**: $o$ supervises dynamics + representation quality; $r$ lets the model produce reward scores during latent rollouts — **CEM planning never touches the real env and must rely on model-predicted reward to pick the best action sequence**. Only $o$ → cannot plan; only $r$ → cannot do long-horizon prediction.
-- **Trajectory-level, not frame-level**: dynamics is temporal; the core thing to learn is "how the state evolves" — must look at adjacent frames. Frame-level learning degenerates into a VAE, dropping transition learning — this is exactly **World Models' problem**.
-
-**(2) Why log?**
-
-| Property | Purpose |
-|---|---|
-| Monotonic | $\arg\max \log p = \arg\max p$, optimum unchanged |
-| Product → sum | $\log \prod_t p_t = \sum_t \log p_t$ — numerically stable (avoids multiplying many small numbers), gradients easy |
-| Natural information-theoretic unit | $-\log p$ is "information" (bits or nats), so NLL = cross-entropy |
-
-> 💡 **Summary**: **MLE = making the model find the data most natural = approaching the real environment in KL sense**. This specific form is chosen because: $a$ is external input not to be learned, $o + r$ jointly supervise dynamics and planning, trajectory-level supervises the transition, and $\log$ is the engineering standard for numerical stability + gradient computation.
 
 **Objective: why ELBO?**
 
