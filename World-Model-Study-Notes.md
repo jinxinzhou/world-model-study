@@ -1603,17 +1603,6 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 
 This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
 
-**Why is this reasonable?**
-
-| Angle | Explanation |
-|---|---|
-| **Design intent** | RSSM designs $s_t$ as "a compressed representation of history". When training succeeds, $s_{t-1}$ carries all relevant info from both $s_{<t-1}$ and $o_{1:t-1}, a_{1:t-2}$ |
-| **Model symmetry** | The generative model is itself Markov (transition depends only on $s_{t-1}, a_{t-1}$); keeping $q$ in the same Markov form is the most natural choice |
-| **Engineering necessity** | Otherwise the encoder would have to consume the full history $o_{1:t}$ every step — $O(T^2)$ in time and memory |
-| **Implicit info flow** | Recursively: $s_{t-1}$ was computed from $s_{t-2}$ + $o_{t-1}$, $s_{t-2}$ from $s_{t-3}$ + $o_{t-2}$, ... So $o_{<t}$ **flows into $s_{t-1}$ through the $s$ chain** |
-
-> ⚠️ **Does this assumption have risk?** Yes — but ELBO optimization itself corrects it. If $s_{t-1}$ isn't sufficient (e.g., undertrained), the approximation degrades and the ELBO becomes loose; the KL term then back-propagates pressure on the encoder to pack more "future-useful" info into $s_{t-1}$. This is exactly why **encoder + transition must be trained jointly**.
-
 **All three steps together — evolution of the conditioning set**
 
 | Stage | Conditioning set |
