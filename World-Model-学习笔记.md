@@ -1749,6 +1749,100 @@ $$
 
 **所有梯度通过 $s_t$ 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 $s_t$"。
 
+**目标:为什么是 ELBO?**
+
+我们真正想最大化的是模型对真实数据的 log-likelihood:
+
+$$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
+
+但这个 marginal likelihood 需要把 $s$ 积掉,**算不出来**(见步骤2 折叠 section)。**ELBO 是它的一个能算的下界** —— 最大化 ELBO 会自动推高真实 log-likelihood,差距 = $\mathrm{KL}[q \,\|\, \text{真后验}]$,$q$ 越准差距越小。
+
+**推导:ELBO 是怎么来的(5 步)**
+
+**Step 1 — 引入 $q$(乘以 1)**
+
+$$\log p_\theta(o, r \mid a) = \log \int p_\theta(o, r, s \mid a) \, ds = \log \int q_\phi(s \mid o, a) \cdot \frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)} \, ds = \log \mathbb{E}_q\!\left[\frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)}\right]$$
+
+**Step 2 — Jensen 不等式**(log 是凹函数,$\log \mathbb{E}[X] \geq \mathbb{E}[\log X]$):
+
+$$\log p_\theta(o, r \mid a) \;\geq\; \mathbb{E}_q\!\left[\log p_\theta(o, r, s \mid a) - \log q_\phi(s \mid o, a)\right]$$
+
+右边就是 **ELBO** 的定义。
+
+**Step 3 — 展开联合 $p$ 的因子化**(用前面推过的图模型分解 + reward 项):
+
+$$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p(s_t \mid s_{t-1}, a_{t-1}) + \log p(o_t \mid s_t) + \log p(r_t \mid s_t)\big]$$
+
+**Step 4 — 展开 $q$ 的因子化**(用步骤2 推过的 chain rule + Markov + filtering):
+
+$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q(s_t \mid h_t, o_t)$$
+
+**Step 5 — 合并 transition 项与 $q$ 项 → KL**
+
+代回 ELBO 后,每个 $t$ 的贡献是:
+
+$$\log p(o_t \mid s_t) + \log p(r_t \mid s_t) + \big[\log p(s_t \mid s_{t-1}, a_{t-1}) - \log q(s_t \mid h_t, o_t)\big]$$
+
+其中最后两项在 $\mathbb{E}_{q(s_t)}$ 下正好是**负 KL 散度**:
+
+$$\mathbb{E}_{q(s_t \mid h_t, o_t)}\big[\log p(s_t \mid s_{t-1}, a_{t-1}) - \log q(s_t \mid h_t, o_t)\big] = -\mathrm{KL}\big[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\big]$$
+
+合起来得到最终形式:
+
+$$\log p(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p(o_t \mid s_t) + \log p(r_t \mid s_t) - \mathrm{KL}\big[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+
+**每一步用的"工具"**
+
+| Step | 操作 | 工具 | 类型 |
+|---|---|---|---|
+| 1 | 乘 $q/q$ | 恒等式 | 数学 |
+| 2 | $\log \mathbb{E}$ 换成 $\mathbb{E}\log$ | **Jensen 不等式** | 数学(凹函数性质) |
+| 3 | 联合 $p$ 因子化 | RSSM 图模型(前面已推) | 模型设计 |
+| 4 | 后验 $q$ 因子化 | 变分设计(步骤 2 已推) | 变分设计 |
+| 5 | transition 项 + $q$ 项 合并 | KL 散度定义 | 数学 |
+
+→ **数学只占 2 步(Jensen + KL 定义),其余 3 步全是"代入图模型告诉我们的形式"**。
+
+**实现:怎么真的训这个 loss**
+
+理论上 ELBO 含 $\mathbb{E}_q$(对所有可能的 $s$ 轨迹积分),不可解。工程上用**单样本 + reparameterization** 估计:
+
+```python
+for batch in dataloader:
+    o[1:T], a[1:T], r[1:T] = batch
+
+    # 1. encoder 顺序采样一条 s 轨迹(重参数化)
+    h, s = init_h, init_s
+    s_seq, kl_terms = [], []
+    for t in 1..T:
+        h = GRU(h, s, a[t-1])                              # 确定性
+        mu_q, sigma_q = encoder(h, o[t])                   # 后验参数
+        mu_p, sigma_p = transition(h)                      # 先验参数(只用 h)
+        s = mu_q + sigma_q * eps,   eps ~ N(0, I)         # 重参数化
+        s_seq.append(s)
+        kl_terms.append( KL_gaussian(mu_q, sigma_q, mu_p, sigma_p) )  # 闭式
+
+    # 2. 算每一项 loss(用上一步采的 s)
+    L_recon  = - sum( log p_decoder(o[t] | s_seq[t]) for t )
+    L_reward = - sum( log p_reward(r[t] | s_seq[t]) for t )
+    L_kl     = sum( kl_terms )
+
+    L = L_recon + L_reward + L_kl
+    L.backward()        # 梯度同时回传到 4 个网络
+    optimizer.step()
+```
+
+**关键工程技巧**:
+
+| 技巧 | 作用 |
+|---|---|
+| **Reparameterization** | $s = \mu + \sigma \epsilon$ 让梯度能流过采样 |
+| **单样本估计** | 每条轨迹只采 1 次 $s$,靠 batch 平均降方差 |
+| **KL 闭式** | 两边都是高斯 → KL 有解析式,不用再采样 |
+| **梯度共享** | 同一个 $s$ 同时进入 3 个 loss,梯度自然在 encoder 上汇合 |
+
+> 💡 **一句话**:**ELBO = 真实 log-likelihood 算不出 → Jensen 造下界 → 图模型把 ELBO 展开成 3 个能算的项(重建 + reward + KL)→ Reparameterization 让梯度流过采样。**
+
 #### 3. 这样为什么能解决问题:具体对照
 
 | 信息类型 | World Models VAE | PlaNet encoder |

@@ -1750,6 +1750,100 @@ $$
 
 **All gradients flow back to the encoder through the shared variable $s_t$** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into $s_t$".
 
+**Objective: why ELBO?**
+
+What we really want to maximize is the model's log-likelihood of the real data:
+
+$$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
+
+But this marginal likelihood requires integrating out $s$, which is **intractable** (see the folded section in Step 2). **ELBO is a computable lower bound on it** — maximizing the ELBO automatically pushes up the true log-likelihood; the gap = $\mathrm{KL}[q \,\|\, \text{true posterior}]$, so the closer $q$ is, the tighter the bound.
+
+**Derivation: where does ELBO come from (5 steps)**
+
+**Step 1 — Introduce $q$ (multiply by 1)**
+
+$$\log p_\theta(o, r \mid a) = \log \int p_\theta(o, r, s \mid a) \, ds = \log \int q_\phi(s \mid o, a) \cdot \frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)} \, ds = \log \mathbb{E}_q\!\left[\frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)}\right]$$
+
+**Step 2 — Jensen's inequality** (log is concave, $\log \mathbb{E}[X] \geq \mathbb{E}[\log X]$):
+
+$$\log p_\theta(o, r \mid a) \;\geq\; \mathbb{E}_q\!\left[\log p_\theta(o, r, s \mid a) - \log q_\phi(s \mid o, a)\right]$$
+
+The right side is the definition of **ELBO**.
+
+**Step 3 — Expand the joint $p$'s factorization** (using the graphical-model decomposition derived above, plus the reward term):
+
+$$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p(s_t \mid s_{t-1}, a_{t-1}) + \log p(o_t \mid s_t) + \log p(r_t \mid s_t)\big]$$
+
+**Step 4 — Expand $q$'s factorization** (chain rule + Markov + filtering as derived in Step 2):
+
+$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q(s_t \mid h_t, o_t)$$
+
+**Step 5 — Merge transition term with $q$ term → KL**
+
+Substituting back into the ELBO, each $t$'s contribution is:
+
+$$\log p(o_t \mid s_t) + \log p(r_t \mid s_t) + \big[\log p(s_t \mid s_{t-1}, a_{t-1}) - \log q(s_t \mid h_t, o_t)\big]$$
+
+The last two terms under $\mathbb{E}_{q(s_t)}$ are exactly the **negative KL divergence**:
+
+$$\mathbb{E}_{q(s_t \mid h_t, o_t)}\big[\log p(s_t \mid s_{t-1}, a_{t-1}) - \log q(s_t \mid h_t, o_t)\big] = -\mathrm{KL}\big[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\big]$$
+
+Combining gives the final form:
+
+$$\log p(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p(o_t \mid s_t) + \log p(r_t \mid s_t) - \mathrm{KL}\big[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+
+**Tools used at each step**
+
+| Step | Operation | Tool | Type |
+|---|---|---|---|
+| 1 | Multiply by $q/q$ | Identity | Math |
+| 2 | $\log \mathbb{E}$ → $\mathbb{E}\log$ | **Jensen's inequality** | Math (concave-function property) |
+| 3 | Joint $p$ factorization | RSSM graphical model (derived above) | Model design |
+| 4 | Posterior $q$ factorization | Variational design (derived in Step 2) | Variational design |
+| 5 | Merge transition term + $q$ term | KL divergence definition | Math |
+
+→ **Math only does 2 steps (Jensen + KL definition); the other 3 are all "substitute in the form the graphical model gives us"**.
+
+**Implementation: how this loss is actually trained**
+
+In theory the ELBO contains $\mathbb{E}_q$ (an integral over all possible $s$ trajectories), which is intractable. In practice we use **single-sample + reparameterization**:
+
+```python
+for batch in dataloader:
+    o[1:T], a[1:T], r[1:T] = batch
+
+    # 1. encoder sequentially samples one s trajectory (reparameterized)
+    h, s = init_h, init_s
+    s_seq, kl_terms = [], []
+    for t in 1..T:
+        h = GRU(h, s, a[t-1])                              # deterministic
+        mu_q, sigma_q = encoder(h, o[t])                   # posterior params
+        mu_p, sigma_p = transition(h)                      # prior params (h only)
+        s = mu_q + sigma_q * eps,   eps ~ N(0, I)         # reparameterization
+        s_seq.append(s)
+        kl_terms.append( KL_gaussian(mu_q, sigma_q, mu_p, sigma_p) )  # closed form
+
+    # 2. compute each loss term (using the s sampled above)
+    L_recon  = - sum( log p_decoder(o[t] | s_seq[t]) for t )
+    L_reward = - sum( log p_reward(r[t] | s_seq[t]) for t )
+    L_kl     = sum( kl_terms )
+
+    L = L_recon + L_reward + L_kl
+    L.backward()        # gradients flow to all 4 networks simultaneously
+    optimizer.step()
+```
+
+**Key engineering tricks**:
+
+| Trick | Purpose |
+|---|---|
+| **Reparameterization** | $s = \mu + \sigma \epsilon$ lets gradients flow through sampling |
+| **Single-sample estimate** | Sample $s$ once per trajectory; batch averaging reduces variance |
+| **KL closed form** | Both sides are Gaussian → analytic KL, no extra sampling |
+| **Gradient sharing** | The same $s$ feeds 3 losses, so gradients naturally merge at the encoder |
+
+> 💡 **One sentence**: **ELBO = real log-likelihood is intractable → Jensen creates a lower bound → graphical model expands the ELBO into 3 computable terms (reconstruction + reward + KL) → reparameterization lets gradients flow through sampling.**
+
 #### 3. Why this concretely solves the problem
 
 | Information type | World Models VAE | PlaNet encoder |
