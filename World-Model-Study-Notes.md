@@ -1496,11 +1496,7 @@ The goal is to learn a policy that maximizes expected cumulative return $\mathbb
 flowchart LR
     subgraph A["🤖 PlaNet Agent"]
         direction LR
-        Enc["Encoder<br/>(belief)"]
-        WM["World Model<br/>(RSSM + reward head)"]
-        CEM["CEM planner<br/>(rolls out in latent)"]
-        Enc --> CEM
-        CEM -.uses.-> WM
+        Enc["Encoder<br/>(belief)"] --> CEM["CEM planner<br/>(rolls out in latent)"] -.uses.-> WM["World Model<br/>(RSSM + reward head)"]
     end
     Env("🌍 <b>Environment</b><br/>POMDP")
     A -- "action <i>aₜ</i>" --> Env
@@ -1780,12 +1776,8 @@ All 4 networks are now in place (encoder + transition + decoder + reward). PlaNe
 ```mermaid
 flowchart LR
     subgraph A["🤖 PlaNet Agent"]
-        direction TB
-        Enc["Encoder<br/>(belief)"]
-        WM["World Model<br/>(RSSM + reward head)"]
-        CEM["CEM planner<br/>(rolls out in latent)"]
-        Enc --> CEM
-        CEM -.uses.-> WM
+        direction LR
+        Enc["Encoder<br/>(belief)"] --> CEM["CEM planner<br/>(rolls out in latent)"] -.uses.-> WM["World Model<br/>(RSSM + reward head)"]
     end
     Env("🌍 <b>Environment</b><br/>POMDP / p_real(o, r | a)")
     A -- "action <i>aₜ</i>" --> Env

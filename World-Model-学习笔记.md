@@ -1495,11 +1495,7 @@ $$
 flowchart LR
     subgraph A["🤖 PlaNet Agent"]
         direction LR
-        Enc["Encoder<br/>(belief)"]
-        WM["World Model<br/>(RSSM + reward head)"]
-        CEM["CEM 规划器<br/>(在 latent rollout)"]
-        Enc --> CEM
-        CEM -.uses.-> WM
+        Enc["Encoder<br/>(belief)"] --> CEM["CEM 规划器<br/>(在 latent rollout)"] -.uses.-> WM["World Model<br/>(RSSM + reward head)"]
     end
     Env("🌍 <b>Environment</b><br/>POMDP")
     A -- "action <i>aₜ</i>" --> Env
@@ -1779,12 +1775,8 @@ $$\log p_\theta(o \mid a) \;\geq\; \mathbb{E}_{s \sim q_\phi(s \mid o, a)} \big[
 ```mermaid
 flowchart LR
     subgraph A["🤖 PlaNet Agent"]
-        direction TB
-        Enc["Encoder<br/>(belief)"]
-        WM["World Model<br/>(RSSM + reward head)"]
-        CEM["CEM 规划器<br/>(在 latent rollout)"]
-        Enc --> CEM
-        CEM -.uses.-> WM
+        direction LR
+        Enc["Encoder<br/>(belief)"] --> CEM["CEM 规划器<br/>(在 latent rollout)"] -.uses.-> WM["World Model<br/>(RSSM + reward head)"]
     end
     Env("🌍 <b>Environment</b><br/>POMDP / p_real(o, r | a)")
     A -- "action <i>aₜ</i>" --> Env
