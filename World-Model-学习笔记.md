@@ -1543,7 +1543,7 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 #### 2. PlaNet 的解法:联合优化
 
-##### 步骤1 - 起点:朴素的隐变量序列模型
+##### 步骤1 - 起点:朴素的隐变量序列模型(Latent State-Space Model, SSM)
 
 为了端到端地学一个能模拟 POMDP 的世界模型,最简单的形式就是一个**有隐变量的序列模型**:
 
