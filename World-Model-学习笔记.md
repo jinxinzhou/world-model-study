@@ -1801,18 +1801,14 @@ $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\lo
 视觉化:
 
 ```mermaid
-flowchart LR
-    subgraph Real["🌍 真实环境 (Environment)"]
-        ETrans["真 transition<br/>真 observation<br/>真 reward<br/>—— p_real(o, r | a)"]
-    end
+flowchart TB
+    Real["🌍 <b>真实环境</b><br/>p_real(o, r | a)"]
+    Data[("📊 训练数据<br/>(o, r, a) 轨迹")]
+    Model["📦 <b>PlaNet World Model</b><br/>p_θ(o, r | a)"]
 
-    subgraph Model["📦 PlaNet World Model (Agent 内部)"]
-        MTrans["p_θ(s'|s,a)<br/>p_θ(o|s)<br/>p_θ(r|s)<br/>—— p_θ(o, r | a)"]
-    end
-
-    Real == "采轨迹 (o, r, a)" ==> Data[("📊 训练数据")]
-    Data == "max E[log p_θ]<br/>≡ min KL(p_real ∥ p_θ)" ==> Model
-    Model -. "训练目标:<br/>在 KL 意义下贴近" .-> Real
+    Real -->|"采轨迹"| Data
+    Data -->|"max E[log p_θ] &nbsp;≡&nbsp; min KL(p_real ∥ p_θ)"| Model
+    Model -. "训练目标:在 KL 意义下贴近" .-> Real
 ```
 
 | 角度 | 解读 |

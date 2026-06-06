@@ -1802,18 +1802,14 @@ $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\lo
 Visualization:
 
 ```mermaid
-flowchart LR
-    subgraph Real["🌍 Real Environment"]
-        ETrans["true transition<br/>true observation<br/>true reward<br/>—— p_real(o, r | a)"]
-    end
+flowchart TB
+    Real["🌍 <b>Real Environment</b><br/>p_real(o, r | a)"]
+    Data[("📊 Training data<br/>(o, r, a) trajectories")]
+    Model["📦 <b>PlaNet World Model</b><br/>p_θ(o, r | a)"]
 
-    subgraph Model["📦 PlaNet World Model (inside Agent)"]
-        MTrans["p_θ(s'|s,a)<br/>p_θ(o|s)<br/>p_θ(r|s)<br/>—— p_θ(o, r | a)"]
-    end
-
-    Real == "collect trajectories (o, r, a)" ==> Data[("📊 training data")]
-    Data == "max E[log p_θ]<br/>≡ min KL(p_real ∥ p_θ)" ==> Model
-    Model -. "training goal:<br/>match in KL sense" .-> Real
+    Real -->|"collect trajectories"| Data
+    Data -->|"max E[log p_θ] &nbsp;≡&nbsp; min KL(p_real ∥ p_θ)"| Model
+    Model -. "training goal: match in KL sense" .-> Real
 ```
 
 | Angle | Interpretation |
