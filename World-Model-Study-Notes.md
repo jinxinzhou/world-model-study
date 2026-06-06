@@ -1603,9 +1603,7 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 
 This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **sufficient statistic** for all past (both s history and obs/action history).
 
-Three more angles to unpack:
-
-**(1) Why is the true posterior "intractable"?**
+**One final note: why is the true posterior "intractable"?**
 
 The true posterior is given by Bayes' rule:
 
@@ -1623,28 +1621,6 @@ This integral admits a closed form in only two cases:
 PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds → no closed-form integral → Monte Carlo estimates have **enormous variance** (in high-dim $s$ space, "right" trajectories are almost never sampled).
 
 > Hence the variational route: **don't compute the true posterior — find a tractable $q$ to approximate it**, and maximize the ELBO to bring $q$ closer to $p_\theta$.
-
-**(2) What is this approximation called?**
-
-> ⚠️ Strictly speaking this is **not classical mean-field**. The correct term is **structured mean-field** or **autoregressive variational posterior**.
-
-- **Classical mean-field** (most aggressive): $q(s_{1:T}) = \prod_t q(s_t)$ — factors are fully independent, no dependence between $s$'s
-- **PlaNet's q**: keeps the autoregressive chain where $s_t$ depends on $s_{t-1}$, only **simplifying what each factor conditions on** (each factor uses only $s_{t-1}$ and $o_t$)
-
-This "keep temporal structure, but simplify each factor locally" approach is **structured VI** — more expressive than classical mean-field (captures temporal correlations), simpler than fully-expanded smoothing posterior (each factor is small and can be sampled in parallel).
-
-**(3) How is $q$ actually used?**
-
-$q$ is not the goal itself — it is a **tool to make the ELBO computable**:
-
-1. **Sample $s \sim q$** — $q$ is Gaussian; doable via reparameterization
-2. **Reconstruction** — $\log p_\theta(o_t \mid s_t)$ is computed by the decoder NN
-3. **KL** — both $q(s_t \mid s_{t-1}, o_t)$ and the prior $p_\theta(s_t \mid s_{t-1})$ are Gaussians; KL has a closed form
-4. **Backprop** — via the reparameterization trick, gradients flow from the ELBO back to encoder $\theta_q$, decoder, transition
-
-This is exactly the underlying mechanism that makes Step 3's shared ELBO runnable.
-
-> 💡 **One-sentence understanding**: $q$ is an auxiliary encoder introduced to make the training objective computable. Via the chain rule, it decomposes "an approximation of the whole trajectory" into "small Gaussians per time step", and via two engineering-reasonable assumptions (Markov + filtering), each factor depends only on a small set of variables. This lets $q$ capture temporal correlations, sample efficiently, and be jointly gradient-optimized with the rest of the model.
 
 ##### Step 3 - Jointly train all networks with the shared ELBO
 

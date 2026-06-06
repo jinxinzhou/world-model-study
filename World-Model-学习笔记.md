@@ -1602,9 +1602,7 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 
 这是 PlaNet 做得**最大胆的一步** —— 它假设 $s_{t-1}$ 是对所有过去(包括 s 历史和 obs/action 历史)的**充分统计量**。
 
-下面再从三个维度补充说明。
-
-**(1) 为什么真后验"算不出来"**
+**最后再补充一点:为什么真后验"算不出来"**
 
 真后验由贝叶斯公式给出:
 
@@ -1622,28 +1620,6 @@ $$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) 
 PlaNet 是**非线性 NN + 连续高斯**,两个条件都不满足 → 积分**没有闭式解** → 蒙特卡洛估计**方差极大**(在高维 $s$ 空间里几乎采不到"对"的轨迹)。
 
 > 所以走变分路线:**不算真后验,而是找一个能算的 $q$ 去近似它**,并通过最大化 ELBO 让 $q$ 越来越接近 $p_\theta$。
-
-**(2) 这种近似叫什么?**
-
-> ⚠️ 严格来说**不是经典 mean-field**,正确叫法是 **structured mean-field** 或 **autoregressive variational posterior**。
-
-- **经典 mean-field**(最暴力的近似):$q(s_{1:T}) = \prod_t q(s_t)$ —— 因子完全独立,没有任何 $s$ 之间的依赖
-- **PlaNet 的 q**:保留了 $s_t$ 依赖 $s_{t-1}$ 的 autoregressive 链,只是**因子之间在条件上做了简化**(每个因子只用 $s_{t-1}$ 和 $o_t$)
-
-这种"保留时序结构、但每个因子局部简化"的做法叫 **structured VI** —— 比经典 mean-field 表达能力强(能 capture 时间相关性),又比"全展开"的 smoothing posterior 简单(每个因子小、能并行采)。
-
-**(3) $q$ 是怎么"被用"的?**
-
-$q$ 不是目标本身 —— 它是为了**让 ELBO 能算**的工具:
-
-1. **采样 $s \sim q$** — $q$ 是高斯,通过 reparameterization 可以做
-2. **重建** — $\log p_\theta(o_t \mid s_t)$ 由 decoder NN 算
-3. **KL** — $q(s_t \mid s_{t-1}, o_t)$ 和 prior $p_\theta(s_t \mid s_{t-1})$ 都是高斯,KL 有闭式
-4. **梯度回传** — 通过 reparameterization trick,梯度从 ELBO 流回 encoder $\theta_q$、decoder、transition
-
-这就是步骤 3 共享 ELBO 能跑起来的底层机制。
-
-> 💡 **一句话理解**:$q$ 是为了让"训练目标可计算"而引入的辅助 encoder。它通过链式法则把"对整条轨迹的近似"拆成"每个时间步的小高斯",并通过两个工程合理的假设(马尔可夫 + filtering)让每个因子只依赖少量变量。这样 $q$ 既能 capture 时间相关性,又能高效采样、和模型一起被梯度优化。
 
 ##### 步骤3 - 共享 ELBO 联合训练所有网络
 
