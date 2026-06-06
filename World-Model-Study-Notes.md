@@ -1804,6 +1804,24 @@ Therefore, **PlaNet's training objective is to maximize** the world model's log-
 
 $$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\big[\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})\big]$$
 
+<p align="center">
+  <img src="asset/planet-2019/ssm.png" alt="PlaNet paper Fig. 2(b) Stochastic State-Space Model" width="28%"/><br/>
+  <sub>↑ PlaNet paper Fig. 2(b): graphical model of the bare SSM. Circles = random variables, solid arrows = generative direction, dashed arrows = inference direction.</sub>
+</p>
+
+However, this $p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$ is **not directly computable** (see expand for the reason).
+
+<details>
+<summary><b>Expand: why the marginal likelihood is intractable</b></summary>
+
+The model is actually defined as a **latent-variable generative model** with $s$ (the bare SSM above):
+$$\underbrace{p_\theta(o, r \mid a)}_{\text{the marginal we want}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{the joint the model defines}} \, ds$$
+Using the chain-rule factorization from the Step 2 folded section:
+$$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
+**The joint is computable** (NN forward), but **integrating out $s$ has no closed form**, which is the root cause of the marginal likelihood being intractable.
+
+</details>
+
 Written in concrete form:
 
 $$
@@ -1827,11 +1845,6 @@ $$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
 **Where is $s$ here?** On the surface the formula only contains $o, r, a$, but $p_\theta(o, r \mid a)$ is **itself shorthand for a marginalization**:
 
 $$\underbrace{p_\theta(o, r \mid a)}_{\text{the marginal we want}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{the joint the model defines}} \, ds$$
-
-<p align="center">
-  <img src="asset/planet-2019/ssm.png" alt="PlaNet paper Fig. 2(b) Stochastic State-Space Model" width="28%"/><br/>
-  <sub>↑ PlaNet paper Fig. 2(b): graphical model of the bare SSM. Circles = random variables, solid arrows = generative direction, dashed arrows = inference direction.</sub>
-</p>
 
 The model is actually defined as a **latent-variable generative model** with $s$ (the bare SSM in Step 2):
 

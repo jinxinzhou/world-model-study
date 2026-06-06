@@ -1808,10 +1808,18 @@ $$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\b
   <sub>↑ PlaNet 论文 Fig. 2(b):朴素 SSM 的图模型。圆圈 = 随机变量,实线 = 生成方向,虚线 = 推理方向。</sub>
 </p>
 
-而模型其实是定义在**带隐变量 $s$ 的生成模型**上(上图 的朴素 SSM):
-$$\underbrace{p_\theta(o, r \mid a)}_{\text{我们想要的 marginal}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{模型实际定义的联合}} \, ds$$
+然而这个$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$ **无法计算**(具体原因见展开)。
 
-$$p_\theta(o, r, s \mid a) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
+<details>
+<summary><b>展开:为什么 marginal likelihood 算不出来</b></summary>
+
+模型其实是定义在**带隐变量 $s$ 的生成模型**上(上图 的朴素 SSM):
+$$\underbrace{p_\theta(o, r \mid a)}_{\text{我们想要的 marginal}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{模型实际定义的联合}} \, ds$$
+根据步骤 2 折叠的section:
+$$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
+**联合分布能算**(NN 前向),但**积掉 $s$ 没闭式解**, 这就是 marginal likelihood 算不出来的根本原因。
+
+</details>
 
 写成数学就是:
 
