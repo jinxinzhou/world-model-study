@@ -1754,17 +1754,7 @@ $$
 
 Before discussing the ELBO, answer a more foundational question: **why maximize $\log p_\theta(o, r \mid a)$ in the first place?**
 
-**(1) The essence of MLE**
-
-Find a $\theta$ that makes the model **think** the real data is "most likely". Intuition: if the real environment is $p_{\text{real}}$ and our model $p_\theta \approx p_{\text{real}}$, then real samples should also have high probability under $p_\theta$. Conversely — whichever $\theta$ makes the data look most reasonable is the $\theta$ closest to the real environment.
-
-It can be shown (law of large numbers + KL definition):
-
-$$\arg\max_\theta \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big] \;\;\Leftrightarrow\;\; \arg\min_\theta \mathrm{KL}\big[p_{\text{real}}(o, r \mid a) \,\|\, p_\theta(o, r \mid a)\big]$$
-
-→ **MLE = making $p_\theta$ approach the real environment in KL sense**; with enough data, $\theta_{\text{MLE}}$ is asymptotically unbiased and consistent.
-
-**(2) Why not other losses?**
+**(1) Why not other losses?**
 
 | Candidate | Problem |
 |---|---|
@@ -1773,7 +1763,7 @@ $$\arg\max_\theta \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(
 | **Contrastive learning** | Only learns representations, not a full generative distribution → cannot "imagine", CEM cannot plan |
 | **MLE / log-likelihood** ⭐ | Uses both $o$ and $r$; probability distribution captures multi-modality; has asymptotic theoretical guarantees |
 
-**(3) Why this particular form?**
+**(2) Why this particular form?**
 
 Three notable details in the formula:
 
@@ -1781,7 +1771,7 @@ Three notable details in the formula:
 - **Both $o$ and $r$**: $o$ supervises dynamics + representation quality; $r$ lets the model produce reward scores during latent rollouts — **CEM planning never touches the real env and must rely on model-predicted reward to pick the best action sequence**. Only $o$ → cannot plan; only $r$ → cannot do long-horizon prediction.
 - **Trajectory-level, not frame-level**: dynamics is temporal; the core thing to learn is "how the state evolves" — must look at adjacent frames. Frame-level learning degenerates into a VAE, dropping transition learning — this is exactly **World Models' problem**.
 
-**(4) Why log?**
+**(3) Why log?**
 
 | Property | Purpose |
 |---|---|
