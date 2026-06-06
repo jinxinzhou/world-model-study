@@ -1567,16 +1567,95 @@ $$
 
 ##### Step 2 - Inference difficulty: intractable true posterior → variational encoder
 
-To train the Step-1 model, in theory one should sample from the true posterior $p_\theta(s_t \mid o_{\le t}, a_{<t})$ to infer $s_t$. But this posterior is **intractable** (transition / observation are NNs — nonlinear, no closed-form integration). The fix is to introduce an **approximate posterior** q (also NN-parameterized) as an **encoder**:
+To train the Step-1 model, in theory one should sample latent trajectories from the **true posterior** $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$. But this posterior is **intractable**. The fix is to introduce an **approximate posterior** $q$ (also NN-parameterized) as an **encoder**:
 
 $$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
-Three key points:
-1. This is the VAE's **encoder**, but in **trajectory form**
-2. It is the **filtering posterior** (only sees $o_{≤t}$, not the future), since deployment also only has access to the past
-3. **Mean-field** assumption: q is factorized into per-step $q(s_t \mid ...)$
+Five angles to unpack this step:
 
-> 🔑 Every variational inference method goes through this step — "true posterior won't do, use an approximation". With this encoder in place, the expectation E_q in the upcoming ELBO can be evaluated on q, with gradients flowing via reparameterization.
+**(1) What is q approximating?**
+
+$q$ approximates **the distribution over the full latent state trajectory, conditioned on the full observation and action sequences** — i.e., the true posterior $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$.
+
+| | True posterior $p_\theta$ | Approximate posterior $q$ |
+|---|---|---|
+| Whose | The model's own intrinsic distribution | An extra NN we add (encoder) |
+| Computable | Exists in theory, but **intractable** | Designed to be tractable |
+| Goal | — | Optimize to make $q$ as close to $p_\theta$ as possible |
+
+**(2) Why is the true posterior "intractable"?**
+
+The true posterior is given by Bayes' rule:
+
+$$p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T}) = \frac{p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T})}{p_\theta(o_{1:T} \mid a_{1:T})}$$
+
+The problem is not the numerator (it is just the model's joint distribution, which is writable). The problem is the **denominator** — this marginal likelihood requires integrating out all possible latent trajectories:
+
+$$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) \, ds_{1:T}$$
+
+This integral admits a closed form in only two cases:
+
+- ✅ **Linear + Gaussian**: Kalman filter's analytic solution
+- ✅ **Discrete + small state space**: brute-force enumeration
+
+PlaNet has **nonlinear NNs + continuous Gaussian** — neither condition holds → no closed-form integral → Monte Carlo estimates have **enormous variance** (in high-dim $s$ space, "right" trajectories are almost never sampled).
+
+> Hence the variational route: **don't compute the true posterior — find a tractable $q$ to approximate it**, and maximize the ELBO to bring $q$ closer to $p_\theta$.
+
+**(3) Why can $q$ be factorized this way?**
+
+The factorization relies on the **chain rule of probability + two simplifying assumptions**.
+
+**Step A — chain rule (exact)**
+
+Any joint distribution can be written sequentially in time:
+
+$$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q\big(s_t \mid s_{<t}, o_{1:T}, a_{1:T}\big)$$
+
+No approximation yet — pure mathematical identity.
+
+**Step B — Markov approximation (drop distant $s$ history)**
+
+$$q(s_t \mid s_{<t}, \cdots) \;\approx\; q(s_t \mid s_{t-1}, \cdots)$$
+
+**Reason**: **The generative model is itself Markov** (transition depends only on $s_{t-1}, a_{t-1}$). Since $p_\theta$ is Markov, having $q$ keep the same chain structure is the most natural way to **preserve the model's symmetry**.
+
+**Step C — filtering approximation (drop future observations)**
+
+$$q(s_t \mid s_{t-1}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+
+Why not look at future $o_{>t}$?
+
+| Option | Name | Trade-off |
+|---|---|---|
+| Only see $o_{\le t}$ | **filtering posterior** | At inference (deployment / planning), only past obs is available — **there is no future $o$** |
+| See full $o_{1:T}$ | **smoothing posterior** | During training, the full trajectory is available; more info to estimate $s_t$ |
+
+PlaNet picks filtering, key reason: **the $q$ learned at training must be the same $q$ used at deployment**. If training-time $q$ peeked at future observations, deployment couldn't access them, and $q$ would be unusable.
+
+> 💡 Note: although each $q$ factor's **direct conditioning** is only $(s_{t-1}, a_{t-1}, o_t)$, $s_{t-1}$ is itself sampled from the previous step's $q$, which depended on $s_{t-2}$ and $o_{t-1}$, and so on. So **the entire trajectory's $q$ implicitly depends on $o_{\le t}$**. Chain rule + sequential sampling automatically carries "historical observations" forward through $s$.
+
+**(4) What is this approximation called?**
+
+> ⚠️ Strictly speaking this is **not classical mean-field**. The correct term is **structured mean-field** or **autoregressive variational posterior**.
+
+- **Classical mean-field** (most aggressive): $q(s_{1:T}) = \prod_t q(s_t)$ — factors are fully independent, no dependence between $s$'s
+- **PlaNet's q**: keeps the autoregressive chain where $s_t$ depends on $s_{t-1}$, only **simplifying what each factor conditions on** (each factor uses only $s_{t-1}$ and $o_t$)
+
+This "keep temporal structure, but simplify each factor locally" approach is **structured VI** — more expressive than classical mean-field (captures temporal correlations), simpler than fully-expanded smoothing posterior (each factor is small and can be sampled in parallel).
+
+**(5) How is $q$ actually used?**
+
+$q$ is not the goal itself — it is a **tool to make the ELBO computable**:
+
+1. **Sample $s \sim q$** — $q$ is Gaussian; doable via reparameterization
+2. **Reconstruction** — $\log p_\theta(o_t \mid s_t)$ is computed by the decoder NN
+3. **KL** — both $q(s_t \mid s_{t-1}, o_t)$ and the prior $p_\theta(s_t \mid s_{t-1})$ are Gaussians; KL has a closed form
+4. **Backprop** — via the reparameterization trick, gradients flow from the ELBO back to encoder $\theta_q$, decoder, transition
+
+This is exactly the underlying mechanism that makes Step 3's shared ELBO runnable.
+
+> 💡 **One-sentence understanding**: $q$ is an auxiliary encoder introduced to make the training objective computable. Via the chain rule, it decomposes "an approximation of the whole trajectory" into "small Gaussians per time step", and via two engineering-reasonable assumptions (Markov + filtering), each factor depends only on a small set of variables. This lets $q$ capture temporal correlations, sample efficiently, and be jointly gradient-optimized with the rest of the model.
 
 ##### Step 3 - Jointly train all networks with the shared ELBO
 
