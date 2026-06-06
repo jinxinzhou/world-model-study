@@ -1640,9 +1640,44 @@ $$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) 
 
 **分子具体怎么"能算"(无需 encoder)**
 
-由 RSSM 的图模型,联合分布按时间链式分解:
+这个分解不是数学硬推出来的,而是 **2 次链式法则 + 2 个图模型假设**。RSSM 的图结构是:
+
+```
+   a_0       a_1       a_2 ...
+     ↘         ↘         ↘
+  s_0 ─→ s_1 ─→ s_2 ─→ s_3 ...     (transition: 状态 Markov)
+          ↓     ↓     ↓
+          o_1   o_2   o_3            (observation: o_t 只看 s_t)
+```
+
+**Step 1 — 按"先 s 后 o"拆开**(chain rule,严格成立):
+
+$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) \cdot p_\theta(s_{1:T} \mid a_{1:T})$$
+
+**Step 2 — 观测条件独立**(图模型假设:POMDP observation function):给定 $s_t$,$o_t$ 与其他变量都条件独立:
+
+$$p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) = \prod_{t=1}^{T} p_\theta(o_t \mid s_t)$$
+
+**Step 3 — s 序列按时间拆**(chain rule,严格成立):
+
+$$p_\theta(s_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} p_\theta(s_t \mid s_{<t}, a_{1:T})$$
+
+**Step 4 — Markov transition**(图模型假设:生成模型本身就是 Markov):给定 $s_{t-1}, a_{t-1}$,$s_t$ 与其他变量都条件独立:
+
+$$p_\theta(s_t \mid s_{<t}, a_{1:T}) = p_\theta(s_t \mid s_{t-1}, a_{t-1})$$
+
+**合起来**:Step 2 + Step 4 代回 Step 1,得到联合的完整因子化形式
 
 $$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} \underbrace{p_\theta(s_t \mid s_{t-1}, a_{t-1})}_{\text{transition NN}} \cdot \underbrace{p_\theta(o_t \mid s_t)}_{\text{decoder NN}}$$
+
+| Step | 操作 | 类型 | 依据 |
+|---|---|---|---|
+| 1 | 联合 → s 部分 · o 部分 | chain rule | 概率恒等式 |
+| 2 | $o_{1:T}$ 拆成 $\prod_t p(o_t \mid s_t)$ | **图模型假设** | 观测条件独立 |
+| 3 | $s_{1:T}$ 按时间拆 | chain rule | 概率恒等式 |
+| 4 | $s_t$ 简化到只依赖 $s_{t-1}, a_{t-1}$ | **图模型假设** | Markov transition |
+
+> ⭐ 一句话:**分解形式不是推出来的,而是图模型的设计决定的**。链式法则只负责"按时间拆开",真正起作用的是 RSSM/POMDP 的 DAG 结构告诉我们"哪些条件可以丢"。不同的世界模型(Dreamer / Transformer WM / Diffusion WM)有不同的因子化,都遵循"先 chain rule 拆,再按图结构丢条件"的同一套流程。
 
 每个因子都是高斯,均值/方差由 NN 给出:
 

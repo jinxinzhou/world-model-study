@@ -1641,9 +1641,44 @@ For PlaNet:
 
 **How the numerator is "computable" concretely (no encoder needed)**
 
-By the RSSM graphical model, the joint factorizes by the chain rule:
+This factorization is not algebraically derived — it follows from **2 applications of the chain rule + 2 graphical-model assumptions**. The RSSM graph structure:
+
+```
+   a_0       a_1       a_2 ...
+     ↘         ↘         ↘
+  s_0 ─→ s_1 ─→ s_2 ─→ s_3 ...     (transition: state Markov)
+          ↓     ↓     ↓
+          o_1   o_2   o_3            (observation: o_t depends only on s_t)
+```
+
+**Step 1 — split as "s first, then o"** (chain rule, exact):
+
+$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) \cdot p_\theta(s_{1:T} \mid a_{1:T})$$
+
+**Step 2 — observation conditional independence** (graphical-model assumption: POMDP observation function): given $s_t$, $o_t$ is conditionally independent of everything else:
+
+$$p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) = \prod_{t=1}^{T} p_\theta(o_t \mid s_t)$$
+
+**Step 3 — chain-rule split the s sequence in time** (exact):
+
+$$p_\theta(s_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} p_\theta(s_t \mid s_{<t}, a_{1:T})$$
+
+**Step 4 — Markov transition** (graphical-model assumption: the generative model is itself Markov): given $s_{t-1}, a_{t-1}$, $s_t$ is conditionally independent of everything else:
+
+$$p_\theta(s_t \mid s_{<t}, a_{1:T}) = p_\theta(s_t \mid s_{t-1}, a_{t-1})$$
+
+**Combine**: substituting Step 2 + Step 4 back into Step 1 gives the full factorized form
 
 $$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} \underbrace{p_\theta(s_t \mid s_{t-1}, a_{t-1})}_{\text{transition NN}} \cdot \underbrace{p_\theta(o_t \mid s_t)}_{\text{decoder NN}}$$
+
+| Step | Operation | Type | Reason |
+|---|---|---|---|
+| 1 | joint → s-part · o-part | chain rule | probability identity |
+| 2 | $o_{1:T}$ → $\prod_t p(o_t \mid s_t)$ | **graphical-model assumption** | observation conditional independence |
+| 3 | $s_{1:T}$ split in time | chain rule | probability identity |
+| 4 | $s_t$ simplified to only depend on $s_{t-1}, a_{t-1}$ | **graphical-model assumption** | Markov transition |
+
+> ⭐ One sentence: **the factorization isn't derived — it's dictated by the graphical-model design**. Chain rule just splits things in time; what actually does the work are the RSSM/POMDP DAG assumptions telling us "which conditions can be dropped". Different world models (Dreamer / Transformer-based WM / Diffusion WM) have different factorizations but all follow the same procedure: "chain-rule first, then drop conditions by graph structure".
 
 Each factor is Gaussian with mean / variance produced by an NN:
 
