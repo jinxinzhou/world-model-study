@@ -1554,7 +1554,20 @@ To end-to-end learn a world model that simulates the POMDP, the simplest form is
 
 ##### Step 2 - Inference difficulty: intractable true posterior → variational encoder
 
-On top of this, PlaNet adds an **encoder** (to infer latent s_t from observations; details in §3), and places all 4 networks (encoder / transition / decoder / reward) under the **same objective function, jointly trained**:
+To train the Step-1 model, in theory one should sample from the true posterior p(s_t ∣ o_{≤t}, a_{<t}) to infer s_t. But this posterior is **intractable** (transition / observation are NNs — nonlinear, no closed-form integration). The fix is to introduce an **approximate posterior** q (also NN-parameterized) as an **encoder**:
+
+q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
+
+Three key points:
+1. This is the VAE's **encoder**, but in **trajectory form**
+2. It is the **filtering posterior** (only sees o_{≤t}, not the future), since deployment also only has access to the past
+3. **Mean-field** assumption: q is factorized into per-step q(s_t ∣ ...)
+
+> 🔑 Every variational inference method goes through this step — "true posterior won't do, use an approximation". With this encoder in place, the expectation E_q in the upcoming ELBO can be evaluated on q, with gradients flowing via reparameterization.
+
+##### Step 3 - Jointly train all networks with the shared ELBO
+
+All 4 networks are now in place (encoder + transition + decoder + reward). PlaNet places them under the **same objective function, jointly trained**:
 
 <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
 
@@ -1566,22 +1579,7 @@ On top of this, PlaNet adds an **encoder** (to infer latent s_t from observation
 
 **All gradients flow back to the encoder through the shared variable s_t** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into s_t".
 
-#### 3. The inference difficulty: intractable posterior → variational encoder
-
-§2 mentioned that one of the 4 networks is an encoder. **Why is this encoder needed?**
-
-Training requires inferring s_t from observations; in theory one should sample from the true posterior p(s_t ∣ o_{≤t}, a_{<t}). But this posterior is **intractable** (transition / observation are NNs — nonlinear, no closed-form integration). The fix is to introduce an **approximate posterior** q, also NN-parameterized:
-
-q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
-
-Three key points:
-1. This is the VAE's **encoder**, but in **trajectory form**
-2. It is the **filtering posterior** (only sees o_{≤t}, not the future), since deployment also only has access to the past
-3. **Mean-field** assumption: q is factorized into per-step q(s_t ∣ ...)
-
-> 🔑 With this encoder in place, the ELBO in §2 above becomes actually trainable — the expectation E_q is taken over q, and gradients flow via reparameterization. Every variational inference method goes through this step — "true posterior won't do, use an approximation".
-
-#### 4. Why this concretely solves the problem
+#### 3. Why this concretely solves the problem
 
 | Information type | World Models VAE | PlaNet encoder |
 |---|---|---|
@@ -1590,12 +1588,12 @@ Three key points:
 | Reward-relevant features | ❌ Not needed for reconstruction, not learned | ✅ Pulled back by the reward term |
 | Physical regularities (inertia, collision) | ❌ Not learned | ✅ Pulled back by transition consistency |
 
-#### 5. Side benefits: diagnosability + extensibility
+#### 4. Side benefits: diagnosability + extensibility
 
 - **Diagnosability**: decoder degrades → reconstruction loss rises; transition degrades → KL rises — **the failing component is locatable** (in World Models, a bad z could be the VAE's fault or the MDN-RNN's; responsibilities aren't split, hard to localize)
 - **Extensibility**: to add a new constraint (e.g., latent overshooting), just append a new term to the ELBO — **there is a theoretical basis** (continue the variational derivation), rather than World Models' "just slap on another loss and weight it"
 
-#### 6. One-sentence summary
+#### 5. One-sentence summary
 
 > **The World Models VAE has no idea what z will be used for — it just wants to reconstruct this frame well.**
 > **The PlaNet encoder knows: my s_t will be rolled forward by the transition, used to predict reward, and decoded into images — the gradients from these three downstream tasks will force me to pack into s_t whatever is useful for all of them.**

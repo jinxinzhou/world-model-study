@@ -1553,7 +1553,20 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 ##### 步骤2 - 推理的难题:真后验不可解 → variational encoder
 
-PlaNet 在这基础上再加一个 **encoder**(用于从观测推断 latent s_t,具体见 §3),把 4 个网络(encoder / transition / decoder / reward)放在**同一个目标函数下联合训**:
+要训练步骤1 的模型,理论上应该从真后验 p(s_t ∣ o_{≤t}, a_{<t}) 采样来反推 s_t,但这个后验**算不出来**(transition / observation 都是 NN,非线性,没法解析积分)。解法是引入一个**近似后验** q(也是 NN 参数化的)作为 **encoder**:
+
+q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
+
+三个关键点:
+1. 这就是 VAE 里的 **encoder**,但是**轨迹版**
+2. 是 **filtering 后验**(只看 o_{≤t},不看未来),因为部署时也只能看到过去
+3. **mean-field** 假设:q 被分解成每一步独立的 q(s_t ∣ ...)
+
+> 🔑 所有变分推断方法都要走这一步 —— "真后验不行,用近似的"。有了这个 encoder,后面 ELBO 里的期望 E_q 就能在 q 上取,通过 reparameterization 算梯度。
+
+##### 步骤3 - 共享 ELBO 联合训练所有网络
+
+至此 4 个网络(encoder + transition + decoder + reward)全部到位。PlaNet 把它们放在**同一个目标函数下联合训**:
 
 <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
 
@@ -1565,22 +1578,7 @@ PlaNet 在这基础上再加一个 **encoder**(用于从观测推断 latent s_t,
 
 **所有梯度通过 s_t 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 s_t"。
 
-#### 3. 推理的难题:真后验不可解 → variational encoder
-
-§2 提到 4 个网络中有一个是 encoder。**为什么需要这个 encoder?**
-
-训练时需要从观测反推 s_t,理论上应该从真后验 p(s_t ∣ o_{≤t}, a_{<t}) 采样,但这个后验**算不出来**(transition / observation 都是 NN,非线性,没法解析积分)。解法是引入一个**近似后验** q,也用 NN 参数化:
-
-q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
-
-三个关键点:
-1. 这就是 VAE 里的 **encoder**,但是**轨迹版**
-2. 是 **filtering 后验**(只看 o_{≤t},不看未来),因为部署时也只能看到过去
-3. **mean-field** 假设:q 被分解成每一步独立的 q(s_t ∣ ...)
-
-> 🔑 有了这个 encoder,上面 §2 那个 ELBO 才能真的训起来 —— 公式里的期望 E_q 就在 q 上取,通过 reparameterization 算梯度。所有变分推断方法都要走这一步 —— "真后验不行,用近似的"。
-
-#### 4. 这样为什么能解决问题:具体对照
+#### 3. 这样为什么能解决问题:具体对照
 
 | 信息类型 | World Models VAE | PlaNet encoder |
 |---|---|---|
@@ -1589,12 +1587,12 @@ q(s_{1:T} ∣ o_{1:T}, a_{1:T}) = ∏_t q(s_t ∣ s_{t-1}, a_{t-1}, o_t)
 | 与 reward 相关的特征 | ❌ 重建不需要,不学 | ✅ reward 项反推 |
 | 物理规律(惯性、碰撞) | ❌ 不学 | ✅ transition 一致性反推 |
 
-#### 5. 副产物:可诊断 + 可扩展
+#### 4. 副产物:可诊断 + 可扩展
 
 - **诊断性**:decoder 学坏 → 重建 loss 升;transition 学坏 → KL 升 —— **能定位是哪个组件出问题**(World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,职能未拆开,定位困难)
 - **可扩展性**:想加新约束(如 latent overshooting)直接在 ELBO 后面加项即可,**理论上有依据**(变分推导继续走),而不是 World Models 的"再拍个 loss 加权"
 
-#### 6. 一句话总结
+#### 5. 一句话总结
 
 > **World Models 的 VAE 不知道 z 会被拿去干什么 —— 它只想"重建好这一帧"。**
 > **PlaNet 的 encoder 知道:我编出的 s_t 会被 transition 滚向未来、被 reward 预测奖励、被 decoder 还原图像 —— 这三个下游任务的梯度会逼着我把对它们都有用的信息全塞进 s_t。**
