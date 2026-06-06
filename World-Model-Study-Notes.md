@@ -1754,16 +1754,7 @@ $$
 
 Before discussing the ELBO, answer a more foundational question: **why maximize $\log p_\theta(o, r \mid a)$ in the first place?**
 
-**(1) Why not other losses?**
-
-| Candidate | Problem |
-|---|---|
-| **MSE** (used by World Models' VAE) | Implicit single-mode Gaussian; **cannot express multi-modal futures** (ball left or right? MSE averages → predicts "blurry ball") |
-| **Pure RL reward signal** | Doesn't use observations as supervision; **sample efficiency is 100× worse** (the core gap between model-based and model-free) |
-| **Contrastive learning** | Only learns representations, not a full generative distribution → cannot "imagine", CEM cannot plan |
-| **MLE / log-likelihood** ⭐ | Uses both $o$ and $r$; probability distribution captures multi-modality; has asymptotic theoretical guarantees |
-
-**(2) Why this particular form?**
+**(1) Why this particular form?**
 
 Three notable details in the formula:
 
@@ -1771,7 +1762,7 @@ Three notable details in the formula:
 - **Both $o$ and $r$**: $o$ supervises dynamics + representation quality; $r$ lets the model produce reward scores during latent rollouts — **CEM planning never touches the real env and must rely on model-predicted reward to pick the best action sequence**. Only $o$ → cannot plan; only $r$ → cannot do long-horizon prediction.
 - **Trajectory-level, not frame-level**: dynamics is temporal; the core thing to learn is "how the state evolves" — must look at adjacent frames. Frame-level learning degenerates into a VAE, dropping transition learning — this is exactly **World Models' problem**.
 
-**(3) Why log?**
+**(2) Why log?**
 
 | Property | Purpose |
 |---|---|
