@@ -1544,7 +1544,15 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 #### 2. PlaNet's fix: share one ELBO
 
-To **end-to-end learn a world model that simulates the POMDP**, the simplest form is a **latent variable sequence model** — each of the POMDP triple from §🧭 Problem Setup is parameterized by an NN: p(s_t ∣ s_{t-1}, a_{t-1}), p(o_t ∣ s_t), p(r_t ∣ s_t), directly learning the POMDP's transition, observation, and reward functions. **No h yet, no RSSM** — just the simplest latent SSM.
+##### Step 1: Vanilla Latent Variable Sequence Model
+
+To end-to-end learn a world model that simulates the POMDP, the simplest form is a **latent variable sequence model** — NN-parameterize the real-environment distribution from §🧭 Problem Setup (upright p) into a learnable world model (italic p_θ):
+
+<p align="center"><img src="asset/formulas/f20.png" width="520"/></p>
+
+**No h yet, no RSSM** — just the simplest latent SSM.
+
+> 📝 **Notation convention**: this note uses **upright p** (e.g., `p(s_t | ...)`, as in §🧭 Problem Setup) for the real-environment distribution (the POMDP), and **italic p_θ** (e.g., `p_θ(s_t | ...)`) for PlaNet's learned world model — training amounts to making p_θ ≈ p.
 
 > Analogous to the VAE: first put up the "latent + Gaussian decoder" skeleton, then talk about training. Same idea here — define the model form first.
 
