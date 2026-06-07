@@ -2092,6 +2092,7 @@ In RSSM, $s_t$ is parameterized by **two** distributions, differing only in **wh
 "**Rolling the prior forward $d$ steps**" means: starting from some $(h_t, s_t)$ and **without ever touching any real observation**, sample $d$ steps ahead autoregressively using only the prior:
 
 ```python
+# prior path (planning / imagining the future — cannot see future obs)
 h, s = h_t, s_t                       # starting point (came from posterior)
 for k in 1..d:
     h = GRU(h, s, a[t+k-1])           # advance deterministic memory with the real action
@@ -2101,7 +2102,19 @@ for k in 1..d:
 # — a "d-step-ahead latent" extrapolated purely by the model
 ```
 
-The **only** difference vs the encoder-side rollout is the line that samples $s$: the encoder peeks at $o_{t+k}$, the prior does not. This is exactly the situation **at planning time** — future observations have not happened yet, so we must rely on the prior alone.
+For contrast, at training time the encoder **rolls the same $d$ steps**, but peeks at the real observation every step:
+
+```python
+# encoder path (training time — sees real o at every step)
+h, s = h_t, s_t                       # same starting point
+for k in 1..d:
+    h = GRU(h, s, a[t+k-1])           # same
+    mu_q, sigma_q = encoder(h, o[t+k]) # encoder peeks at the real o_{t+k}!
+    s = mu_q + sigma_q * eps,  eps ~ N(0, I)   # reparameterized sample
+# After the loop we have the d-step-ahead latent under the posterior path
+```
+
+The **only** difference between the two is the line that samples $s$: encoder takes $(h, o_{t+k})$, prior takes only $h$. This is exactly the situation **at planning time** — future observations have not happened yet, so we must rely on the prior alone.
 
 → Both candidate fixes below build on this same "roll $d$ steps" operation; they differ only in what they do with $\hat s_{t+d}$.
 

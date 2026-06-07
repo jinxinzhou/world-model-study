@@ -2081,6 +2081,7 @@ RSSM 里 $s_t$ 由**两个**分布刻画,差别全在**是否看观测**:
 "**用 prior 滚 $d$ 步**"就是从某个起点 $(h_t, s_t)$ 出发,**全程不接触任何真实观测**,纯靠 prior 自回归地往前采 $d$ 步:
 
 ```python
+# prior 路径(规划 / 想象未来,看不到 obs)
 h, s = h_t, s_t                       # 起点(来自 posterior)
 for k in 1..d:
     h = GRU(h, s, a[t+k-1])           # 用真实动作,推进确定性记忆
@@ -2090,7 +2091,19 @@ for k in 1..d:
 # —— 完全靠模型外推出来的"d 步后未来 latent"
 ```
 
-跟训练时 encoder 路径的**唯一差别**就在采 $s$ 那一行:encoder 偷看 $o_{t+k}$,prior 不偷看。这正好对应**规划时的实际行为** —— 未来观测还没发生,只能靠 prior。
+作为对照,训练时 encoder **同样滚 $d$ 步**,但每一步都看真实观测:
+
+```python
+# encoder 路径(训练时,每步看到真实 o)
+h, s = h_t, s_t                       # 起点(同上)
+for k in 1..d:
+    h = GRU(h, s, a[t+k-1])           # 同上
+    mu_q, sigma_q = encoder(h, o[t+k]) # encoder 偷看真实 o_{t+k}!
+    s = mu_q + sigma_q * eps,  eps ~ N(0, I)   # 重参数化采样
+# 跑完得到 posterior 路径下 d 步后的 latent
+```
+
+两段**唯一的差别**就在采 $s$ 那一行:encoder 吃 $(h, o_{t+k})$,prior 只吃 $h$。这正好对应**规划时的实际行为** —— 未来观测还没发生,只能靠 prior。
 
 → 接下来两条候选路径都基于这同一个"滚 $d$ 步"操作,差别只在拿 $\hat s_{t+d}$ 干什么。
 
