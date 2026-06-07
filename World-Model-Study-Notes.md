@@ -1828,6 +1828,12 @@ $$
 \ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
 
+Combining the **outer expectation over real data** with the **inner ELBO lower bound**, and **adding the encoder parameters $\phi$ to the optimization variables**, gives the training objective whose gradients PlaNet actually backpropagates:
+
+$$
+\boxed{\;\max_{\theta,\,\phi}\; \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}} \left[\, \sum_{t=1}^{T} \Big( \underbrace{\mathbb{E}_{s_t \sim q_\phi}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big]}_{\text{reconstruction + reward}} \;-\; \underbrace{\mathrm{KL}\!\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]}_{\text{KL}} \Big) \,\right]\;}
+$$
+
 All three loss terms are taken in expectation over $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ (reparameterized sample). So **the encoder enters the first two terms through the sampled $s_t$**, with gradients flowing back along $s_t$ into $\phi$:
 
 | Loss term (expectation over $s_t \sim q_\phi$) | Gradient path | What it tells the encoder (backward) |

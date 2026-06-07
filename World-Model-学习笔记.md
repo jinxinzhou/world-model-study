@@ -1827,6 +1827,12 @@ $$
 \ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
 
+把**外层"对真实数据求期望"** 和**内层 ELBO 下界** 拼起来,**同时把 encoder 参数 $\phi$ 也加入优化变量**,就得到 PlaNet 实际反传梯度的训练目标:
+
+$$
+\boxed{\;\max_{\theta,\,\phi}\; \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}} \left[\, \sum_{t=1}^{T} \Big( \underbrace{\mathbb{E}_{s_t \sim q_\phi}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big]}_{\text{重建 + reward}} \;-\; \underbrace{\mathrm{KL}\!\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]}_{\text{KL}} \Big) \,\right]\;}
+$$
+
 三项 loss 都是在 $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ 下取期望(reparameterization),所以 **encoder 通过被采样出的 $s_t$ 进入前两项**,梯度沿 $s_t$ 反向流回 $\phi$:
 
 | Loss 项(对 $s_t \sim q_\phi$ 取期望) | 梯度路径 | 反向告诉 encoder 什么 |
