@@ -1836,49 +1836,6 @@ $$
 
 **All gradients flow back to the encoder through the shared variable $s_t$** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into $s_t$".
 
-**Objective: why ELBO?**
-
-What we really want to maximize is the model's log-likelihood of the real data:
-
-$$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
-
-**Where is $s$ here?** On the surface the formula only contains $o, r, a$, but $p_\theta(o, r \mid a)$ is **itself shorthand for a marginalization**:
-
-$$\underbrace{p_\theta(o, r \mid a)}_{\text{the marginal we want}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{the joint the model defines}} \, ds$$
-
-The model is actually defined as a **latent-variable generative model** with $s$ (the bare SSM in Step 2):
-
-$$p_\theta(o, r, s \mid a) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
-
-**The joint is computable** (NN forward), but **integrating out $s$ has no closed form** (see the folded section in Step 2) — this is the root cause of the marginal likelihood being intractable.
-
-**ELBO is a computable lower bound on it**:
-
-$$\log p_\theta(o, r \mid a) \;\geq\; \text{ELBO}(\theta, \phi)$$
-
-Maximizing the ELBO automatically pushes up the true log-likelihood. The exact gap:
-
-$$\underbrace{\log p_\theta(o, r \mid a)}_{\text{what we want to maximize}} - \underbrace{\text{ELBO}}_{\text{what we actually maximize}} = \mathrm{KL}\big[\,q_\phi(s \mid o, a) \;\big\|\; \underbrace{p_\theta(s \mid o, a)}_{\text{true posterior}}\,\big]$$
-
-- $q_\phi$ **exactly equals the true posterior** → KL = 0 → ELBO equals $\log p_\theta$ exactly → maximizing ELBO ≡ maximizing what we actually want
-- $q_\phi$ **far from the true posterior** → KL is large → ELBO is a loose lower bound → optimizing ELBO does not necessarily lift the log-likelihood
-
-→ **the quality of the encoder $q_\phi$ directly determines training quality**.
-
-```mermaid
-flowchart TB
-    Goal["🎯 Want to maximize:<br/>log p_θ(o, r | a)<br/>(marginal, intractable)"]
-    Joint["📦 Computable:<br/>log p_θ(o, r, s | a)<br/>(joint, needs s)"]
-    Issue["❌ ∫ ... ds has no closed form<br/>and no ground-truth s in training data"]
-    Sol["✅ Introduce q_φ(s | o, a)<br/>and build ELBO ≤ log p_θ"]
-    Gap["gap = KL[q_φ ∥ p_θ(s | o, a)]<br/>better q → smaller gap → tighter ELBO"]
-
-    Goal --> Issue
-    Joint --> Issue
-    Issue --> Sol
-    Sol --> Gap
-```
-
 <details>
 <summary><b>Derivation: where does ELBO come from (5 steps)</b></summary>
 
@@ -1927,8 +1884,6 @@ $$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p_\theta(o_t \mid
 → **Math only does 2 steps (Jensen + KL definition); the other 3 are all "substitute in the form the graphical model gives us"**.
 
 </details>
-
-**Implementation: how this loss is actually trained**
 
 In theory the ELBO contains $\mathbb{E}_q$ (an integral over all possible $s$ trajectories), which is intractable. In practice we use **single-sample + reparameterization**:
 
