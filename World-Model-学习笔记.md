@@ -2139,6 +2139,8 @@ for k in 1..d:
 
 > 从 $(s_{t-d}, h_{t-d})$ 出发,用 prior **自回归滚 $d$ 步**得到的分布 $\;\approx\;$ encoder 在 $t$ 时刻给出的 posterior $q_\phi(s_t \mid h_t, o_t)$
 
+> 🔧 **$(s_{t-d}, h_{t-d})$ 哪来?** 训练时先沿整条轨迹**只跑一遍 encoder 路径**(共同构件那段伪代码),缓存所有时刻的 $(h_\tau, s_\tau)$。算 multi-step KL 时,起点 $(h_{t-d}, s_{t-d})$ 直接从这份**同一条 posterior 缓存里取切片** —— $d = D$ 就是取 $t - D$ 那个时刻的缓存;$t - d < 1$ 时跳过(序列开头 $D$ 步丢掉)。整条 encoder 路径**只跑一次**就完成所有 KL 项的输入准备,这也是下面"encoder 不被 $D$ 倍增"的实现依据。
+
 把 Observation Overshooting 里"解码 + pixel loss"这步**换成"latent 空间高斯 KL"**,代价模型立刻变干净。**关键在两点**:
 
 1. **encoder / decoder 都不会被 $D$ 倍增**

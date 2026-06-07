@@ -2152,6 +2152,8 @@ The key insight: **you don't need to decode $\hat s_{t+d}$ back to an image to s
 
 > Starting from $(s_{t-d}, h_{t-d})$, the distribution obtained by **autoregressively rolling the prior forward $d$ steps** $\;\approx\;$ the posterior $q_\phi(s_t \mid h_t, o_t)$ the encoder gives at time $t$.
 
+> 🔧 **Where do $(s_{t-d}, h_{t-d})$ come from?** At training time, run the encoder path along the entire trajectory **only once** (the pseudocode in the shared building block), caching $(h_\tau, s_\tau)$ for every $\tau$. When computing the multi-step KL, the starting point $(h_{t-d}, s_{t-d})$ is simply **a slice from this same posterior cache** — for $d = D$, take the cache at time $t - D$; when $t - d < 1$, skip the term (drop the first $D$ steps of the sequence). The encoder path runs **exactly once** to prepare inputs for all KL terms — this is the implementation basis behind the "encoder is not multiplied by $D$" claim below.
+
 Replacing "decoder + pixel loss" by "Gaussian KL in latent space" cleans up the cost model immediately. **The key sits in two places**:
 
 1. **Neither encoder nor decoder gets multiplied by $D$**
