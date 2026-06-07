@@ -1825,7 +1825,7 @@ $$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a
 Written in concrete form:
 
 $$
-\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
+\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big] - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
 
 Combining the **outer expectation over real data** with the **inner ELBO lower bound**, and **adding the encoder parameters $\phi$ to the optimization variables**, gives the training objective whose gradients PlaNet actually backpropagates:
@@ -1867,9 +1867,9 @@ $$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid s_{t-1}, a_{t-1
 
 **Step 5 — Merge transition term with $q$ term → KL**
 
-Substituting back into the ELBO, each $t$'s contribution is:
+Substituting back into the ELBO (with the outer $\mathbb{E}_{q_\phi}$ wrapping everything), each $t$'s contribution is:
 
-$$\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big]$$
+$$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big]\Big]$$
 
 The last two terms under $\mathbb{E}_{q_\phi(s_t)}$ are exactly the **negative KL divergence**:
 
@@ -1877,7 +1877,7 @@ $$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\big[\log p_\theta(s_t \mid
 
 Combining gives the final form:
 
-$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) - \mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t)\big] - \mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
 
 **Tools used at each step**
 
