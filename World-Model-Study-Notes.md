@@ -1472,14 +1472,7 @@ flowchart LR
 
 Formalizing this diagram gives the POMDP four-tuple PlaNet writes down in §2:
 
-$$
-\begin{aligned}
-\text{Transition function:} \quad & s_t \sim \mathrm{p}(s_t \mid s_{t-1}, a_{t-1}) \\
-\text{Observation function:} \quad & o_t \sim \mathrm{p}(o_t \mid s_t) \\
-\text{Reward function:} \quad & r_t \sim \mathrm{p}(r_t \mid s_t) \\
-\text{Policy:} \quad & a_t \sim \mathrm{p}(a_t \mid o_{\le t}, a_{<t})
-\end{aligned}
-$$
+<p align="center"><img src="asset/formulas/planet/f01.png" alt="formula 01"/></p>
 
 - **Transition function**: The real environment's latent state $s_t$ is determined stochastically by the previous state and action
 - **Observation function**: The agent cannot access $s_t$ — it only receives a frame of observation $o_t$ (a pixel image) — this is what "partial observability" means
@@ -1609,13 +1602,7 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 To end-to-end learn a world model that simulates the POMDP, the simplest form is a **latent variable sequence model**:
 
-$$
-\begin{aligned}
-\text{Transition model:} \quad & s_t \sim p_\theta(s_t \mid s_{t-1}, a_{t-1}) \\
-\text{Observation model:} \quad & o_t \sim p_\theta(o_t \mid s_t) \\
-\text{Reward model:} \quad & r_t \sim p_\theta(r_t \mid s_t)
-\end{aligned}
-$$
+<p align="center"><img src="asset/formulas/planet/f02.png" alt="formula 02"/></p>
 
 > 📝 **Notation convention**: this note uses **upright p** (e.g., $\mathrm{p}(s_t \mid \cdots)$) for the real-environment distribution (the POMDP), and **italic p_$\theta$** (e.g., $p_\theta(s_t \mid \cdots)$) for PlaNet's learned world model — training amounts to making $p_\theta \approx \mathrm{p}$. **This convention is consistent with the notation used in the PlaNet paper.**
 
@@ -1623,7 +1610,7 @@ $$
 
 To train the Step-1 model, in theory one should sample latent trajectories from the **true posterior** $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$. But this posterior is **intractable**. The fix is to introduce an **approximate posterior** $q$ (also NN-parameterized) as an **encoder**:
 
-$$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{true posterior}} \;\xleftarrow{\text{approx.}}\; \underbrace{q(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{approximation}} = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+<p align="center"><img src="asset/formulas/planet/f03_en.png" alt="formula 03"/></p>
 
 <details>
 <summary><b>How does this factorization come about?</b> Chain rule + filtering + Markov (click to expand)</summary>
@@ -1632,13 +1619,13 @@ $$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{true posterior}} \
 
 Any joint distribution can be written sequentially in time:
 
-$$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q\big(s_t \mid s_{<t}, o_{1:T}, a_{1:T}\big)$$
+<p align="center"><img src="asset/formulas/planet/f04.png" alt="formula 04"/></p>
 
 No approximation yet — pure mathematical identity.
 
 **Step B — filtering approximation (drop future observations / actions)**
 
-$$q(s_t \mid s_{<t}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1})$$
+<p align="center"><img src="asset/formulas/planet/f05.png" alt="formula 05"/></p>
 
 **Reason**: at inference (deployment / planning) only past obs/actions are available — **there is no future $o, a$**. The $q$ learned at training must be the same $q$ used at deployment; peeking at future would make it unusable at test time.
 
@@ -1649,7 +1636,7 @@ $$q(s_t \mid s_{<t}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{<t}, o_{1:t}, a
 
 **Step C — Markov approximation (compress all past into $s_{t-1}$)**
 
-$$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+<p align="center"><img src="asset/formulas/planet/f06.png" alt="formula 06"/></p>
 
 **This step does two things at once** (both are Markov sufficiency assumptions):
 
@@ -1667,11 +1654,11 @@ This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **suff
 
 The true posterior is given by Bayes' rule:
 
-$$p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T}) = \frac{p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T})}{p_\theta(o_{1:T} \mid a_{1:T})}$$
+<p align="center"><img src="asset/formulas/planet/f07.png" alt="formula 07"/></p>
 
 The problem is not the numerator (it is the model's joint distribution and can be **written down directly**); the problem is the **denominator** — this marginal likelihood requires integrating out all possible latent trajectories:
 
-$$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) \, ds_{1:T}$$
+<p align="center"><img src="asset/formulas/planet/f08.png" alt="formula 08"/></p>
 
 But we need to be careful: "computable" is itself ambiguous.
 
@@ -1710,23 +1697,23 @@ This factorization is not algebraically derived — it follows from **2 applicat
 
 **Step 1 — split as "s first, then o"** (chain rule, exact):
 
-$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) \cdot p_\theta(s_{1:T} \mid a_{1:T})$$
+<p align="center"><img src="asset/formulas/planet/f09.png" alt="formula 09"/></p>
 
 **Step 2 — observation conditional independence** (graphical-model assumption: POMDP observation function): given $s_t$, $o_t$ is conditionally independent of everything else:
 
-$$p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) = \prod_{t=1}^{T} p_\theta(o_t \mid s_t)$$
+<p align="center"><img src="asset/formulas/planet/f10.png" alt="formula 10"/></p>
 
 **Step 3 — chain-rule split the s sequence in time** (exact):
 
-$$p_\theta(s_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} p_\theta(s_t \mid s_{<t}, a_{1:T})$$
+<p align="center"><img src="asset/formulas/planet/f11.png" alt="formula 11"/></p>
 
 **Step 4 — Markov transition** (graphical-model assumption: the generative model is itself Markov): given $s_{t-1}, a_{t-1}$, $s_t$ is conditionally independent of everything else:
 
-$$p_\theta(s_t \mid s_{<t}, a_{1:T}) = p_\theta(s_t \mid s_{t-1}, a_{t-1})$$
+<p align="center"><img src="asset/formulas/planet/f12.png" alt="formula 12"/></p>
 
 **Combine**: substituting Step 2 + Step 4 back into Step 1 gives the full factorized form
 
-$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} \underbrace{p_\theta(s_t \mid s_{t-1}, a_{t-1})}_{\text{transition NN}} \cdot \underbrace{p_\theta(o_t \mid s_t)}_{\text{decoder NN}}$$
+<p align="center"><img src="asset/formulas/planet/f13.png" alt="formula 13"/></p>
 
 | Step | Operation | Type | Reason |
 |---|---|---|---|
@@ -1775,7 +1762,7 @@ Listing every scenario where $s$ is needed:
 
 Training data is $(o_{1:T}, a_{1:T})$ — **no ground-truth $s$**. We want to maximize $\log p_\theta(o \mid a)$, but this log-likelihood involves the intractable denominator integral. The ELBO route:
 
-$$\log p_\theta(o \mid a) \;\geq\; \mathbb{E}_{s \sim q_\phi(s \mid o, a)} \big[\log p_\theta(o, s \mid a) - \log q_\phi(s \mid o, a)\big]$$
+<p align="center"><img src="asset/formulas/planet/f14.png" alt="formula 14"/></p>
 
 The Monte Carlo estimator here **needs to sample $s$ from some distribution**. Which?
 
@@ -1809,7 +1796,7 @@ flowchart LR
 
 The essence of PlaNet is to make the world model $p_\theta(o, r \mid a)$ **approach the real environment** $p_{\text{real}}(o, r \mid a)$ under the data distribution. Three equivalent statements:
 
-$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① optimization objective}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② information-theoretic view}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ teleological: world model ≈ env}}$$
+<p align="center"><img src="asset/formulas/planet/f15_en.png" alt="formula 15"/></p>
 
 | Angle | Interpretation |
 |---|---|
@@ -1821,7 +1808,7 @@ $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\lo
 
 Therefore, **PlaNet's training objective is to maximize** the world model's log-likelihood on real data:
 
-$$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\big[\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})\big]$$
+<p align="center"><img src="asset/formulas/planet/f16.png" alt="formula 16"/></p>
 
 <p align="center">
   <img src="asset/planet-2019/ssm.png" alt="PlaNet paper Fig. 2(b) Stochastic State-Space Model" width="28%"/><br/>
@@ -1834,59 +1821,55 @@ However, this $p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$ is **not directly comput
 <summary><b>Expand: why the marginal likelihood is intractable</b></summary>
 
 The model is actually defined as a **latent-variable generative model** with $s$ (the bare SSM above):
-$$\underbrace{p_\theta(o, r \mid a)}_{\text{the marginal we want}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{the joint the model defines}} \, ds$$
+<p align="center"><img src="asset/formulas/planet/f17_en.png" alt="formula 17"/></p>
 Using the chain-rule factorization from the Step 2 folded section:
-$$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
+<p align="center"><img src="asset/formulas/planet/f18.png" alt="formula 18"/></p>
 **The joint is computable** (NN forward), but **integrating out $s$ has no closed form**, which is the root cause of the marginal likelihood being intractable.
 
 </details>
 
 Written in concrete form:
 
-$$
-\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big] - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
-$$
+<p align="center"><img src="asset/formulas/planet/f19.png" alt="formula 19"/></p>
 
 Combining the **outer expectation over real data** with the **inner ELBO lower bound**, and **adding the encoder parameters $\phi$ to the optimization variables**, gives the training objective whose gradients PlaNet actually backpropagates:
 
-$$
-\boxed{\;\max_{\theta,\,\phi}\; \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}} \left[\, \sum_{t=1}^{T} \Big( \underbrace{\mathbb{E}_{s_t \sim q_\phi}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big]}_{\text{reconstruction + reward}} \;-\; \underbrace{\mathrm{KL}\!\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]}_{\text{KL}} \Big) \,\right]\;}
-$$
+<p align="center"><img src="asset/formulas/planet/f20_en.png" alt="formula 20"/></p>
 
 <details>
 <summary><b>Derivation: where does ELBO come from (5 steps)</b></summary>
 
 **Step 1 — Introduce $q$ (multiply by 1)**
 
-$$\log p_\theta(o, r \mid a) = \log \int p_\theta(o, r, s \mid a) \, ds = \log \int q_\phi(s \mid o, a) \cdot \frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)} \, ds = \log \mathbb{E}_q\!\left[\frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)}\right]$$
+<p align="center"><img src="asset/formulas/planet/f21.png" alt="formula 21"/></p>
 
 **Step 2 — Jensen's inequality** (log is concave, $\log \mathbb{E}[X] \geq \mathbb{E}[\log X]$):
 
-$$\log p_\theta(o, r \mid a) \;\geq\; \mathbb{E}_q\!\left[\log p_\theta(o, r, s \mid a) - \log q_\phi(s \mid o, a)\right]$$
+<p align="center"><img src="asset/formulas/planet/f22.png" alt="formula 22"/></p>
 
 The right side is the definition of **ELBO**.
 
 **Step 3 — Expand the joint $p$'s factorization** (using the graphical-model decomposition derived above, plus the reward term):
 
-$$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) + \log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t)\big]$$
+<p align="center"><img src="asset/formulas/planet/f23.png" alt="formula 23"/></p>
 
 **Step 4 — Expand $q$'s factorization** (chain rule + Markov + filtering as derived in Step 2):
 
-$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+<p align="center"><img src="asset/formulas/planet/f24.png" alt="formula 24"/></p>
 
 **Step 5 — Merge transition term with $q$ term → KL**
 
 Substituting back into the ELBO (with the outer $\mathbb{E}_{q_\phi}$ wrapping everything), each $t$'s contribution is:
 
-$$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big]\Big]$$
+<p align="center"><img src="asset/formulas/planet/f25.png" alt="formula 25"/></p>
 
 The last two terms under $\mathbb{E}_{q_\phi(s_t)}$ are exactly the **negative KL divergence**:
 
-$$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big] = -\mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]$$
+<p align="center"><img src="asset/formulas/planet/f26.png" alt="formula 26"/></p>
 
 Combining gives the final form:
 
-$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t)\big] - \mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+<p align="center"><img src="asset/formulas/planet/f27.png" alt="formula 27"/></p>
 
 **Tools used at each step**
 

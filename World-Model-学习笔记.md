@@ -1471,14 +1471,7 @@ flowchart LR
 
 把这张图形式化,就是 PlaNet 论文 §2 写下的 POMDP 四件套:
 
-$$
-\begin{aligned}
-\text{Transition function:} \quad & s_t \sim \mathrm{p}(s_t \mid s_{t-1}, a_{t-1}) \\
-\text{Observation function:} \quad & o_t \sim \mathrm{p}(o_t \mid s_t) \\
-\text{Reward function:} \quad & r_t \sim \mathrm{p}(r_t \mid s_t) \\
-\text{Policy:} \quad & a_t \sim \mathrm{p}(a_t \mid o_{\le t}, a_{<t})
-\end{aligned}
-$$
+<p align="center"><img src="asset/formulas/planet/f01.png" alt="formula 01"/></p>
 
 - **Transition function**:真实环境的隐状态 $s_t$ 由前一步的状态和动作决定(随机)
 - **Observation function**:agent 拿不到 $s_t$,只能拿到一帧观测 $o_t$(像素图像)—— 这就是"部分可观测"
@@ -1608,13 +1601,7 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 为了端到端地学一个能模拟 POMDP 的世界模型,最简单的形式就是一个**有隐变量的序列模型**:
 
-$$
-\begin{aligned}
-\text{Transition model:} \quad & s_t \sim p_\theta(s_t \mid s_{t-1}, a_{t-1}) \\
-\text{Observation model:} \quad & o_t \sim p_\theta(o_t \mid s_t) \\
-\text{Reward model:} \quad & r_t \sim p_\theta(r_t \mid s_t)
-\end{aligned}
-$$
+<p align="center"><img src="asset/formulas/planet/f02.png" alt="formula 02"/></p>
 
 > 📝 **符号约定**:本笔记用**直体 p**(如 $\mathrm{p}(s_t \mid \cdots)$)表示真实环境的分布(POMDP);用**斜体 p_$\theta$**(如 $p_\theta(s_t \mid \cdots)$)表示 PlaNet 学到的世界模型 —— 训练就是让 $p_\theta \approx \mathrm{p}$。**这一约定与 PlaNet 论文使用的符号习惯一致**。
 
@@ -1622,7 +1609,7 @@ $$
 
 要训练步骤1 的模型,理论上需要从**真后验** $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$ 采样隐状态轨迹,但这个后验**算不出来**。解法是引入一个**近似后验** $q$(也是 NN 参数化的)作为 **encoder**:
 
-$$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{真实后验}} \;\xleftarrow{\text{近似}}\; \underbrace{q(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{近似后验}} = \prod_{t=1}^{T} q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+<p align="center"><img src="asset/formulas/planet/f03.png" alt="formula 03"/></p>
 
 <details>
 <summary><b>这个分解怎么来的?</b> 链式法则 + filtering + Markov(点开展开)</summary>
@@ -1631,13 +1618,13 @@ $$\underbrace{p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})}_{\text{真实后验}} \;\
 
 任何联合分布都可以按时间顺序拆:
 
-$$q(s_{1:T} \mid o_{1:T}, a_{1:T}) = \prod_{t=1}^{T} q\big(s_t \mid s_{<t}, o_{1:T}, a_{1:T}\big)$$
+<p align="center"><img src="asset/formulas/planet/f04.png" alt="formula 04"/></p>
 
 到这里**没做任何近似**,纯粹是数学恒等式。
 
 **Step B — filtering 近似(丢掉未来观测/动作)**
 
-$$q(s_t \mid s_{<t}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1})$$
+<p align="center"><img src="asset/formulas/planet/f05.png" alt="formula 05"/></p>
 
 **理由**:推理时(部署/规划)只能看到过去,本来就**没有未来 $o, a$**。训练时学到的 $q$ 必须和部署时用的 $q$ 是同一个 —— 如果训练时偷看未来,部署时根本拿不到。
 
@@ -1648,7 +1635,7 @@ $$q(s_t \mid s_{<t}, o_{1:T}, a_{1:T}) \;\approx\; q(s_t \mid s_{<t}, o_{1:t}, a
 
 **Step C — Markov 近似(把所有过去都压进 $s_{t-1}$)**
 
-$$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+<p align="center"><img src="asset/formulas/planet/f06.png" alt="formula 06"/></p>
 
 **这一步同时做了两件事**(本质都是 Markov 充分性假设):
 
@@ -1666,11 +1653,11 @@ $$q(s_t \mid s_{<t}, o_{1:t}, a_{1:t-1}) \;\approx\; q(s_t \mid s_{t-1}, a_{t-1}
 
 真后验由贝叶斯公式给出:
 
-$$p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T}) = \frac{p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T})}{p_\theta(o_{1:T} \mid a_{1:T})}$$
+<p align="center"><img src="asset/formulas/planet/f07.png" alt="formula 07"/></p>
 
 问题不在分子(分子是模型联合分布,可以**直接写出**),问题在**分母** —— 这个 marginal likelihood 需要把所有可能的隐状态轨迹积掉:
 
-$$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) \, ds_{1:T}$$
+<p align="center"><img src="asset/formulas/planet/f08.png" alt="formula 08"/></p>
 
 但这里要小心:"能算"这个词本身就有歧义。
 
@@ -1709,23 +1696,23 @@ $$p_\theta(o_{1:T} \mid a_{1:T}) = \int p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) 
 
 **Step 1 — 按"先 s 后 o"拆开**(chain rule,严格成立):
 
-$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) \cdot p_\theta(s_{1:T} \mid a_{1:T})$$
+<p align="center"><img src="asset/formulas/planet/f09.png" alt="formula 09"/></p>
 
 **Step 2 — 观测条件独立**(图模型假设:POMDP observation function):给定 $s_t$,$o_t$ 与其他变量都条件独立:
 
-$$p_\theta(o_{1:T} \mid s_{1:T}, a_{1:T}) = \prod_{t=1}^{T} p_\theta(o_t \mid s_t)$$
+<p align="center"><img src="asset/formulas/planet/f10.png" alt="formula 10"/></p>
 
 **Step 3 — s 序列按时间拆**(chain rule,严格成立):
 
-$$p_\theta(s_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} p_\theta(s_t \mid s_{<t}, a_{1:T})$$
+<p align="center"><img src="asset/formulas/planet/f11.png" alt="formula 11"/></p>
 
 **Step 4 — Markov transition**(图模型假设:生成模型本身就是 Markov):给定 $s_{t-1}, a_{t-1}$,$s_t$ 与其他变量都条件独立:
 
-$$p_\theta(s_t \mid s_{<t}, a_{1:T}) = p_\theta(s_t \mid s_{t-1}, a_{t-1})$$
+<p align="center"><img src="asset/formulas/planet/f12.png" alt="formula 12"/></p>
 
 **合起来**:Step 2 + Step 4 代回 Step 1,得到联合的完整因子化形式
 
-$$p_\theta(s_{1:T}, o_{1:T} \mid a_{1:T}) = \prod_{t=1}^{T} \underbrace{p_\theta(s_t \mid s_{t-1}, a_{t-1})}_{\text{transition NN}} \cdot \underbrace{p_\theta(o_t \mid s_t)}_{\text{decoder NN}}$$
+<p align="center"><img src="asset/formulas/planet/f13.png" alt="formula 13"/></p>
 
 | Step | 操作 | 类型 | 依据 |
 |---|---|---|---|
@@ -1774,7 +1761,7 @@ PlaNet 两个都不满足,所以分母**只能近似**。
 
 训练数据是 $(o_{1:T}, a_{1:T})$,**没有 $s$ 的 ground truth**。我们想最大化 $\log p_\theta(o \mid a)$,但这个 log-likelihood 涉及分母那个积不出来的积分。走 ELBO:
 
-$$\log p_\theta(o \mid a) \;\geq\; \mathbb{E}_{s \sim q_\phi(s \mid o, a)} \big[\log p_\theta(o, s \mid a) - \log q_\phi(s \mid o, a)\big]$$
+<p align="center"><img src="asset/formulas/planet/f14.png" alt="formula 14"/></p>
 
 这里 Monte Carlo 估计**需要从某个分布采 $s$**。选谁?
 
@@ -1808,7 +1795,7 @@ flowchart LR
 
 PlaNet 的本质就是让 world model $p_\theta(o, r \mid a)$ 在数据分布下**贴近真实环境** $p_{\text{real}}(o, r \mid a)$。三种等价表述:
 
-$$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\log p_\theta(o, r \mid a)\big]}_{\text{① 优化目标}} \;\;\Leftrightarrow\;\; \underbrace{\min_\theta \, \mathrm{KL}\big[p_{\text{real}} \,\|\, p_\theta\big]}_{\text{② 信息论解读}} \;\;\Leftrightarrow\;\; \underbrace{p_\theta(o, r \mid a) \approx p_{\text{real}}(o, r \mid a)}_{\text{③ 目的论:world model ≈ env}}$$
+<p align="center"><img src="asset/formulas/planet/f15.png" alt="formula 15"/></p>
 
 | 角度 | 解读 |
 |---|---|
@@ -1820,7 +1807,7 @@ $$\underbrace{\max_\theta \, \mathbb{E}_{(o, r, a) \sim p_{\text{real}}}\big[\lo
 
 因此 **PlaNet 的训练目标就是最大化** 世界模型对真实数据的 log-likelihood:
 
-$$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\big[\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})\big]$$
+<p align="center"><img src="asset/formulas/planet/f16.png" alt="formula 16"/></p>
 
 <p align="center">
   <img src="asset/planet-2019/ssm.png" alt="PlaNet 论文 Fig. 2(b) Stochastic State-Space Model" width="28%"/><br/>
@@ -1833,59 +1820,55 @@ $$\max_\theta \, \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}}\b
 <summary><b>展开:为什么 marginal likelihood 算不出来</b></summary>
 
 模型其实是定义在**带隐变量 $s$ 的生成模型**上(上图 的朴素 SSM):
-$$\underbrace{p_\theta(o, r \mid a)}_{\text{我们想要的 marginal}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{模型实际定义的联合}} \, ds$$
+<p align="center"><img src="asset/formulas/planet/f17.png" alt="formula 17"/></p>
 根据步骤 2 折叠的section:
-$$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
+<p align="center"><img src="asset/formulas/planet/f18.png" alt="formula 18"/></p>
 **联合分布能算**(NN 前向),但**积掉 $s$ 没闭式解**, 这就是 marginal likelihood 算不出来的根本原因。
 
 </details>
 
 **ELBO 是它的一个能算的下界**， 具体来说:
 
-$$
-\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big] - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
-$$
+<p align="center"><img src="asset/formulas/planet/f19.png" alt="formula 19"/></p>
 
 把**外层"对真实数据求期望"** 和**内层 ELBO 下界** 拼起来,**同时把 encoder 参数 $\phi$ 也加入优化变量**,就得到 PlaNet 实际反传梯度的训练目标:
 
-$$
-\boxed{\;\max_{\theta,\,\phi}\; \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}} \left[\, \sum_{t=1}^{T} \Big( \underbrace{\mathbb{E}_{s_t \sim q_\phi}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big]}_{\text{重建 + reward}} \;-\; \underbrace{\mathrm{KL}\!\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]}_{\text{KL}} \Big) \,\right]\;}
-$$
+<p align="center"><img src="asset/formulas/planet/f20.png" alt="formula 20"/></p>
 
 <details>
 <summary><b>推导:ELBO 是怎么来的(5 步)</b></summary>
 
 **Step 1 — 引入 $q$(乘以 1)**
 
-$$\log p_\theta(o, r \mid a) = \log \int p_\theta(o, r, s \mid a) \, ds = \log \int q_\phi(s \mid o, a) \cdot \frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)} \, ds = \log \mathbb{E}_q\!\left[\frac{p_\theta(o, r, s \mid a)}{q_\phi(s \mid o, a)}\right]$$
+<p align="center"><img src="asset/formulas/planet/f21.png" alt="formula 21"/></p>
 
 **Step 2 — Jensen 不等式**(log 是凹函数,$\log \mathbb{E}[X] \geq \mathbb{E}[\log X]$):
 
-$$\log p_\theta(o, r \mid a) \;\geq\; \mathbb{E}_q\!\left[\log p_\theta(o, r, s \mid a) - \log q_\phi(s \mid o, a)\right]$$
+<p align="center"><img src="asset/formulas/planet/f22.png" alt="formula 22"/></p>
 
 右边就是 **ELBO** 的定义。
 
 **Step 3 — 展开联合 $p$ 的因子化**(用前面推过的图模型分解 + reward 项):
 
-$$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) + \log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t)\big]$$
+<p align="center"><img src="asset/formulas/planet/f23.png" alt="formula 23"/></p>
 
 **Step 4 — 展开 $q$ 的因子化**(用步骤2 推过的 chain rule + Markov + filtering):
 
-$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
+<p align="center"><img src="asset/formulas/planet/f24.png" alt="formula 24"/></p>
 
 **Step 5 — 合并 transition 项与 $q$ 项 → KL**
 
 代回 ELBO(整体外面套 $\mathbb{E}_{q_\phi}$)后,每个 $t$ 的贡献是:
 
-$$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big]\Big]$$
+<p align="center"><img src="asset/formulas/planet/f25.png" alt="formula 25"/></p>
 
 其中最后两项在 $\mathbb{E}_{q_\phi(s_t)}$ 下正好是**负 KL 散度**:
 
-$$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big] = -\mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]$$
+<p align="center"><img src="asset/formulas/planet/f26.png" alt="formula 26"/></p>
 
 合起来得到最终形式:
 
-$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\!\big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t)\big] - \mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+<p align="center"><img src="asset/formulas/planet/f27.png" alt="formula 27"/></p>
 
 **每一步用的"工具"**
 
@@ -1955,9 +1938,12 @@ for batch in dataloader:
 
 ### 🧬 RSSM:双路 latent 架构
 
-> 对应 §4.2 痛点表第 3 行的展开:"MDN-RNN 长程不稳,确定性记忆与随机性预测未解耦" → **RSSM(确定性 + 随机性双路)**
+RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性的 RNN 记忆"和"随机性的 SSM 不确定性"**缝合**在一起的双路 latent 动力学模型 → 将确定性记忆与随机性预测解耦 → 解决之前world model里MDN-RNN 长程不稳的问题。
 
-RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性的 RNN 记忆"和"随机性的 SSM 不确定性"**缝合**在一起的双路 latent 动力学模型。
+<p align="center">
+  <img src="asset/planet-2019/rssm.png" width="900"/><br/>
+  <i>论文 Figure 1:三种动力学模型的概率图模型对比。<b>(a) RNN</b>:只有确定性 h,没法表达不确定性;<b>(b) SSM</b>:只有随机 s,长期信息易被噪声冲掉;<b>(c) RSSM</b>:h(方块,确定性)+ s(圆圈,随机性)并存,各司其职 —— 这就是 PlaNet 的核心创新</i>
+</p>
 
 #### 问题:纯随机 SSM 的长程信息会被噪声冲掉
 
