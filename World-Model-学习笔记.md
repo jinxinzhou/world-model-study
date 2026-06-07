@@ -2129,7 +2129,7 @@ for k in 1..d:
 | 总训练 cost | $\mathcal{O}(T \cdot \text{decoder})$ | $\mathcal{O}(T \cdot D \cdot \text{decoder})$ |
 | $D = 50$ 时 | 可行 | cost 涨 ~50× → **跑不起** |
 
-> 💡 $D$ = latent overshooting 的**最大预测跨度**(上面伪代码里 `d = 1, ..., D` 那个 $D$)—— 训练时强制模型预测准 1, 2, ..., $D$ 步之后的 latent。$D = 1$ 时退化回 §🧬 RSSM 原版 ELBO;PlaNet 实际用 $D = 50$,大致等于训练序列长度,基本"训练时所有可能的跨度都覆盖"。能扛 50 是因为下面 Latent Overshooting 把每个跨度的 cost 从"decoder 前向"砍到"transition 前向 + 高斯 KL 闭式"。
+> 💡 $D$ = latent overshooting 的**最大预测跨度**—— 训练时强制模型预测准 1, 2, ..., $D$ 步之后的 latent。$D = 1$ 时退化回 §🧬 RSSM 原版 ELBO;PlaNet 实际用 $D = 50$,大致等于训练序列长度,基本"训练时所有可能的跨度都覆盖"。
 >
 > ⚠️ **别和 CEM 规划 horizon $H = 12$ 搞混**:$D$ 是**训练时**多步 KL 的最大跨度(离线正则强度);$H$ 是**部署时** CEM 向前 rollout 的步数(在线规划深度)。$D > H$ 是合理设计 —— 训练得越远,推理时才能规划得更远而不漂移。
 
@@ -2139,15 +2139,22 @@ for k in 1..d:
 
 > 从 $(s_{t-d}, h_{t-d})$ 出发,用 prior **自回归滚 $d$ 步**得到的分布 $\;\approx\;$ encoder 在 $t$ 时刻给出的 posterior $q_\phi(s_t \mid h_t, o_t)$
 
-把 Observation Overshooting 里"解码 + pixel loss"这步**换成"latent 空间高斯 KL"**,代价模型立刻变干净:
+把 Observation Overshooting 里"解码 + pixel loss"这步**换成"latent 空间高斯 KL"**,代价模型立刻变干净。**关键在两点**:
 
-| 每个 $(t, d)$ 多算 | Observation Overshooting | Latent Overshooting |
-|---|---|---|
-| 重型计算 | decoder 前向(大反卷积网) | transition 前向(小 MLP) |
-| loss 形式 | pixel-level MSE / 重建似然 | **高斯 KL 闭式**,不用再采样 |
-| $D = 50$ 可行性 | ❌ 算不起 | ✅ 几乎不增成本 ⭐ |
+1. **encoder / decoder 都不会被 $D$ 倍增** —— posterior $q_\phi(s_t \mid h_t, o_t)$ 跟 $d$ 无关,每个 $t$ encode 一次就被所有 $d$ 共享;reconstruction 项**原封不动**(latent overshooting **只改 KL 项**),所以 decoder 也只跑 $T$ 次
+2. **多出来的 $D$ 倍开销都在"廉价侧"** —— transition 是个小 MLP(参数比 encoder / decoder 少 1-2 数量级,每次 forward 几乎瞬时);高斯 KL 有**闭式解**(两边都是 $\mathcal{N}(\mu, \sigma^2)$ 代入公式几个数乘加),几乎不算"成本"
 
-→ 这正是 PlaNet 真正用的 Latent Overshooting,**让 $D = 50$ 这种大跨度成为可能**。
+按组件拆开三种方案的训练 cost:
+
+| 组件 | 标准 RSSM ELBO | Observation Overshooting | Latent Overshooting |
+|---|---|---|---|
+| **encoder**(CNN,重) | $O(T)$ | $O(T)$ | $O(T)$ |
+| **decoder**(反卷积,重) | $O(T)$ | $O(T \cdot D)$ ← **杀手** | $O(T)$ ← 不变 ⭐ |
+| **transition**(小 MLP) | $O(T)$ | $O(T \cdot D)$ | $O(T \cdot D)$ |
+| **每步 loss 评估** | 1 次像素 MSE | 像素 MSE × $D$ | **高斯 KL 闭式** × $D$ |
+| **$D = 50$ 可行性** | (是 baseline) | ❌ 算不起 | ✅ 几乎不增成本 ⭐ |
+
+总训练 cost 大致是 $C_{\text{encoder}}\cdot T + C_{\text{decoder}}\cdot T + C_{\text{transition}}\cdot T\cdot D + \varepsilon$ —— 前两项(**重的**)不变,后两项虽然乘了 $D$ 但每次便宜得多,**绝对值意义上几乎看不见**。这正是 PlaNet 真正用的 Latent Overshooting,**让 $D = 50$ 这种大跨度成为可能**。
 
 <p align="center">
   <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>

@@ -2152,15 +2152,22 @@ The key insight: **you don't need to decode $\hat s_{t+d}$ back to an image to s
 
 > Starting from $(s_{t-d}, h_{t-d})$, the distribution obtained by **autoregressively rolling the prior forward $d$ steps** $\;\approx\;$ the posterior $q_\phi(s_t \mid h_t, o_t)$ the encoder gives at time $t$.
 
-Replacing "decoder + pixel loss" by "Gaussian KL in latent space" cleans up the cost model immediately:
+Replacing "decoder + pixel loss" by "Gaussian KL in latent space" cleans up the cost model immediately. **The key sits in two places**:
 
-| Per extra $(t, d)$ | Observation Overshooting | Latent Overshooting |
-|---|---|---|
-| Heavy computation | decoder forward (big deconv) | transition forward (small MLP) |
-| Loss form | pixel-level MSE / reconstruction likelihood | **closed-form Gaussian KL**, no resampling |
-| $D = 50$ feasibility | ❌ unaffordable | ✅ negligible overhead ⭐ |
+1. **Neither encoder nor decoder gets multiplied by $D$** — the posterior $q_\phi(s_t \mid h_t, o_t)$ does not depend on $d$, so encoding each $t$ once is shared across all $d$; the reconstruction term is **unchanged** (latent overshooting **modifies only the KL**), so the decoder also runs only $T$ times.
+2. **What does get multiplied by $D$ is all on the cheap side** — the transition is a small MLP (1-2 orders of magnitude fewer parameters than encoder / decoder; each forward is essentially instantaneous), and the Gaussian KL has a **closed form** (both sides are $\mathcal{N}(\mu, \sigma^2)$ — plug into the formula, a few multiply-adds), barely registering as "cost".
 
-→ This is the Latent Overshooting PlaNet actually uses, and it is **what makes large spans like $D = 50$ practical**.
+Training cost broken down by component across the three options:
+
+| Component | Standard RSSM ELBO | Observation Overshooting | Latent Overshooting |
+|---|---|---|---|
+| **encoder** (CNN, heavy) | $O(T)$ | $O(T)$ | $O(T)$ |
+| **decoder** (deconv, heavy) | $O(T)$ | $O(T \cdot D)$ ← **the killer** | $O(T)$ ← unchanged ⭐ |
+| **transition** (small MLP) | $O(T)$ | $O(T \cdot D)$ | $O(T \cdot D)$ |
+| **Per-step loss eval** | 1 pixel MSE | pixel MSE × $D$ | **closed-form Gaussian KL** × $D$ |
+| **$D = 50$ feasibility** | (baseline) | ❌ unaffordable | ✅ negligible overhead ⭐ |
+
+The total training cost is roughly $C_{\text{encoder}}\cdot T + C_{\text{decoder}}\cdot T + C_{\text{transition}}\cdot T\cdot D + \varepsilon$ — the first two terms (the **heavy** ones) are unchanged, and the last two terms, although multiplied by $D$, are far cheaper per call, so **absolute cost change is essentially imperceptible**. This is the Latent Overshooting PlaNet actually uses, and is **what makes large spans like $D = 50$ practical**.
 
 <p align="center">
   <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
