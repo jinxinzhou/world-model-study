@@ -1997,6 +1997,61 @@ for batch in dataloader:
 
 约束:$h_t = f_\mathrm{GRU}(h_{t-1}, s_{t-1}, a_{t-1})$ —— 给定一条 $s$ 轨迹,$h$ 轨迹完全确定,**不参与积分**。
 
+<details>
+<summary><b>推导:RSSM ELBO 是怎么来的(沿用 §⚙️ Step 3 的 5 步,处处插入 $h_t$)</b></summary>
+
+跟 bare-SSM 推导**结构完全一样** —— Steps 1-2 是任何 latent variable model 都要做的通用准备,Steps 3-5 把每个因子的条件换成 RSSM 的形式即可。
+
+**Steps 1-2 — 引入 $q$ + Jensen 不等式**(与 §⚙️ Step 3 完全一致)
+
+直接复用结论 —— 对任何 latent variable model,有:
+
+<p align="center"><img src="asset/formulas/planet/f22.png" alt="formula 22" style="max-width: 100%; height: auto;"/></p>
+
+只是这里 $p_\theta(o, r, s \mid a)$ 和 $q_\phi(s \mid o, a)$ 的具体形式不同 —— 下面 Step 3 / 4 给出 RSSM 的形式。
+
+**Step 3 — 展开 RSSM 联合 $p$ 因子化**(代入 §🧬 RSSM 图模型 + reward 项):
+
+<p align="center"><img src="asset/formulas/planet/f29.png" alt="formula 29" style="max-width: 100%; height: auto;"/></p>
+
+每个因子都条件 $h_t$ —— 而 $h_t = f_\mathrm{GRU}(h_{t-1}, s_{t-1}, a_{t-1})$ 由 $(s_{<t}, a_{<t})$ 唯一确定,不参与积分。
+
+**Step 4 — 展开 RSSM $q$ 因子化**(§🧬 解法子节给出的 encoder):
+
+<p align="center"><img src="asset/formulas/planet/f30.png" alt="formula 30" style="max-width: 100%; height: auto;"/></p>
+
+→ 对比 bare-SSM 的 $q(s_t \mid s_{t-1}, a_{t-1}, o_t)$:这里 $(s_{t-1}, a_{t-1})$ 已被 $h_t$ 吸收。
+
+**Step 5 — 合并 transition 项与 $q$ 项 → KL**
+
+代回 ELBO(整体套 $\mathbb{E}_{q_\phi}$)后,每个 $t$ 的贡献:
+
+<p align="center"><img src="asset/formulas/planet/f31.png" alt="formula 31" style="max-width: 100%; height: auto;"/></p>
+
+其中最后两项在 $\mathbb{E}_{q_\phi(s_t \mid h_t, o_t)}$ 下正好是**负 KL 散度**:
+
+<p align="center"><img src="asset/formulas/planet/f32.png" alt="formula 32" style="max-width: 100%; height: auto;"/></p>
+
+合起来得到**最终形式(per-trajectory RSSM ELBO 下界)**:
+
+<p align="center"><img src="asset/formulas/planet/f33.png" alt="formula 33" style="max-width: 100%; height: auto;"/></p>
+
+→ 再套上外层 $\mathbb{E}_{(o, r, a) \sim p_\text{real}}$ 对真实数据求期望 + 最大化 $\max_{\theta, \phi}$,就是本子节正文 boxed 出来的训练目标。
+
+**与 bare-SSM 推导的核心差异(机械替换)**:
+
+| Step | bare-SSM 形式 | RSSM 形式 | 关键变化 |
+|---|---|---|---|
+| 1 | $\log \mathbb{E}_q[p/q]$ | 同 | 通用,不变 |
+| 2 | Jensen → $\mathbb{E}_q[\log(p/q)]$ | 同 | 通用,不变 |
+| 3 | $\prod_t p(s_t \mid s_{t-1}, a_{t-1}) \cdot p(o_t \mid s_t) \cdot p(r_t \mid s_t)$ | $\prod_t p(s_t \mid h_t) \cdot p(o_t \mid h_t, s_t) \cdot p(r_t \mid h_t, s_t)$ | 所有因子条件多 $h_t$ |
+| 4 | $\prod_t q(s_t \mid s_{t-1}, a_{t-1}, o_t)$ | $\prod_t q(s_t \mid h_t, o_t)$ | $(s_{t-1}, a_{t-1})$ 被 $h_t$ 吸收 |
+| 5 | $\mathrm{KL}[q(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})]$ | $\mathrm{KL}[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid h_t)]$ | 同上 |
+
+→ **数学完全没新东西,只是机械替换 "$(s_{t-1}, a_{t-1})$ → $h_t$"**。$h_t$ 确定性不参与积分,但因为它依赖 $s_{t-1}$,采样 $s$ 轨迹时 $h$ 轨迹要顺序计算出来(细节见 §⚙️ Step 3 折叠里的实现伪代码)。
+
+</details>
+
 
 ### 🧪 关键实验
 

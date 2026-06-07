@@ -2008,7 +2008,60 @@ Substituting back into the ELBO gives **the training objective whose gradients R
 
 Constraint: $h_t = f_\mathrm{GRU}(h_{t-1}, s_{t-1}, a_{t-1})$ — given one $s$ trajectory, the $h$ trajectory is fully determined, **not subject to integration**.
 
-> 💡 The structural form is unchanged (still reconstruction + reward + KL), only that **every conditioning gains $h_t$ as the "summary of past"**. This is also the source of the $h_t$ conditioning in all 4 sub-networks in §🔧 Detail ①.
+<details>
+<summary><b>Derivation: how the RSSM ELBO is obtained (reuses the 5 steps of §⚙️ Step 3, with $h_t$ inserted everywhere)</b></summary>
+
+The derivation **structurally mirrors** the bare-SSM one — Steps 1-2 are generic latent-variable-model preparation, Steps 3-5 just swap each factor's conditioning to the RSSM form.
+
+**Steps 1-2 — Introduce $q$ + Jensen's inequality** (identical to §⚙️ Step 3)
+
+Reuse the conclusion directly — for any latent variable model:
+
+<p align="center"><img src="asset/formulas/planet/f22.png" alt="formula 22" style="max-width: 100%; height: auto;"/></p>
+
+Only the specific forms of $p_\theta(o, r, s \mid a)$ and $q_\phi(s \mid o, a)$ differ — these are given by Steps 3 and 4 below.
+
+**Step 3 — Expand the RSSM joint $p$'s factorization** (plug in the §🧬 RSSM graphical model + reward term):
+
+<p align="center"><img src="asset/formulas/planet/f29.png" alt="formula 29" style="max-width: 100%; height: auto;"/></p>
+
+Every factor now conditions on $h_t$ — and $h_t = f_\mathrm{GRU}(h_{t-1}, s_{t-1}, a_{t-1})$ is uniquely determined by $(s_{<t}, a_{<t})$, so it does not participate in integration.
+
+**Step 4 — Expand the RSSM $q$ factorization** (the encoder given in §🧬 Fix subsection):
+
+<p align="center"><img src="asset/formulas/planet/f30.png" alt="formula 30" style="max-width: 100%; height: auto;"/></p>
+
+→ Compare with bare-SSM's $q(s_t \mid s_{t-1}, a_{t-1}, o_t)$: here $(s_{t-1}, a_{t-1})$ has been absorbed into $h_t$.
+
+**Step 5 — Merge transition term with $q$ term → KL**
+
+Substituting back into the ELBO (with the outer $\mathbb{E}_{q_\phi}$ wrapping everything), each $t$'s contribution is:
+
+<p align="center"><img src="asset/formulas/planet/f31.png" alt="formula 31" style="max-width: 100%; height: auto;"/></p>
+
+The last two terms under $\mathbb{E}_{q_\phi(s_t \mid h_t, o_t)}$ are exactly the **negative KL divergence**:
+
+<p align="center"><img src="asset/formulas/planet/f32.png" alt="formula 32" style="max-width: 100%; height: auto;"/></p>
+
+Combining gives the **final form (per-trajectory RSSM ELBO bound)**:
+
+<p align="center"><img src="asset/formulas/planet/f33.png" alt="formula 33" style="max-width: 100%; height: auto;"/></p>
+
+→ Wrapping the outer $\mathbb{E}_{(o, r, a) \sim p_\text{real}}$ over real data and maximizing $\max_{\theta, \phi}$ gives the boxed training objective in this subsection's main text.
+
+**Core differences vs the bare-SSM derivation (mechanical substitutions)**:
+
+| Step | bare-SSM form | RSSM form | Key change |
+|---|---|---|---|
+| 1 | $\log \mathbb{E}_q[p/q]$ | same | Generic, unchanged |
+| 2 | Jensen → $\mathbb{E}_q[\log(p/q)]$ | same | Generic, unchanged |
+| 3 | $\prod_t p(s_t \mid s_{t-1}, a_{t-1}) \cdot p(o_t \mid s_t) \cdot p(r_t \mid s_t)$ | $\prod_t p(s_t \mid h_t) \cdot p(o_t \mid h_t, s_t) \cdot p(r_t \mid h_t, s_t)$ | Every factor's conditioning gains $h_t$ |
+| 4 | $\prod_t q(s_t \mid s_{t-1}, a_{t-1}, o_t)$ | $\prod_t q(s_t \mid h_t, o_t)$ | $(s_{t-1}, a_{t-1})$ absorbed into $h_t$ |
+| 5 | $\mathrm{KL}[q(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})]$ | $\mathrm{KL}[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid h_t)]$ | Same as above |
+
+→ **No new math — just the mechanical substitution "$(s_{t-1}, a_{t-1})$ → $h_t$"**. $h_t$ is deterministic and does not participate in integration, but because it depends on $s_{t-1}$, when sampling an $s$ trajectory the $h$ trajectory must be computed sequentially (see implementation pseudocode inside the §⚙️ Step 3 fold).
+
+</details>
 
 
 ### 🧪 Key Experiments
