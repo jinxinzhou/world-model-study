@@ -2129,7 +2129,7 @@ for k in 1..d:
 | 总训练 cost | $\mathcal{O}(T \cdot \text{decoder})$ | $\mathcal{O}(T \cdot D \cdot \text{decoder})$ |
 | $D = 50$ 时 | 可行 | cost 涨 ~50× → **跑不起** |
 
-> 💡 **$D$ 是什么 / 为什么论文用 50**:$D$ = latent overshooting 的**最大预测跨度**,公式里 $\sum_{d=1}^{D}$ 的上界 —— 训练时强制模型预测准 1, 2, ..., $D$ 步之后的 latent。$D = 1$ 时退化回 §🧬 RSSM 原版 ELBO;PlaNet 实际用 $D = 50$,大致等于训练序列长度,基本"训练时所有可能的跨度都覆盖"。能扛 50 是因为下面 Latent Overshooting 把每个跨度的 cost 从"decoder 前向"砍到"transition 前向 + 高斯 KL 闭式"。
+> 💡 $D$ = latent overshooting 的**最大预测跨度**,公式里 $\sum_{d=1}^{D}$ 的上界 —— 训练时强制模型预测准 1, 2, ..., $D$ 步之后的 latent。$D = 1$ 时退化回 §🧬 RSSM 原版 ELBO;PlaNet 实际用 $D = 50$,大致等于训练序列长度,基本"训练时所有可能的跨度都覆盖"。能扛 50 是因为下面 Latent Overshooting 把每个跨度的 cost 从"decoder 前向"砍到"transition 前向 + 高斯 KL 闭式"。
 >
 > ⚠️ **别和 CEM 规划 horizon $H = 12$ 搞混**:$D$ 是**训练时**多步 KL 的最大跨度(离线正则强度);$H$ 是**部署时** CEM 向前 rollout 的步数(在线规划深度)。$D > H$ 是合理设计 —— 训练得越远,推理时才能规划得更远而不漂移。
 
