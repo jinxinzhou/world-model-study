@@ -1950,20 +1950,36 @@ In the bare latent SSM from §⚙️ End-to-End Joint Training, **all informatio
 
 #### Fix: add a deterministic path → RSSM
 
-Add a **purely deterministic parallel path** $h_t$, dedicated to memory:
+Add a **purely deterministic parallel path** $h_t$, dedicated to memory — the complete RSSM state has two parts: deterministic $h_t$ and stochastic $s_t$:
 
 <p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
 
-**Dual-path division of duties**:
+```
+state = (h_t, s_t)
+        ↑    ↑
+   deterministic  stochastic
+   (GRU)          (Gaussian)
+```
 
-| Part | Role | Analogy |
-|---|---|---|
-| **$h_t$** (deterministic) | Long-range memory, lossless information transport | RNN's hidden state |
-| **$s_t$** (stochastic) | Express environmental uncertainty, multiple possible futures | VAE's latent |
+| Variable | Type | Produced By | Role |
+|----------|------|-------------|------|
+| `h_t` | **Deterministic** | GRU hidden state: `h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})` | **Long-term memory**, stable |
+| `s_t` | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
 
-This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + **S**tate-**S**pace **M**odel (stochastic), **stitched together**.
+**Why must we go dual-path?** The two dead-ends of single-path designs:
 
-> 🔑 Figure 2 in the paper says it all: **(a) pure deterministic RNN** = remembers but cannot express uncertainty | **(b) pure stochastic SSM** = expresses uncertainty but cannot remember | **(c) RSSM = a + b** = best of both worlds
+| Single-path Design | Fatal problem |
+|--------------------|---------------|
+| **Pure deterministic RNN** (figure (a) below) | Cannot express noise, multi-modal futures |
+| **Pure stochastic SSM** (figure (b) below) | Unstable training; long-range info washed out by sampling noise |
+| **Dual path h + s** (figure (c) below) ⭐ | h guarantees stable memory, s expresses uncertainty — handled independently |
+
+→ This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + **S**tate-**S**pace **M**odel (stochastic), **stitched together** — separating "stable memory of the past" from "uncertainty about the future" into two independent variables.
+
+<p align="center">
+  <img src="asset/planet-2019/rssm.png" width="900"/><br/>
+  <i>Paper Figure 2: three dynamics models compared. <b>(a) RNN</b> only deterministic h / <b>(b) SSM</b> only stochastic s / <b>(c) RSSM</b> h (squares) + s (circles) coexist with distinct roles — PlaNet's core innovation</i>
+</p>
 
 #### One-sentence summary
 
@@ -2026,38 +2042,7 @@ This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + *
 
 ### 🔧 Implementation Details Deep-Dive
 
-#### Detail ①: RSSM State Decomposition (PlaNet's Most Important Contribution)
-
-<p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
-
-```
-state = (h_t, s_t)
-        ↑    ↑
-   deterministic  stochastic
-   (GRU)          (Gaussian)
-```
-
-| Variable | Type | Produced By | Role |
-|----------|------|-------------|------|
-| `h_t` | **Deterministic** | GRU hidden state: `h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})` | **Long-term memory**, stable |
-| `s_t` | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
-
-**Why dual-path?** (Key insight)
-
-| Single-path Design | Problem |
-|--------------------|---------|
-| **Pure deterministic** | Cannot express noise, multi-modal futures |
-| **Pure stochastic** | Unstable training, long-term info washed out by noise |
-| **Dual path h + s** | ✅ h guarantees stable memory, s expresses uncertainty |
-
-→ This is the **core mathematical intuition** of RSSM: separate "stable memory of the past" and "uncertainty about the future" into two independent variables.
-
-<p align="center">
-  <img src="asset/planet-2019/rssm.png" width="900"/><br/>
-  <i>Paper Figure 1: Probabilistic graphical comparison of three dynamics models. <b>(a) RNN</b>: only deterministic h, cannot express uncertainty; <b>(b) SSM</b>: only stochastic s, long-term info easily washed out by noise; <b>(c) RSSM</b>: h (squares, deterministic) + s (circles, stochastic) coexist with distinct roles — this is PlaNet's core innovation</i>
-</p>
-
-#### Detail ②: Roles of the Four Sub-Networks
+#### Detail ①: Roles of the Four Sub-Networks
 
 | Network | Form | When Used |
 |---------|------|-----------|
@@ -2068,7 +2053,7 @@ state = (h_t, s_t)
 
 🔑 **Core mechanism**: **At training time, use the Encoder's posterior s (supervised by obs); at planning time, use the Transition's prior s (no obs available)** — this is what enables RSSM to "imagine the future in latent space".
 
-#### Detail ③: End-to-End ELBO Loss
+#### Detail ②: End-to-End ELBO Loss
 
 PlaNet **merges World Models' separately-trained V and M into a single objective**:
 
@@ -2081,7 +2066,7 @@ Three terms optimized jointly:
 
 → A single gradient optimizes all 4 sub-networks, so **features automatically become decision-useful** (unlike World Models' V which only learns reconstruction).
 
-#### Detail ④: Latent Overshooting (Long-Horizon Stability Trick)
+#### Detail ③: Latent Overshooting (Long-Horizon Stability Trick)
 
 Standard ELBO only considers "single-step prediction", but PlaNet does H=12 step planning → **multi-step predictions must all be accurate**.
 
