@@ -2078,13 +2078,72 @@ But PlaNet's CEM planner needs to roll out **$H = 12$ steps** in latent space, a
 - The prior has only ever seen "predict $s_t$ from $s_{t-1}, a_{t-1}$" — **it has never been trained to "predict $s_t$ from $s_{t-3}$ over 3 steps"**
 - Result: as $H$ grows, the dreamed latent drifts further and further from the true trajectory
 
-#### Fix: multi-step priors must also align with multi-step posteriors
+→ The natural fix: **explicitly supervise the prior's multi-step predictions too**. To do that, we first need to nail down what "multi-step" actually means inside RSSM — the building block both candidate fixes will share.
 
-Force the prior to align not just at 1 step, but at every horizon $d \in \{1, 2, \dots, D\}$:
+#### Shared building block: rolling the prior forward $d$ steps
 
-> Starting from $(s_{t-d}, h_{t-d})$, the distribution obtained by **autoregressively rolling the prior forward $d$ steps** $\;\approx\;$ the posterior the encoder gives at time $t$ after seeing $o_t$.
+In RSSM, $s_t$ is parameterized by **two** distributions, differing only in **whether they see observations**:
 
-Key design: **do the alignment (KL) in latent space, not by decoding back to images** — decoding would cost $\mathcal{O}(D \cdot T \cdot \text{decoder})$, while latent KL is just $\mathcal{O}(D \cdot T)$ with a tiny constant.
+| Name | Form | When used | Sees $o$? |
+|---|---|---|---|
+| **posterior** (encoder) | $q_\phi(s_t \mid h_t, o_t)$ | training / encoding the current frame | **yes**, $o_t$ |
+| **prior** (transition) | $p_\theta(s_t \mid h_t)$ | imagining the future / planning | **no** obs |
+
+"**Rolling the prior forward $d$ steps**" means: starting from some $(h_t, s_t)$ and **without ever touching any real observation**, sample $d$ steps ahead autoregressively using only the prior:
+
+```python
+h, s = h_t, s_t                       # starting point (came from posterior)
+for k in 1..d:
+    h = GRU(h, s, a[t+k-1])           # advance deterministic memory with the real action
+    mu_p, sigma_p = transition(h)     # prior reads only h, NOT o!
+    s = mu_p + sigma_p * eps,  eps ~ N(0, I)   # reparameterized sample
+# After the loop we have \hat h_{t+d}, \hat s_{t+d}
+# — a "d-step-ahead latent" extrapolated purely by the model
+```
+
+The **only** difference vs the encoder-side rollout is the line that samples $s$: the encoder peeks at $o_{t+k}$, the prior does not. This is exactly the situation **at planning time** — future observations have not happened yet, so we must rely on the prior alone.
+
+→ Both candidate fixes below build on this same "roll $d$ steps" operation; they differ only in what they do with $\hat s_{t+d}$.
+
+#### Wrong path: Observation Overshooting (too expensive)
+
+The most direct idea: **decode the rolled-out $\hat s_{t+d}$ back to an image** and compute a reconstruction loss against the true observation $d$ steps later:
+
+```
+For each time t and each horizon d = 1, ..., D:
+    1. From (h_t, s_t), roll the prior d steps → (\hat h_{t+d}, \hat s_{t+d})
+    2. Decode: \hat o_{t+d} ~ p_θ(o | \hat h_{t+d}, \hat s_{t+d})
+    3. Compute reconstruction loss against the real o_{t+d}
+Sum it all up as an extra training signal.
+```
+
+The intuition is clean — the "imagined frame" must match "the frame that actually happens $d$ steps later", and long-horizon prediction is explicitly supervised.
+
+**Problem: the cost makes it untrainable.** The decoder is a heavy deconvolutional network producing 64×64×3 pixels per forward pass:
+
+| Item | Standard ELBO | Observation Overshooting |
+|---|---|---|
+| Decoder forward passes | 1 per timestep | 1 per $(t, d)$ pair → **$T \times D$** |
+| Total training cost | $\mathcal{O}(T \cdot \text{decoder})$ | $\mathcal{O}(T \cdot D \cdot \text{decoder})$ |
+| At $D = 50$ | feasible | ~50× cost blow-up → **infeasible** |
+
+→ The paper lists it as a contrast, then **rejects** it — right idea, but the decoder can't survive that many forward passes.
+
+#### PlaNet's fix: Latent Overshooting (alignment in latent space)
+
+The key insight: **you don't need to decode $\hat s_{t+d}$ back to an image to supervise it** — just compute a KL in latent space between "the rolled-out multi-step prior" and "the posterior the encoder gives at time $t$ after seeing $o_t$":
+
+> Starting from $(s_{t-d}, h_{t-d})$, the distribution obtained by **autoregressively rolling the prior forward $d$ steps** $\;\approx\;$ the posterior $q_\phi(s_t \mid h_t, o_t)$ the encoder gives at time $t$.
+
+Replacing "decoder + pixel loss" by "Gaussian KL in latent space" cleans up the cost model immediately:
+
+| Per extra $(t, d)$ | Observation Overshooting | Latent Overshooting |
+|---|---|---|
+| Heavy computation | decoder forward (big deconv) | transition forward (small MLP) |
+| Loss form | pixel-level MSE / reconstruction likelihood | **closed-form Gaussian KL**, no resampling |
+| $D = 50$ feasibility | ❌ unaffordable | ✅ negligible overhead ⭐ |
+
+→ This is the Latent Overshooting PlaNet actually uses, and it is **what makes large spans like $D = 50$ practical**.
 
 <p align="center">
   <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
@@ -2098,15 +2157,13 @@ Just replace the **single 1-step KL** in the §🧬 RSSM ELBO with a **weighted 
 | Where | RSSM ELBO | Latent Overshooting version |
 |---|---|---|
 | KL term | $\mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid h_t)]$ (only 1 step) | $\sum_{d=1}^{D} \alpha_d \cdot \mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta^{(d)}(s_t \mid s_{t-d}, h_{t-d}, a_{t-d:t-1})]$ (1..$D$ steps) |
-| Where the $d$-step prior $p_\theta^{(d)}$ comes from | not needed | Starting from $(s_{t-d}, h_{t-d})$, **autoregressively roll the prior forward $d$ steps** to $s_t$ |
+| Where the $d$-step prior $p_\theta^{(d)}$ comes from | not needed | Starting from $(s_{t-d}, h_{t-d})$, **autoregressively roll the prior forward $d$ steps** to $s_t$ (the "shared building block" above) |
 | Reconstruction / reward | unchanged | unchanged (latent overshooting **only modifies the KL**) |
 | Weights $\alpha_d$ | — | the paper uses uniform $\alpha_d = 1/D$ |
 
 Substituting back gives **the training objective whose gradients Latent Overshooting actually backpropagates**:
 
 <p align="center"><img src="asset/formulas/planet/f35_en.png" alt="formula 35" style="max-width: 100%; height: auto;"/></p>
-
-> 💡 **Key contrast with (b) Observation Overshooting**: that variant decodes every $d$-step prior back to an image and computes pixel reconstruction loss, costing $D$× extra decoder forwards + pixel loss; latent KL stays in $s$-space (closed-form for diagonal Gaussians), so cost barely increases. This is exactly what lets PlaNet **afford large spans like $D = 50$**.
 
 #### Experimental effect (see §🧪)
 

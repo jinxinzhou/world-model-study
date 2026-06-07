@@ -2067,17 +2067,76 @@ for batch in dataloader:
 - prior 只见过 "$s_{t-1}, a_{t-1}$ 直接预测 $s_t$",**从来没被训练过 "$s_{t-3}$ 跨 3 步预测 $s_t$"**
 - 结果:$H$ 越大,梦境里的 latent 离真实轨迹越远
 
-#### 解法:多步 prior 也要对齐多步 posterior
+→ 思路自然:**让 prior 的多步预测也被显式监督**。要"监督多步",先得说清"多步"在 RSSM 里到底怎么算 —— 这是后面所有候选方案的共同构件。
 
-让 prior 不只单步对齐,而是每个跨度 $d \in \{1, 2, \dots, D\}$ 都要对齐:
+#### 共同构件:用 prior 滚 $d$ 步预测未来
 
-> 从 $(s_{t-d}, h_{t-d})$ 出发,用 prior **自回归滚 $d$ 步**得到的分布 $\;\approx\;$ encoder 在 $t$ 时刻看到 $o_t$ 后给出的 posterior。
+RSSM 里 $s_t$ 由**两个**分布刻画,差别全在**是否看观测**:
 
-关键设计:**在 latent 空间做对齐(KL),不重建到图像** —— 重建代价 $\mathcal{O}(D \cdot T \cdot \text{decoder})$,而 latent KL 只是 $\mathcal{O}(D \cdot T)$,常数小得多。
+| 名字 | 形式 | 何时用 | 看不看 $o$ |
+|---|---|---|---|
+| **posterior**(encoder) | $q_\phi(s_t \mid h_t, o_t)$ | 训练 / 编码当前帧 | **看** $o_t$ |
+| **prior**(transition) | $p_\theta(s_t \mid h_t)$ | 想象未来 / 规划 | **不看** obs |
+
+"**用 prior 滚 $d$ 步**"就是从某个起点 $(h_t, s_t)$ 出发,**全程不接触任何真实观测**,纯靠 prior 自回归地往前采 $d$ 步:
+
+```python
+h, s = h_t, s_t                       # 起点(来自 posterior)
+for k in 1..d:
+    h = GRU(h, s, a[t+k-1])           # 用真实动作,推进确定性记忆
+    mu_p, sigma_p = transition(h)     # prior 只吃 h, 不看 o!
+    s = mu_p + sigma_p * eps,  eps ~ N(0, I)   # 重参数化采样
+# 跑完得到 \hat h_{t+d}, \hat s_{t+d}
+# —— 完全靠模型外推出来的"d 步后未来 latent"
+```
+
+跟训练时 encoder 路径的**唯一差别**就在采 $s$ 那一行:encoder 偷看 $o_{t+k}$,prior 不偷看。这正好对应**规划时的实际行为** —— 未来观测还没发生,只能靠 prior。
+
+→ 接下来两条候选路径都基于这同一个"滚 $d$ 步"操作,差别只在拿 $\hat s_{t+d}$ 干什么。
+
+#### 错误路径:Observation Overshooting(代价过高)
+
+最直接的想法:把滚出来的 $\hat s_{t+d}$ **解码回图像**,跟 $d$ 步后真实的观测算 reconstruction loss:
+
+```
+对每个时刻 t、每个跨度 d = 1, ..., D:
+    1. 从 (h_t, s_t) 起, 用 prior 滚 d 步 → (\hat h_{t+d}, \hat s_{t+d})
+    2. 用 decoder 重建: \hat o_{t+d} ~ p_θ(o | \hat h_{t+d}, \hat s_{t+d})
+    3. 跟真实 o_{t+d} 算 reconstruction loss
+合起来作为额外训练信号
+```
+
+直观很对 —— "想象出的画面"必须能对上"$d$ 步后实际看到的画面",长程预测就被监督到了。
+
+**问题:贵到训不动。** decoder 是个反卷积大网络,每次 forward 输出 64×64×3 像素:
+
+| 项目 | 标准 ELBO | Observation Overshooting |
+|---|---|---|
+| decoder 前向次数 | 每个时刻 1 次 | 每个 $(t, d)$ 对 1 次 → **$T \times D$ 次** |
+| 总训练 cost | $\mathcal{O}(T \cdot \text{decoder})$ | $\mathcal{O}(T \cdot D \cdot \text{decoder})$ |
+| $D = 50$ 时 | 可行 | cost 涨 ~50× → **跑不起** |
+
+→ 论文把它写出来作为对照,然后**否决** —— 思路对,但 decoder 扛不住这么多次前向。
+
+#### PlaNet 的解法:Latent Overshooting(对齐在 latent 空间)
+
+关键洞察:**不必把 $\hat s_{t+d}$ 解码回图像才能监督它** —— 直接在 latent 空间,让"滚出来的 multi-step prior" 跟 "encoder 在 $t$ 时刻看到 $o_t$ 后给出的 posterior" 算 KL 就够了:
+
+> 从 $(s_{t-d}, h_{t-d})$ 出发,用 prior **自回归滚 $d$ 步**得到的分布 $\;\approx\;$ encoder 在 $t$ 时刻给出的 posterior $q_\phi(s_t \mid h_t, o_t)$
+
+把 Observation Overshooting 里"解码 + pixel loss"这步**换成"latent 空间高斯 KL"**,代价模型立刻变干净:
+
+| 每个 $(t, d)$ 多算 | Observation Overshooting | Latent Overshooting |
+|---|---|---|
+| 重型计算 | decoder 前向(大反卷积网) | transition 前向(小 MLP) |
+| loss 形式 | pixel-level MSE / 重建似然 | **高斯 KL 闭式**,不用再采样 |
+| $D = 50$ 可行性 | ❌ 算不起 | ✅ 几乎不增成本 ⭐ |
+
+→ 这正是 PlaNet 真正用的 Latent Overshooting,**让 $D = 50$ 这种大跨度成为可能**。
 
 <p align="center">
   <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
-  <i>论文 Figure 3:三种训练目标对比。<b>(a) 标准 ELBO</b> 只在相邻时间步约束(1-step KL,易长程漂移) / <b>(b) Observation Overshooting</b> 跨多步重建观察(精度高但代价大) / <b>(c) Latent Overshooting</b> ⭐ 在 latent 空间跨多步对齐 prior 和 posterior 的 KL —— 平衡了准确性和计算成本</i>
+  <i>论文 Figure 3:三种训练目标对比。<b>(a) 标准 ELBO</b> 只在相邻时间步约束(1-step KL,易长程漂移)/ <b>(b) Observation Overshooting</b> 跨多步重建观察(精度高但代价大)/ <b>(c) Latent Overshooting</b> ⭐ 在 latent 空间跨多步对齐 prior 和 posterior 的 KL —— 平衡了准确性和计算成本</i>
 </p>
 
 #### 对应的 ELBO 训练目标(Latent Overshooting 版)
@@ -2087,15 +2146,13 @@ for batch in dataloader:
 | 位置 | RSSM ELBO | Latent Overshooting 版 |
 |---|---|---|
 | KL 项 | $\mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid h_t)]$(只 1 步) | $\sum_{d=1}^{D} \alpha_d \cdot \mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta^{(d)}(s_t \mid s_{t-d}, h_{t-d}, a_{t-d:t-1})]$(对齐 1..$D$ 步) |
-| 多步 prior $p_\theta^{(d)}$ 怎么来 | 不需要 | 从 $(s_{t-d}, h_{t-d})$ 起,**用 prior 自回归滚 $d$ 步**到 $s_t$ |
+| 多步 prior $p_\theta^{(d)}$ 怎么来 | 不需要 | 从 $(s_{t-d}, h_{t-d})$ 起,**用 prior 自回归滚 $d$ 步**到 $s_t$(就是上面"共同构件"那段) |
 | 重建 / reward 项 | 不变 | 不变(latent overshooting **只动 KL**) |
 | 权重 $\alpha_d$ | — | 论文用 $\alpha_d = 1/D$ 等权 |
 
 代回得到 **Latent Overshooting 实际反传梯度的训练目标**:
 
 <p align="center"><img src="asset/formulas/planet/f35.png" alt="formula 35" style="max-width: 100%; height: auto;"/></p>
-
-> 💡 **跟 (b) Observation Overshooting 的关键差异**:后者要把每个 $d$-步 prior 解码回图像再算 reconstruction loss,代价多 $D$ 倍的 decoder 前向 + pixel loss;而 latent KL 只在 $s$ 空间里(对角高斯时甚至是闭式),代价几乎不增。这是 PlaNet **能负担起 $D = 50$ 这种大跨度** 的原因。
 
 #### 实验效果(详见 §🧪)
 
