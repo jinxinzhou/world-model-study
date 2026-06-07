@@ -1584,6 +1584,25 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 > Analogy: have a JPEG-compression expert compress an image, then ask a physicist to predict the object's motion from the compressed code. The compression expert has no idea the physicist needs things like "velocity".
 
+##### How PlaNet fills in the information $z$ misses (side-by-side preview)
+
+| Information type | World Models' $z$ | PlaNet's $s_t$ |
+|---|---|---|
+| Static appearance (color, shape) | ✅ Needed for reconstruction, learned | ✅ |
+| Velocity (frame difference) | ❌ Not needed for single-frame reconstruction, not learned | ✅ Transition must predict the next frame; pulled back via KL |
+| Reward-relevant features | ❌ Not needed for reconstruction, not learned | ✅ Pulled back by the reward term |
+| Physical regularities (inertia, collision) | ❌ Not learned | ✅ Pulled back by transition consistency |
+
+##### Side benefits: diagnosability + extensibility
+
+- **Diagnosability**: decoder degrades → reconstruction loss rises; transition degrades → KL rises — **the failing component is locatable** (in World Models, a bad z could be the VAE's fault or the MDN-RNN's; responsibilities aren't split, hard to localize)
+- **Extensibility**: to add a new constraint (e.g., latent overshooting), just append a new term to the ELBO — **there is a theoretical basis** (continue the variational derivation), rather than World Models' "just slap on another loss and weight it"
+
+##### One-sentence summary
+
+> **The World Models VAE has no idea what z will be used for — it just wants to reconstruct this frame well.**
+> **The PlaNet encoder knows: my $s_t$ will be rolled forward by the transition, used to predict reward, and decoded into images — the gradients from these three downstream tasks will force me to pack into $s_t$ whatever is useful for all of them.**
+
 #### 2. PlaNet's fix: joint optimization
 
 ##### Step 1 - Starting point: vanilla latent variable sequence model (Latent State-Space Model, SSM)
@@ -1935,25 +1954,6 @@ for batch in dataloader:
 </details>
 
 > 💡 **One sentence**: **ELBO = real log-likelihood is intractable → Jensen creates a lower bound → graphical model expands the ELBO into 3 computable terms (reconstruction + reward + KL) → reparameterization lets gradients flow through sampling.**
-
-#### 3. Why this concretely solves the problem
-
-| Information type | World Models' $z$ | PlaNet's $s_t$ |
-|---|---|---|
-| Static appearance (color, shape) | ✅ Needed for reconstruction, learned | ✅ |
-| Velocity (frame difference) | ❌ Not needed for single-frame reconstruction, not learned | ✅ Transition must predict the next frame; pulled back via KL |
-| Reward-relevant features | ❌ Not needed for reconstruction, not learned | ✅ Pulled back by the reward term |
-| Physical regularities (inertia, collision) | ❌ Not learned | ✅ Pulled back by transition consistency |
-
-#### 4. Side benefits: diagnosability + extensibility
-
-- **Diagnosability**: decoder degrades → reconstruction loss rises; transition degrades → KL rises — **the failing component is locatable** (in World Models, a bad z could be the VAE's fault or the MDN-RNN's; responsibilities aren't split, hard to localize)
-- **Extensibility**: to add a new constraint (e.g., latent overshooting), just append a new term to the ELBO — **there is a theoretical basis** (continue the variational derivation), rather than World Models' "just slap on another loss and weight it"
-
-#### 5. One-sentence summary
-
-> **The World Models VAE has no idea what z will be used for — it just wants to reconstruct this frame well.**
-> **The PlaNet encoder knows: my $s_t$ will be rolled forward by the transition, used to predict reward, and decoded into images — the gradients from these three downstream tasks will force me to pack into $s_t$ whatever is useful for all of them.**
 
 ### 🧬 RSSM: Dual-Path Latent Architecture
 

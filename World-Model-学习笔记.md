@@ -1583,6 +1583,25 @@ World Models 用三阶段独立训练:Stage 1 训 VAE,Stage 2 冻住 VAE 训 MDN
 
 > 类比:让一个图像压缩专家压完图,再让一个物理学家从压缩码预测物体的运动 —— 压缩专家根本不知道物理学家需要"速度"这种东西。
 
+##### PlaNet 怎么补上 $z$ 缺失的信息(对照预览)
+
+| 信息类型 | World Models 的 $z$ | PlaNet 的 $s_t$ |
+|---|---|---|
+| 静态外观(颜色、形状) | ✅ 重建需要,会学到 | ✅ |
+| 速度(两帧之差) | ❌ 单帧重建不需要,不学 | ✅ transition 需要预测下一帧,通过 KL 反推 |
+| 与 reward 相关的特征 | ❌ 重建不需要,不学 | ✅ reward 项反推 |
+| 物理规律(惯性、碰撞) | ❌ 不学 | ✅ transition 一致性反推 |
+
+##### 副产物:可诊断 + 可扩展
+
+- **诊断性**:decoder 学坏 → 重建 loss 升;transition 学坏 → KL 升 —— **能定位是哪个组件出问题**(World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,职能未拆开,定位困难)
+- **可扩展性**:想加新约束(如 latent overshooting)直接在 ELBO 后面加项即可,**理论上有依据**(变分推导继续走),而不是 World Models 的"再拍个 loss 加权"
+
+##### 一句话总结
+
+> **World Models 的 VAE 不知道 z 会被拿去干什么 —— 它只想"重建好这一帧"。**
+> **PlaNet 的 encoder 知道:我编出的 $s_t$ 会被 transition 滚向未来、被 reward 预测奖励、被 decoder 还原图像 —— 这三个下游任务的梯度会逼着我把对它们都有用的信息全塞进 $s_t$。**
+
 #### 2. PlaNet 的解法:联合优化
 
 ##### 步骤1 - 起点:朴素的隐变量序列模型(Latent State-Space Model, SSM)
@@ -1933,25 +1952,6 @@ for batch in dataloader:
 
 </details>
 
-
-#### 3. 这样为什么能解决问题:具体对照
-
-| 信息类型 | World Models 的 $z$ | PlaNet 的 $s_t$ |
-|---|---|---|
-| 静态外观(颜色、形状) | ✅ 重建需要,会学到 | ✅ |
-| 速度(两帧之差) | ❌ 单帧重建不需要,不学 | ✅ transition 需要预测下一帧,通过 KL 反推 |
-| 与 reward 相关的特征 | ❌ 重建不需要,不学 | ✅ reward 项反推 |
-| 物理规律(惯性、碰撞) | ❌ 不学 | ✅ transition 一致性反推 |
-
-#### 4. 副产物:可诊断 + 可扩展
-
-- **诊断性**:decoder 学坏 → 重建 loss 升;transition 学坏 → KL 升 —— **能定位是哪个组件出问题**(World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,职能未拆开,定位困难)
-- **可扩展性**:想加新约束(如 latent overshooting)直接在 ELBO 后面加项即可,**理论上有依据**(变分推导继续走),而不是 World Models 的"再拍个 loss 加权"
-
-#### 5. 一句话总结
-
-> **World Models 的 VAE 不知道 z 会被拿去干什么 —— 它只想"重建好这一帧"。**
-> **PlaNet 的 encoder 知道:我编出的 $s_t$ 会被 transition 滚向未来、被 reward 预测奖励、被 decoder 还原图像 —— 这三个下游任务的梯度会逼着我把对它们都有用的信息全塞进 $s_t$。**
 
 ### 🧬 RSSM:双路 latent 架构
 
