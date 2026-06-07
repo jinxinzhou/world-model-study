@@ -1973,6 +1973,28 @@ for batch in dataloader:
   <i>论文 Figure 2:三种动力学模型对比。<b>(a) RNN</b> 只有确定性 h / <b>(b) SSM</b> 只有随机 s / <b>(c) RSSM</b> h(方块)+ s(圆圈)并存,各司其职 —— PlaNet 的核心创新</i>
 </p>
 
+> 🔍 **怎么读图里的实线 vs 虚线?**(生成方向 vs 推理方向)
+>
+> | 方向 | 实线 / 虚线 | 数学对象 | 干什么 |
+> |---|---|---|---|
+> | **生成** | 实线(箭头从 $s$ 流向 $o$) | $p_\theta$ —— 模型分布 | "**模型描述世界怎么演化**":给定 $s$ 产生 $o, r$;给定 $(s_{t-1}, a_{t-1})$ 产生 $s_t$ |
+> | **推理** | 虚线(箭头从 $o$ 反向流向 $s$) | $q_\phi$ —— encoder | "**给定 obs 反推 latent**":看到 $o_t$ 应该把它认成哪个 $s_t$ |
+>
+> **跟前面已经认识的网络对应**:
+> - 实线 $s \to o$、$s \to r$ ⇔ **decoder / reward head** —— $p_\theta(o_t \mid h_t, s_t)$、$p_\theta(r_t \mid h_t, s_t)$
+> - 实线 $s_{t-1}, a_{t-1} \to s_t$(RSSM 里通过 $h_t$ 汇总)⇔ **transition prior** —— $p_\theta(s_t \mid h_t)$
+> - 虚线 $o_t \dashrightarrow s_t$ ⇔ **encoder posterior** —— $q_\phi(s_t \mid h_t, o_t)$
+>
+> **三种使用场景对应**:
+>
+> | 场景 | 用哪个方向 |
+> |---|---|
+> | **训练**(算 ELBO) | **两个都用** —— 虚线 encoder 推 $s$,实线 decoder 算 reconstruction |
+> | **CEM 规划 / 想象未来** | **只用实线** —— 从当前 $(h_t, s_t)$ 出发沿 prior + decoder 想象 rollout,未来 obs 不存在,**不需要 encoder** |
+> | **部署时编码当前帧** | **只用虚线** —— 把当前 obs 编码成 belief $s_t$,然后才有起点做规划 |
+>
+> → 这也呼应了前面 🔑 **关于 $o_t$ 的信息必须经过 encoder 的采样 $s_t$** 那条硬约束:obs 只能走**虚线**(推理,经 encoder)进入模型,不能旁路走生成方向直接跑到 decoder。
+
 #### 对应的 ELBO 训练目标(RSSM 版)
 
 只要把 §⚙️ Step 3 的 bare-SSM ELBO 里**两处条件机械替换**就得到 RSSM 版:

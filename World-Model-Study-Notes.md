@@ -1984,6 +1984,28 @@ state = (h_t, s_t)
   <i>Paper Figure 2: three dynamics models compared. <b>(a) RNN</b> only deterministic h / <b>(b) SSM</b> only stochastic s / <b>(c) RSSM</b> h (squares) + s (circles) coexist with distinct roles — PlaNet's core innovation</i>
 </p>
 
+> 🔍 **How to read the solid vs dashed arrows in the figure?** (Generation vs inference direction)
+>
+> | Direction | Solid / dashed | Math object | Role |
+> |---|---|---|---|
+> | **Generation** | solid (arrows flow from $s$ to $o$) | $p_\theta$ — model distribution | "**How the model describes the world evolving**": given $s$, produce $o, r$; given $(s_{t-1}, a_{t-1})$, produce $s_t$ |
+> | **Inference** | dashed (arrows flow back from $o$ to $s$) | $q_\phi$ — encoder | "**Given obs, recover the latent**": seeing $o_t$, what $s_t$ best explains it? |
+>
+> **Maps to the networks we already know**:
+> - Solid $s \to o$, $s \to r$ ⇔ **decoder / reward head** — $p_\theta(o_t \mid h_t, s_t)$, $p_\theta(r_t \mid h_t, s_t)$
+> - Solid $s_{t-1}, a_{t-1} \to s_t$ (in RSSM summarized through $h_t$) ⇔ **transition prior** — $p_\theta(s_t \mid h_t)$
+> - Dashed $o_t \dashrightarrow s_t$ ⇔ **encoder posterior** — $q_\phi(s_t \mid h_t, o_t)$
+>
+> **Three usage scenarios**:
+>
+> | Scenario | Which direction |
+> |---|---|
+> | **Training** (compute ELBO) | **Both** — dashed encoder infers $s$, solid decoder computes reconstruction |
+> | **CEM planning / imagining the future** | **Solid only** — start from $(h_t, s_t)$ and roll forward via prior + decoder; future obs do not exist, **no encoder needed** |
+> | **Deployment-time encoding of the current frame** | **Dashed only** — encode current obs into belief $s_t$, which then serves as the starting point for planning |
+>
+> → This also reflects the earlier 🔑 **"all information about $o_t$ must pass through the encoder's sampled $s_t$"** constraint: obs may only enter the model through the **dashed** path (inference, via the encoder), never via a side-channel directly into the decoder.
+
 #### Corresponding ELBO training objective (RSSM version)
 
 Mechanical substitution of the conditioning in §⚙️ Step 3's bare-SSM ELBO gives the RSSM version — two replacements:
