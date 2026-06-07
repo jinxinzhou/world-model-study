@@ -1966,10 +1966,7 @@ state = (h_t, s_t)
 | $h_t$ | **Deterministic** | GRU hidden state: $h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **Long-term memory**, stable |
 | $s_t$ | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
 
-> 🔑 **Key architectural constraint (easy to miss)**: **All information about $o_t$ must pass through the encoder's sampled $s_t$ to reach downstream** — $o_t$ cannot be fed directly into decoder / reward / transition. The paper makes this design explicit:
->
-> > *"Importantly, all information about the observations must pass through the sampling step of the encoder to avoid a deterministic shortcut from inputs to reconstructions."*
->
+> 🔑 **Key architectural constraint (easy to miss)**: **All information about $o_t$ must pass through the encoder's sampled $s_t$ to reach downstream** — $o_t$ cannot be fed directly into decoder / reward / transition.
 > Otherwise the decoder would receive $o_t$ directly and reconstruct it, **taking a "deterministic shortcut" that bypasses $s_t$**, leaving the latent useless. That is why the encoder is the only network that reads $o_t$, while decoder / reward / transition all read only $(h_t, s_t)$ — the asymmetry is not accidental, it is a design constraint (visible in the sub-network table of §🔧 Detail ①).
 
 **Why must we go dual-path?** The two dead-ends of single-path designs:
@@ -1987,18 +1984,32 @@ state = (h_t, s_t)
   <i>Paper Figure 2: three dynamics models compared. <b>(a) RNN</b> only deterministic h / <b>(b) SSM</b> only stochastic s / <b>(c) RSSM</b> h (squares) + s (circles) coexist with distinct roles — PlaNet's core innovation</i>
 </p>
 
-#### One-sentence summary
+#### Corresponding ELBO training objective (RSSM version)
 
-> **RSSM = the bare latent SSM augmented with a deterministic memory path** — h carries long-range information losslessly, while s preserves the ability to express uncertainty.
+Mechanical substitution of the conditioning in §⚙️ Step 3's bare-SSM ELBO gives the RSSM version — two replacements:
 
-#### Common pitfalls when cross-referencing the paper's notation
+| Where | bare-SSM | RSSM |
+|---|---|---|
+| Past-information carrier | $(s_{t-1}, a_{t-1})$ | $h_t$ (absorbed by GRU) |
+| Decoder / reward inputs | only $s_t$ | $(h_t, s_t)$ |
 
-| Sticking point | The truth |
-|---|---|
-| "Is $s_t$ the POMDP state or the stochastic part?" | **The same symbol shifts meaning subtly between Eq. 2 and Eq. 4** — in Eq. 2, $s_t$ is the whole latent; in Eq. 4, $s_t$ is only the **stochastic part**, and the full state is ($h_t$, $s_t$). This note follows the Dreamer convention: $z_t$ = stochastic part, to avoid the ambiguity. |
-| "Why is the KL's prior $p(s_t \mid s_{t-1}, a_{t-1})$ instead of $p(s_t)$?" | Because it is a **conditional prior**: the previous step rolled forward through the transition model. Unlike static VAE where $p(s)$ = N(0, I) — here the prior itself is something the model has to learn. |
-| "How is the expectation in the ELBO computed?" | Reparameterize a single sample of $s_{t-1}$ and substitute. **Single-sample estimate + reparameterization** is enough. |
-| "Why not just use an RNN as the transition?" | As explained above: RNNs are deterministic, **they cannot express 'I don't know what comes next'**. In model-based RL, letting the planner know how uncertain the model is **matters a lot**. |
+The four sub-networks transform accordingly:
+
+| Network | bare-SSM | RSSM |
+|---|---|---|
+| Posterior (encoder) | $q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ | $q_\phi(s_t \mid h_t, o_t)$ |
+| Prior (transition) | $p_\theta(s_t \mid s_{t-1}, a_{t-1})$ | $p_\theta(s_t \mid h_t)$ |
+| Decoder | $p_\theta(o_t \mid s_t)$ | $p_\theta(o_t \mid h_t, s_t)$ |
+| Reward | $p_\theta(r_t \mid s_t)$ | $p_\theta(r_t \mid h_t, s_t)$ |
+
+Substituting back into the ELBO gives **the training objective whose gradients RSSM actually backpropagates**:
+
+<p align="center"><img src="asset/formulas/planet/f28_en.png" alt="formula 28" style="max-width: 100%; height: auto;"/></p>
+
+Constraint: $h_t = f_\mathrm{GRU}(h_{t-1}, s_{t-1}, a_{t-1})$ — given one $s$ trajectory, the $h$ trajectory is fully determined, **not subject to integration**.
+
+> 💡 The structural form is unchanged (still reconstruction + reward + KL), only that **every conditioning gains $h_t$ as the "summary of past"**. This is also the source of the $h_t$ conditioning in all 4 sub-networks in §🔧 Detail ①.
+
 
 ### 🧪 Key Experiments
 

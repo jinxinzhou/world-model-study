@@ -1955,10 +1955,7 @@ for batch in dataloader:
 | $h_t$ | **确定性** | GRU 的隐藏状态:$h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **长程记忆**,稳定可靠 |
 | $s_t$ | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
 
-> 🔑 **架构关键约束(易漏)**:**所有关于 $o_t$ 的信息必须经过 encoder 的采样 $s_t$ 才能流到下游** —— $o_t$ 不能旁路注入 decoder / reward / transition。这是论文显式强调的设计:
->
-> > *"Importantly, all information about the observations must pass through the sampling step of the encoder to avoid a deterministic shortcut from inputs to reconstructions."*
->
+> 🔑 **架构关键约束(易漏)**:**所有关于 $o_t$ 的信息必须经过 encoder 的采样 $s_t$ 才能流到下游** —— $o_t$ 不能旁路注入 decoder / reward / transition。
 > 否则 decoder 直接拿到 $o_t$ 重建,**走"确定性捷径"绕过 $s_t$**,latent 就学不到东西。所以 encoder 是唯一读 $o_t$ 的网络,decoder / reward / transition 全只读 $(h_t, s_t)$——这个不对称不是巧合,是设计约束(§🔧 细节 ① 子网络表里可见)。
 
 **为什么必须双路?** 单路设计的两条死路:
@@ -1975,6 +1972,30 @@ for batch in dataloader:
   <img src="asset/planet-2019/rssm.png" width="900"/><br/>
   <i>论文 Figure 2:三种动力学模型对比。<b>(a) RNN</b> 只有确定性 h / <b>(b) SSM</b> 只有随机 s / <b>(c) RSSM</b> h(方块)+ s(圆圈)并存,各司其职 —— PlaNet 的核心创新</i>
 </p>
+
+#### 对应的 ELBO 训练目标(RSSM 版)
+
+只要把 §⚙️ Step 3 的 bare-SSM ELBO 里**两处条件机械替换**就得到 RSSM 版:
+
+| 位置 | bare-SSM | RSSM |
+|---|---|---|
+| 过去信息载体 | $(s_{t-1}, a_{t-1})$ | $h_t$(GRU 已吸收) |
+| decoder / reward 的输入 | 只看 $s_t$ | 看 $(h_t, s_t)$ |
+
+四个网络相应变形:
+
+| 网络 | bare-SSM | RSSM |
+|---|---|---|
+| Posterior (encoder) | $q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ | $q_\phi(s_t \mid h_t, o_t)$ |
+| Prior (transition) | $p_\theta(s_t \mid s_{t-1}, a_{t-1})$ | $p_\theta(s_t \mid h_t)$ |
+| Decoder | $p_\theta(o_t \mid s_t)$ | $p_\theta(o_t \mid h_t, s_t)$ |
+| Reward | $p_\theta(r_t \mid s_t)$ | $p_\theta(r_t \mid h_t, s_t)$ |
+
+代回 ELBO,得到 **RSSM 实际反传梯度的训练目标**:
+
+<p align="center"><img src="asset/formulas/planet/f28.png" alt="formula 28" style="max-width: 100%; height: auto;"/></p>
+
+约束:$h_t = f_\mathrm{GRU}(h_{t-1}, s_{t-1}, a_{t-1})$ —— 给定一条 $s$ 轨迹,$h$ 轨迹完全确定,**不参与积分**。
 
 
 ### 🧪 关键实验
