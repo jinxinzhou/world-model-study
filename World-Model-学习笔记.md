@@ -1852,8 +1852,6 @@ $$
 \boxed{\;\max_{\theta,\,\phi}\; \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}} \left[\, \sum_{t=1}^{T} \Big( \underbrace{\mathbb{E}_{s_t \sim q_\phi}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big]}_{\text{重建 + reward}} \;-\; \underbrace{\mathrm{KL}\!\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]}_{\text{KL}} \Big) \,\right]\;}
 $$
 
-三项 loss 都是在 $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ 下取期望(reparameterization),所以 **encoder 通过被采样出的 $s_t$ 进入前两项**,梯度沿 $s_t$ 反向流回 $\phi$:
-
 <details>
 <summary><b>推导:ELBO 是怎么来的(5 步)</b></summary>
 
@@ -1902,6 +1900,8 @@ $$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t
 → **数学只占 2 步(Jensen + KL 定义),其余 3 步全是"代入图模型告诉我们的形式"**。
 
 </details>
+
+三项 loss 都是在 $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ 下取期望(reparameterization),所以 **encoder 通过被采样出的 $s_t$ 进入前两项**,梯度沿 $s_t$ 反向流回 $\phi$:
 
 | Loss 项(对 $s_t \sim q_\phi$ 取期望) | 梯度路径 | 反向告诉 encoder 什么 |
 |---|---|---|

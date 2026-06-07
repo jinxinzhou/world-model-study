@@ -1853,8 +1853,6 @@ $$
 \boxed{\;\max_{\theta,\,\phi}\; \mathbb{E}_{(o_{1:T}, r_{1:T}, a_{1:T}) \sim p_{\text{real}}} \left[\, \sum_{t=1}^{T} \Big( \underbrace{\mathbb{E}_{s_t \sim q_\phi}\!\big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t)\big]}_{\text{reconstruction + reward}} \;-\; \underbrace{\mathrm{KL}\!\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]}_{\text{KL}} \Big) \,\right]\;}
 $$
 
-All three loss terms are taken in expectation over $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ (reparameterized sample). So **the encoder enters the first two terms through the sampled $s_t$**, with gradients flowing back along $s_t$ into $\phi$:
-
 <details>
 <summary><b>Derivation: where does ELBO come from (5 steps)</b></summary>
 
@@ -1903,6 +1901,8 @@ $$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t
 → **Math only does 2 steps (Jensen + KL definition); the other 3 are all "substitute in the form the graphical model gives us"**.
 
 </details>
+
+All three loss terms are taken in expectation over $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ (reparameterized sample). So **the encoder enters the first two terms through the sampled $s_t$**, with gradients flowing back along $s_t$ into $\phi$:
 
 | Loss term (expectation over $s_t \sim q_\phi$) | Gradient path | What it tells the encoder (backward) |
 |---|---|---|
