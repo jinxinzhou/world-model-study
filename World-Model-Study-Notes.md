@@ -2064,6 +2064,58 @@ Combining gives the **final form (per-trajectory RSSM ELBO bound)**:
 </details>
 
 
+### 🔭 Latent Overshooting: Generalize ELBO to Multi-Step Predictions
+
+> Expansion of the §4.2 pain-points row "trains only single-step prediction; multi-step errors accumulate with no explicit constraint" — **impose a KL regularizer across all prediction horizons in latent space, no decoding back to image needed**.
+
+#### Problem: RSSM ELBO only aligns "the adjacent one step" — long horizons drift
+
+The RSSM ELBO's KL term is $\mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid h_t)]$ — it only forces the **prior to single-step-predict the posterior** (only "is the next step right?").
+
+But PlaNet's CEM planner needs to roll out **$H = 12$ steps** in latent space, and all 12 must be accurate:
+
+- Single-step accuracy ≠ multi-step extrapolation stability: errors compound through the transition
+- The prior has only ever seen "predict $s_t$ from $s_{t-1}, a_{t-1}$" — **it has never been trained to "predict $s_t$ from $s_{t-3}$ over 3 steps"**
+- Result: as $H$ grows, the dreamed latent drifts further and further from the true trajectory
+
+#### Fix: multi-step priors must also align with multi-step posteriors
+
+Force the prior to align not just at 1 step, but at every horizon $d \in \{1, 2, \dots, D\}$:
+
+> Starting from $(s_{t-d}, h_{t-d})$, the distribution obtained by **autoregressively rolling the prior forward $d$ steps** $\;\approx\;$ the posterior the encoder gives at time $t$ after seeing $o_t$.
+
+Key design: **do the alignment (KL) in latent space, not by decoding back to images** — decoding would cost $\mathcal{O}(D \cdot T \cdot \text{decoder})$, while latent KL is just $\mathcal{O}(D \cdot T)$ with a tiny constant.
+
+<p align="center">
+  <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
+  <i>Paper Figure 3: comparison of three training objectives. <b>(a) Standard ELBO</b>: constraint only between adjacent timesteps (1-step KL — long-horizon drift) / <b>(b) Observation Overshooting</b>: reconstruct observations across multiple steps (accurate but expensive) / <b>(c) Latent Overshooting</b> ⭐: align prior and posterior across multiple steps in latent space via KL — balances accuracy and cost</i>
+</p>
+
+#### Corresponding ELBO training objective (Latent Overshooting version)
+
+Just replace the **single 1-step KL** in the §🧬 RSSM ELBO with a **weighted sum of $d$-step KLs** (reconstruction + reward terms are unchanged):
+
+| Where | RSSM ELBO | Latent Overshooting version |
+|---|---|---|
+| KL term | $\mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid h_t)]$ (only 1 step) | $\sum_{d=1}^{D} \alpha_d \cdot \mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta^{(d)}(s_t \mid s_{t-d}, h_{t-d}, a_{t-d:t-1})]$ (1..$D$ steps) |
+| Where the $d$-step prior $p_\theta^{(d)}$ comes from | not needed | Starting from $(s_{t-d}, h_{t-d})$, **autoregressively roll the prior forward $d$ steps** to $s_t$ |
+| Reconstruction / reward | unchanged | unchanged (latent overshooting **only modifies the KL**) |
+| Weights $\alpha_d$ | — | the paper uses uniform $\alpha_d = 1/D$ |
+
+Substituting back gives **the training objective whose gradients Latent Overshooting actually backpropagates**:
+
+<p align="center"><img src="asset/formulas/planet/f35_en.png" alt="formula 35" style="max-width: 100%; height: auto;"/></p>
+
+> 💡 **Key contrast with (b) Observation Overshooting**: that variant decodes every $d$-step prior back to an image and computes pixel reconstruction loss, costing $D$× extra decoder forwards + pixel loss; latent KL stays in $s$-space (closed-form for diagonal Gaussians), so cost barely increases. This is exactly what lets PlaNet **afford large spans like $D = 50$**.
+
+#### Experimental effect (see §🧪)
+
+- Only 1-step KL (standard ELBO) → short-horizon prediction OK, **long-horizon severely drifts**
+- Adding $D = 50$ step overshooting → **long-horizon prediction markedly more stable**
+
+→ This is **the key to PlaNet's long-horizon stability**. But **DreamerV1 simplified to just single-step KL + a critic for residual value, and worked even better** — outsourcing "long-horizon extrapolation by the model" to "long-horizon value estimation by the critic", which is more RL-native. This is also the direction PlaNet's successors evolved.
+
+
 ### 🧪 Key Experiments
 
 #### Beats Model-Free by 50× on DeepMind Control Suite (Pixel Input)
@@ -2136,25 +2188,7 @@ Three terms optimized jointly:
 
 → A single gradient optimizes all 4 sub-networks, so **features automatically become decision-useful** (unlike World Models' V which only learns reconstruction).
 
-#### Detail ③: Latent Overshooting (Long-Horizon Stability Trick)
-
-Standard ELBO only considers "single-step prediction", but PlaNet does H=12 step planning → **multi-step predictions must all be accurate**.
-
-<p align="center"><img src="asset/formulas/f15.png" alt="latent overshooting"/></p>
-
-Intuition:
-- Make "prior prediction of z d steps ahead from time t" close to "posterior encoding of z at time t+d"
-- Not only single-step accurate, **but multi-step prediction distributions must also align**
-- `α_d` is the weight at each step (typically uniform)
-
-→ This is key to PlaNet's long-horizon stability. DreamerV1 simplified to single-step KL + critic for residual values, which actually works better.
-
-<p align="center">
-  <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
-  <i>Paper Figure 3: Three training-objective variants. <b>(a) Standard ELBO</b>: only constrains adjacent steps (1-step KL); <b>(b) Observation Overshooting</b>: reconstructs observations across multiple steps (expensive); <b>(c) Latent Overshooting</b> ⭐: aligns prior and posterior KL across multiple steps in latent space — balancing accuracy and compute cost</i>
-</p>
-
-#### Detail ⑤: CEM Online Planning (No Actor!)
+#### Detail ③: CEM Online Planning (No Actor!)
 
 PlaNet **does not learn a policy network**; instead it **plans in real time** at each step:
 

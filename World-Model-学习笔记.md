@@ -2053,6 +2053,58 @@ for batch in dataloader:
 </details>
 
 
+### 🔭 Latent Overshooting:把 ELBO 推广到多步预测
+
+> 对应 §4.2 痛点表里"仅训单步预测,多步预测误差累积无显式约束"的展开 —— **在 latent 空间对所有跨度的多步预测施加 KL 正则,无需解码回图像**。
+
+#### 问题:RSSM ELBO 只对齐「相邻一步」,长程会漂移
+
+§🧬 RSSM ELBO 的 KL 项是 $\mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid h_t)]$ —— 只让 **prior 单步预测 posterior**(只看「下一步」准不准)。
+
+但 PlaNet 的 CEM 规划要在 latent 空间 rollout **$H = 12$ 步**,这 12 步的预测都得准:
+
+- 单步精度高 ≠ 多步外推稳:transition 一步步累积误差
+- prior 只见过 "$s_{t-1}, a_{t-1}$ 直接预测 $s_t$",**从来没被训练过 "$s_{t-3}$ 跨 3 步预测 $s_t$"**
+- 结果:$H$ 越大,梦境里的 latent 离真实轨迹越远
+
+#### 解法:多步 prior 也要对齐多步 posterior
+
+让 prior 不只单步对齐,而是每个跨度 $d \in \{1, 2, \dots, D\}$ 都要对齐:
+
+> 从 $(s_{t-d}, h_{t-d})$ 出发,用 prior **自回归滚 $d$ 步**得到的分布 $\;\approx\;$ encoder 在 $t$ 时刻看到 $o_t$ 后给出的 posterior。
+
+关键设计:**在 latent 空间做对齐(KL),不重建到图像** —— 重建代价 $\mathcal{O}(D \cdot T \cdot \text{decoder})$,而 latent KL 只是 $\mathcal{O}(D \cdot T)$,常数小得多。
+
+<p align="center">
+  <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
+  <i>论文 Figure 3:三种训练目标对比。<b>(a) 标准 ELBO</b> 只在相邻时间步约束(1-step KL,易长程漂移) / <b>(b) Observation Overshooting</b> 跨多步重建观察(精度高但代价大) / <b>(c) Latent Overshooting</b> ⭐ 在 latent 空间跨多步对齐 prior 和 posterior 的 KL —— 平衡了准确性和计算成本</i>
+</p>
+
+#### 对应的 ELBO 训练目标(Latent Overshooting 版)
+
+只要把 §🧬 RSSM ELBO 里**单一的 1 步 KL** 替换成**所有 $d$-步 KL 的加权和**(重建 + reward 项不动):
+
+| 位置 | RSSM ELBO | Latent Overshooting 版 |
+|---|---|---|
+| KL 项 | $\mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid h_t)]$(只 1 步) | $\sum_{d=1}^{D} \alpha_d \cdot \mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta^{(d)}(s_t \mid s_{t-d}, h_{t-d}, a_{t-d:t-1})]$(对齐 1..$D$ 步) |
+| 多步 prior $p_\theta^{(d)}$ 怎么来 | 不需要 | 从 $(s_{t-d}, h_{t-d})$ 起,**用 prior 自回归滚 $d$ 步**到 $s_t$ |
+| 重建 / reward 项 | 不变 | 不变(latent overshooting **只动 KL**) |
+| 权重 $\alpha_d$ | — | 论文用 $\alpha_d = 1/D$ 等权 |
+
+代回得到 **Latent Overshooting 实际反传梯度的训练目标**:
+
+<p align="center"><img src="asset/formulas/planet/f35.png" alt="formula 35" style="max-width: 100%; height: auto;"/></p>
+
+> 💡 **跟 (b) Observation Overshooting 的关键差异**:后者要把每个 $d$-步 prior 解码回图像再算 reconstruction loss,代价多 $D$ 倍的 decoder 前向 + pixel loss;而 latent KL 只在 $s$ 空间里(对角高斯时甚至是闭式),代价几乎不增。这是 PlaNet **能负担起 $D = 50$ 这种大跨度** 的原因。
+
+#### 实验效果(详见 §🧪)
+
+- 只用 1 步 KL(标准 ELBO)→ 短程预测可以,**长程严重漂移**
+- 加入 $D = 50$ 步 overshooting → **长程预测显著稳定**
+
+→ 这是 PlaNet **长程稳定性的关键**。但 **DreamerV1 简化为只用单步 KL + critic 估剩值,效果反而更好** —— 把"长程外推靠 model"这件事让位给"长程价值估计靠 critic",更符合 RL 的思路。这也是 PlaNet 之后的演化方向。
+
+
 ### 🧪 关键实验
 
 #### 在 DeepMind Control Suite(像素输入)击败 model-free 50×
@@ -2125,25 +2177,7 @@ PlaNet 把 World Models 三阶段独立训练的 V 和 M **合并成一个目标
 
 → 一个梯度同时优化 4 个子网络,**特征自动对决策有用**(不像 World Models 的 V 只学重建)。
 
-#### 细节 ③:Latent Overshooting(长程稳定性技巧)
-
-标准 ELBO 只看「单步预测」,但 PlaNet 要做 H=12 步规划 → 必须**多步预测都准**。
-
-<p align="center"><img src="asset/formulas/f15.png" alt="latent overshooting"/></p>
-
-直觉:
-- 让「从 t 时刻 prior 预测 d 步后的 z」接近「从 t+d 时刻 posterior 编码的 z」
-- 不仅单步准,**多步预测的分布也要对齐**
-- `α_d` 是各步的权重(通常等权)
-
-→ 这是 PlaNet 长程稳定性的关键。DreamerV1 简化为只用单步 KL + critic 估剩值,效果反而更好。
-
-<p align="center">
-  <img src="asset/planet-2019/latent_overshooting.png" width="900"/><br/>
-  <i>论文 Figure 3:三种训练目标对比。<b>(a) 标准 ELBO</b>:只在相邻时间步约束(1-step KL);<b>(b) Observation Overshooting</b>:跨多步重建观察(代价大);<b>(c) Latent Overshooting</b> ⭐:在 latent 空间跨多步对齐 prior 和 posterior 的 KL —— 平衡了准确性和计算成本</i>
-</p>
-
-#### 细节 ⑤:CEM 在线规划(没有 actor!)
+#### 细节 ③:CEM 在线规划(没有 actor!)
 
 PlaNet **不学 policy 网络**,每个时间步**实时做规划**:
 
