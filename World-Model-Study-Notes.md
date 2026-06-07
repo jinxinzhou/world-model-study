@@ -1825,14 +1825,16 @@ $$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a
 Written in concrete form:
 
 $$
-\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
+\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
 
-| Loss term | Trains whom | What it tells the encoder (backward) |
+All three loss terms are taken in expectation over $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ (reparameterized sample). So **the encoder enters the first two terms through the sampled $s_t$**, with gradients flowing back along $s_t$ into $\phi$:
+
+| Loss term (expectation over $s_t \sim q_\phi$) | Gradient path | What it tells the encoder (backward) |
 |---|---|---|
-| Reconstruction $\ln p_\theta(o_t \mid s_t)$ | decoder + encoder | "$s_t$ must be enough to reconstruct the image" |
-| Reward $\ln p_\theta(r_t \mid s_t)$ | reward model + encoder | "$s_t$ must be enough to predict reward" |
-| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | transition + encoder | "$s_t$ must make the next step predictable" |
+| Reconstruction $\ln p_\theta(o_t \mid s_t)$ | decoder → $s_t$ → encoder | "$s_t$ must be enough to reconstruct the image" |
+| Reward $\ln p_\theta(r_t \mid s_t)$ | reward head → $s_t$ → encoder | "$s_t$ must be enough to predict reward" |
+| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | Trains $q_\phi$ and transition $p_\theta$ directly | "$s_t$ must make the next step predictable" |
 
 **All gradients flow back to the encoder through the shared variable $s_t$** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into $s_t$".
 
@@ -1855,21 +1857,21 @@ $$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p_\theta(s_t \mid s_{
 
 **Step 4 — Expand $q$'s factorization** (chain rule + Markov + filtering as derived in Step 2):
 
-$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid h_t, o_t)$$
+$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
 **Step 5 — Merge transition term with $q$ term → KL**
 
 Substituting back into the ELBO, each $t$'s contribution is:
 
-$$\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid h_t, o_t)\big]$$
+$$\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big]$$
 
 The last two terms under $\mathbb{E}_{q_\phi(s_t)}$ are exactly the **negative KL divergence**:
 
-$$\mathbb{E}_{q_\phi(s_t \mid h_t, o_t)}\big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid h_t, o_t)\big] = -\mathrm{KL}\big[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]$$
+$$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big] = -\mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]$$
 
 Combining gives the final form:
 
-$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) - \mathrm{KL}\big[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) - \mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
 
 **Tools used at each step**
 

@@ -1824,14 +1824,16 @@ $$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a
 **ELBO 是它的一个能算的下界**， 具体来说:
 
 $$
-\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
+\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
 
-| Loss 项 | 训谁 | 反向告诉 encoder 什么 |
+三项 loss 都是在 $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ 下取期望(reparameterization),所以 **encoder 通过被采样出的 $s_t$ 进入前两项**,梯度沿 $s_t$ 反向流回 $\phi$:
+
+| Loss 项(对 $s_t \sim q_\phi$ 取期望) | 梯度路径 | 反向告诉 encoder 什么 |
 |---|---|---|
-| 重建 $\ln p_\theta(o_t \mid s_t)$ | decoder + encoder | "$s_t$ 要够还原图像" |
-| reward $\ln p_\theta(r_t \mid s_t)$ | reward model + encoder | "$s_t$ 要够预测奖励" |
-| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | transition + encoder | "$s_t$ 要让下一步可预测" |
+| 重建 $\ln p_\theta(o_t \mid s_t)$ | decoder → $s_t$ → encoder | "$s_t$ 要够还原图像" |
+| reward $\ln p_\theta(r_t \mid s_t)$ | reward head → $s_t$ → encoder | "$s_t$ 要够预测奖励" |
+| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | 直接训 $q_\phi$ 和 transition $p_\theta$ | "$s_t$ 要让下一步可预测" |
 
 **所有梯度通过 $s_t$ 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 $s_t$"。
 
@@ -1854,21 +1856,21 @@ $$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p_\theta(s_t \mid s_{
 
 **Step 4 — 展开 $q$ 的因子化**(用步骤2 推过的 chain rule + Markov + filtering):
 
-$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid h_t, o_t)$$
+$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$$
 
 **Step 5 — 合并 transition 项与 $q$ 项 → KL**
 
 代回 ELBO 后,每个 $t$ 的贡献是:
 
-$$\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid h_t, o_t)\big]$$
+$$\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big]$$
 
 其中最后两项在 $\mathbb{E}_{q_\phi(s_t)}$ 下正好是**负 KL 散度**:
 
-$$\mathbb{E}_{q_\phi(s_t \mid h_t, o_t)}\big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid h_t, o_t)\big] = -\mathrm{KL}\big[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]$$
+$$\mathbb{E}_{q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)}\big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)\big] = -\mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]$$
 
 合起来得到最终形式:
 
-$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) - \mathrm{KL}\big[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) - \mathrm{KL}\big[q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
 
 **每一步用的"工具"**
 
