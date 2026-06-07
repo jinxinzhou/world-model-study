@@ -510,7 +510,7 @@ Output:
 
   <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
 
-> 💡 **Clarification on z vs h**: In World Models, **z and h are in a "principal-subordinate" relationship, not equal partners** — z is the output of a separately pre-trained VAE (learning only visual reconstruction), and h is just an internal "working memory" of the MDN-RNN that helps predict the next z. The Controller can take either z alone or `[z, h]` (the paper's ablation shows `[z, h]` improves CarRacing score by 40%). This is **a different design philosophy** from PlaNet's later **RSSM dual-path state** (joint training, where z learns both visual and dynamic information, and (h, z) jointly form a unified environment state) — see the comparison table in §4.2.
+> 💡 **Clarification on z vs h**: In World Models, **z and h are in a "principal-subordinate" relationship, not equal partners** — z is the output of a separately pre-trained VAE (learning only visual reconstruction), and h is just an internal "working memory" of the MDN-RNN that helps predict the next z. The Controller can take either z alone or `[z, h]` (the paper's ablation shows `[z, h]` improves CarRacing score by 40%). This is **a different design philosophy** from PlaNet's later **RSSM dual-path state** (joint training, where s learns both visual and dynamic information, and (h, s) jointly form a unified environment state) — see the comparison table in §4.2.
 
 **C: Ultra-Small Controller**
 ```python
@@ -1444,12 +1444,12 @@ In practice, PlaNet **repeats each action** $a_t$ **R times** (typically R = 2�
 | Dimension | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
 |-----------|--------------------|-----|---|
 | Training | Three stages, separate | **End-to-end ELBO** | End-to-end |
-| Latent structure | VAE produces z + MDN-RNN's h as by-product (**separate**, staged training) | **(h, z) as a unified state** (**dual-path RSSM**, joint training) | Same as PlaNet |
+| Latent structure | VAE produces z + MDN-RNN's h as by-product (**separate**, staged training) | **(h, s) as a unified state** (**dual-path RSSM**, joint training) | Same as PlaNet |
 | What z learns | Only visual reconstruction (VAE trained alone) | **Visual reconstruction + dynamics prediction** (KL constraint) | Same as PlaNet |
 | Decision | CMA-ES trains Controller | **CEM online planning** | Actor-Critic + analytic gradients |
 | Main testbed | CarRacing / VizDoom | **DMC (6 tasks)** | DMC / Atari / Minecraft |
 
-> 💡 **Note**: World Models' M does have an LSTM hidden state h internally, but it is only a "working memory" by-product, **conceptually separate** from VAE's z and trained in different stages (z only learns reconstruction; h only assists in predicting z). PlaNet's RSSM is the first to **treat (h, z) as a unified environment state**, trained jointly, so that z simultaneously captures both visual and dynamic information — this is the truly revolutionary aspect of RSSM.
+> 💡 **Note**: World Models' M does have an LSTM hidden state h internally, but it is only a "working memory" by-product, **conceptually separate** from VAE's z and trained in different stages (z only learns reconstruction; h only assists in predicting z). PlaNet's RSSM is the first to **treat (h, s) as a unified environment state**, trained jointly, so that s simultaneously captures both visual and dynamic information — this is the truly revolutionary aspect of RSSM.
 
 ### 🧭 PlaNet's POMDP perspective: problem setup + comparison with World Models
 
@@ -1523,9 +1523,9 @@ Comparison with other paradigms:
 **🔹 Component 1: Transition**
 
 - **World Models — implicit**: MDN-RNN maintains a hidden state h via an LSTM, and the transition is written as $p(z_{t+1} \mid z_t, a_t, h_t)$. The problem — **what is "the POMDP state"? The paper never answers**. If the state is z, why does h appear in the conditioning? If the state is (z, h), why is h not part of reconstruction or KL? This is a **formally non-closed** design.
-- **PlaNet — explicit**: The state is **formally decomposed into two parts** — deterministic $h_t$ and stochastic $z_t$ — and all 4 networks (observation, reward, prior, posterior) take ($h_t$, $z_t$) jointly as input; none of them uses only h or only z. This pins down the POMDP state formally: it is this pair of variables, each with a defined role, trained jointly. There is no World-Models-style ambiguity of "why does h show up here?".
+- **PlaNet — explicit**: The state is **formally decomposed into two parts** — deterministic $h_t$ and stochastic $s_t$ — and all 4 networks (observation, reward, prior, posterior) take ($h_t$, $s_t$) jointly as input; none of them uses only h or only s. This pins down the POMDP state formally: it is this pair of variables, each with a defined role, trained jointly. There is no World-Models-style ambiguity of "why does h show up here?".
 
-> 📝 **Notation note**: PlaNet's paper uses `s_t` for the *stochastic part*, which differs from the subsequent Dreamer-family convention (followed in this note): `z_t = stochastic part`, `(h_t, z_t) together = the full state`. When cross-referencing the paper, keep this symbol mismatch in mind.
+> 📝 **Notation note**: This note **follows the PlaNet paper's original symbols** in the PlaNet/RSSM sections — `s_t` is the stochastic latent, `h_t` is the GRU deterministic memory, and the full RSSM state is written as `(h_t, s_t)` (the paper introduces no separate symbol for "full state"). Later Dreamer-family papers (V1/V2/V3) and their open-source code switch to `z_t = stochastic part`, `(h_t, z_t) = full state` — when reading Dreamer, just treat `z` as our `s`; the two differ only in naming.
 
 **🔹 Component 2: Observation**
 
@@ -1999,12 +1999,12 @@ This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + *
 
 **Necessity of RSSM dual-path**:
 - Only deterministic h (pure RNN) → cannot express uncertainty, mediocre performance
-- Only stochastic z (pure VAE-RNN) → **untrainable**, long-term info washed out by noise
-- **h + z dual path** → **best** ⭐
+- Only stochastic s (pure VAE-RNN) → **untrainable**, long-term info washed out by noise
+- **h + s dual path** → **best** ⭐
 
 <p align="center">
   <img src="asset/planet-2019/result_model.png" width="850"/><br/>
-  <i>Paper Figure 5: RSSM ablation. <b>Blue = PlaNet (h+z dual path)</b>, red = pure deterministic, green = pure stochastic. On all 6 tasks, pure-RNN and pure-VAE-RNN variants are clearly worse than the dual-path RSSM</i>
+  <i>Paper Figure 5: RSSM ablation. <b>Blue = PlaNet (h+s dual path)</b>, red = pure deterministic, green = pure stochastic. On all 6 tasks, pure-RNN and pure-VAE-RNN variants are clearly worse than the dual-path RSSM</i>
 </p>
 
 **Effect of latent overshooting**:
@@ -2031,16 +2031,16 @@ This is where the name **RSSM** comes from: **R**ecurrent NN (deterministic) + *
 <p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
 
 ```
-state s_t = (h_t, z_t)
-            ↑    ↑
-       deterministic  stochastic
-       (GRU)          (Gaussian)
+state = (h_t, s_t)
+        ↑    ↑
+   deterministic  stochastic
+   (GRU)          (Gaussian)
 ```
 
 | Variable | Type | Produced By | Role |
 |----------|------|-------------|------|
-| `h_t` | **Deterministic** | GRU hidden state: `h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1})` | **Long-term memory**, stable |
-| `z_t` | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
+| `h_t` | **Deterministic** | GRU hidden state: `h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})` | **Long-term memory**, stable |
+| `s_t` | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
 
 **Why dual-path?** (Key insight)
 
@@ -2048,7 +2048,7 @@ state s_t = (h_t, z_t)
 |--------------------|---------|
 | **Pure deterministic** | Cannot express noise, multi-modal futures |
 | **Pure stochastic** | Unstable training, long-term info washed out by noise |
-| **Dual path h + z** | ✅ h guarantees stable memory, z expresses uncertainty |
+| **Dual path h + s** | ✅ h guarantees stable memory, s expresses uncertainty |
 
 → This is the **core mathematical intuition** of RSSM: separate "stable memory of the past" and "uncertainty about the future" into two independent variables.
 
@@ -2061,12 +2061,12 @@ state s_t = (h_t, z_t)
 
 | Network | Form | When Used |
 |---------|------|-----------|
-| **Encoder** (Posterior) | $q(z_t \mid h_t, o_t)$ | **Training**: sees real obs, outputs posterior z |
-| **Transition** (Prior) | $p(z_t \mid h_t)$ | **Planning / imagination**: predicts z without seeing obs ⭐ |
-| **Reward** | $p(r_t \mid h_t, z_t)$ | Predicts reward (accumulated for return during planning) |
-| **Decoder** | $p(o_t \mid h_t, z_t)$ | Reconstructs obs (**training only**, not used at deployment) |
+| **Encoder** (Posterior) | $q(s_t \mid h_t, o_t)$ | **Training**: sees real obs, outputs posterior s |
+| **Transition** (Prior) | $p(s_t \mid h_t)$ | **Planning / imagination**: predicts s without seeing obs ⭐ |
+| **Reward** | $p(r_t \mid h_t, s_t)$ | Predicts reward (accumulated for return during planning) |
+| **Decoder** | $p(o_t \mid h_t, s_t)$ | Reconstructs obs (**training only**, not used at deployment) |
 
-🔑 **Core mechanism**: **At training time, use the Encoder's posterior z (supervised by obs); at planning time, use the Transition's prior z (no obs available)** — this is what enables RSSM to "imagine the future in latent space".
+🔑 **Core mechanism**: **At training time, use the Encoder's posterior s (supervised by obs); at planning time, use the Transition's prior s (no obs available)** — this is what enables RSSM to "imagine the future in latent space".
 
 #### Detail ③: End-to-End ELBO Loss
 
@@ -2075,9 +2075,9 @@ PlaNet **merges World Models' separately-trained V and M into a single objective
 <p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO"/></p>
 
 Three terms optimized jointly:
-- **Reconstruction term**: enables decoder to reconstruct obs from (h, z) (VAE-style)
+- **Reconstruction term**: enables decoder to reconstruct obs from (h, s) (VAE-style)
 - **Reward term**: enables reward head to predict true reward
-- **KL term**: makes posterior `q(z|h, o)` close to prior `p(z|h)` (VAE-style regularizer)
+- **KL term**: makes posterior `q(s|h, o)` close to prior `p(s|h)` (VAE-style regularizer)
 
 → A single gradient optimizes all 4 sub-networks, so **features automatically become decision-useful** (unlike World Models' V which only learns reconstruction).
 
@@ -2214,7 +2214,7 @@ Dreamer V2/V3 (2021–2023)
 
 #### One-Sentence Summary
 
-> **PlaNet = end-to-end RSSM world model + CEM online planning. It turned World Models' staged training into end-to-end and introduced the «deterministic h + stochastic z» dual-path latent architecture (inherited by all subsequent Dreamer variants), making model-based RL beat model-free by 50× on pixel-based DMC for the first time. However, CEM online planning is too slow, which directly led to DreamerV1 replacing it with actor-critic + analytic gradient backprop.**
+> **PlaNet = end-to-end RSSM world model + CEM online planning. It turned World Models' staged training into end-to-end and introduced the «deterministic h + stochastic s» dual-path latent architecture (inherited by all subsequent Dreamer variants, which simply rename s to z), making model-based RL beat model-free by 50× on pixel-based DMC for the first time. However, CEM online planning is too slow, which directly led to DreamerV1 replacing it with actor-critic + analytic gradient backprop.**
 
 ### 📚 Learning Resources
 

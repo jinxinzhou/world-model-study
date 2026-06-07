@@ -509,7 +509,7 @@ Model-Based 学的是 `P(s' | s, a)` —— **转移函数只关心物理规律,
 
   <img src="asset/world-models-2018/mp4_sketch_rnn_insect.gif" width="500"/>
 
-> 💡 **z 和 h 的关系澄清**:World Models 这里 **z 和 h 是「主从分离」关系** —— z 是 VAE 独立预训练的输出(只学视觉重建),h 只是 MDN-RNN 内部的「工作记忆」,辅助预测下一步 z。Controller 可选择只用 z、或用 [z, h](论文消融:CarRacing 上 [z, h] 提分 40%)。这与后来 PlaNet 的 **RSSM 双路 state**(联合训练、z 同时学视觉+动力学、(h, z) 共同构成统一环境状态)是**不同的设计哲学** —— 详见 §4.2 对比表。
+> 💡 **z 和 h 的关系澄清**:World Models 这里 **z 和 h 是「主从分离」关系** —— z 是 VAE 独立预训练的输出(只学视觉重建),h 只是 MDN-RNN 内部的「工作记忆」,辅助预测下一步 z。Controller 可选择只用 z、或用 [z, h](论文消融:CarRacing 上 [z, h] 提分 40%)。这与后来 PlaNet 的 **RSSM 双路 state**(联合训练、s 同时学视觉+动力学、(h, s) 共同构成统一环境状态)是**不同的设计哲学** —— 详见 §4.2 对比表。
 
 **C:超小 Controller**
 ```python
@@ -1443,12 +1443,12 @@ PlaNet 部署时每个 time step 走三步,构成一个标准的 **receding-hori
 | 维度 | World Models (2018) | **PlaNet (2019)** | Dreamer (2020+) |
 |------|--------------------|-----|---|
 | 训练方式 | 三阶段独立 | **端到端 ELBO** | 端到端 |
-| Latent 结构 | VAE 出 z + MDN-RNN 副产生 h(**分离**,分阶段训) | **(h, z) 作为统一 state**(**双路 RSSM**,联合训) | 同 PlaNet |
+| Latent 结构 | VAE 出 z + MDN-RNN 副产生 h(**分离**,分阶段训) | **(h, s) 作为统一 state**(**双路 RSSM**,联合训) | 同 PlaNet |
 | z 学到什么 | 仅视觉重建(VAE 单独训) | **视觉重建 + 动力学预测**(KL 约束) | 同 PlaNet |
 | 决策方式 | CMA-ES 训 Controller | **CEM 在线规划** | Actor-Critic + 解析梯度 |
 | 主战场 | CarRacing / VizDoom | **DMC(6 任务)** | DMC / Atari / Minecraft |
 
-> 💡 **注意**:World Models 的 M 内部**也有** LSTM 隐藏状态 h,但它只是"工作记忆"的副产品,与 VAE 的 z **分阶段训练、概念上分离**(z 只学重建,h 只辅助预测 z)。PlaNet 的 RSSM 才**第一次把 (h, z) 视为统一的环境状态**,联合训练,让 z 同时学到视觉和动力学信息 —— 这是 RSSM 真正的革命性所在。
+> 💡 **注意**:World Models 的 M 内部**也有** LSTM 隐藏状态 h,但它只是"工作记忆"的副产品,与 VAE 的 z **分阶段训练、概念上分离**(z 只学重建,h 只辅助预测 z)。PlaNet 的 RSSM 才**第一次把 (h, s) 视为统一的环境状态**,联合训练,让 s 同时学到视觉和动力学信息 —— 这是 RSSM 真正的革命性所在。
 
 ### 🧭 PlaNet 的 POMDP 视角:问题定义 + 与 World Models 对照
 
@@ -1522,9 +1522,9 @@ flowchart LR
 **🔹 组件 1:Transition(转移函数)**
 
 - **World Models 的隐式表现**:MDN-RNN 用 LSTM 维持隐状态 h,转移写成 $p(z_{t+1} \mid z_t, a_t, h_t)$。问题是 —— **"POMDP 的状态"到底是什么?论文从未给出答案**。如果状态是 z,那 h 凭什么出现在条件里?如果状态是 (z, h),那为什么 h 不参与重建、也不参与 KL?这是个**形式上不闭合**的设计。
-- **PlaNet 的显式表现**:状态被**正式拆为两部分** —— 确定性的 $h_t$ 和随机性的 $z_t$,且观测、奖励、prior、posterior 这 4 个网络都同时以 ($h_t$, $z_t$) 为输入,没有任何一个网络"只用 h 不用 z"或反过来。POMDP 的状态在形式上被完全确定:就是这一对变量,各司其职、协同被训。不存在 World Models 那种"h 凭什么出现"的歧义。
+- **PlaNet 的显式表现**:状态被**正式拆为两部分** —— 确定性的 $h_t$ 和随机性的 $s_t$,且观测、奖励、prior、posterior 这 4 个网络都同时以 ($h_t$, $s_t$) 为输入,没有任何一个网络"只用 h 不用 s"或反过来。POMDP 的状态在形式上被完全确定:就是这一对变量,各司其职、协同被训。不存在 World Models 那种"h 凭什么出现"的歧义。
 
-> 📝 **符号说明**:PlaNet 论文用 `s_t` 表示"随机部分",和后续 Dreamer 系列(本笔记沿用)的 `z_t = 随机部分、(h_t, z_t) 一起作为完整状态` 的习惯不一致。本笔记在表格和深入分析里使用 Dreamer 习惯,与论文原文符号对照时请注意这点差异。
+> 📝 **符号说明**:本笔记 PlaNet/RSSM 部分**沿用论文原符号** —— `s_t` 表示随机隐变量,`h_t` 表示 GRU 确定性记忆,完整 RSSM 状态写作 `(h_t, s_t)`(论文不引入独立"完整状态"符号)。后续 Dreamer 系列论文(V1/V2/V3)和它们的开源代码改用 `z_t = 随机部分、(h_t, z_t) = 完整状态` —— 看 Dreamer 时把 `z` 当我们的 `s` 即可,两者只差换名。
 
 **🔹 组件 2:Observation(观测函数)**
 
@@ -1988,12 +1988,12 @@ RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性
 
 **RSSM 双路的必要性**:
 - 只用 deterministic h(纯 RNN)→ 表达不了不确定性,中等性能
-- 只用 stochastic z(纯 VAE-RNN)→ **训不动**,长期信息被噪声冲掉
-- **h + z 双路** → **最好** ⭐
+- 只用 stochastic s(纯 VAE-RNN)→ **训不动**,长期信息被噪声冲掉
+- **h + s 双路** → **最好** ⭐
 
 <p align="center">
   <img src="asset/planet-2019/result_model.png" width="850"/><br/>
-  <i>论文 Figure 5:RSSM 消融实验。<b>蓝色 = PlaNet (h+z 双路)</b>,红色 = 纯 deterministic,绿色 = 纯 stochastic。在所有 6 个任务上,纯 RNN 和纯 VAE-RNN 都明显差于双路 RSSM</i>
+  <i>论文 Figure 5:RSSM 消融实验。<b>蓝色 = PlaNet (h+s 双路)</b>,红色 = 纯 deterministic,绿色 = 纯 stochastic。在所有 6 个任务上,纯 RNN 和纯 VAE-RNN 都明显差于双路 RSSM</i>
 </p>
 
 **Latent overshooting 的作用**:
@@ -2020,16 +2020,16 @@ RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性
 <p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
 
 ```
-state s_t = (h_t, z_t)
-            ↑    ↑
-       确定性  随机性
-       (GRU)  (高斯)
+RSSM state = (h_t, s_t)
+              ↑    ↑
+         确定性  随机性
+         (GRU)  (高斯)
 ```
 
 | 变量 | 类型 | 由谁产生 | 角色 |
 |------|------|---------|------|
-| `h_t` | **确定性** | GRU 的隐藏状态:`h_t = GRU(h_{t-1}, z_{t-1}, a_{t-1})` | **长期记忆**,稳定可靠 |
-| `z_t` | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
+| `h_t` | **确定性** | GRU 的隐藏状态:`h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})` | **长期记忆**,稳定可靠 |
+| `s_t` | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
 
 **为什么要双路?**(关键洞察)
 
@@ -2037,7 +2037,7 @@ state s_t = (h_t, z_t)
 |----------|------|
 | **纯确定性** | 没法表达噪声、多模态未来 |
 | **纯随机** | 训练不稳,长期信息被噪声冲掉 |
-| **双路 h + z** | ✅ h 保证稳定记忆,z 表达不确定性 |
+| **双路 h + s** | ✅ h 保证稳定记忆,s 表达不确定性 |
 
 → 这是 RSSM 的**核心数学直觉**:把「过去的稳定记忆」和「未来的不确定性」分到两个变量里独立处理。
 
@@ -2050,12 +2050,12 @@ state s_t = (h_t, z_t)
 
 | 网络 | 形式 | 何时使用 |
 |------|------|---------|
-| **Encoder**(Posterior) | $q(z_t \mid h_t, o_t)$ | **训练时**:看到真实 obs,出后验 z |
-| **Transition**(Prior) | $p(z_t \mid h_t)$ | **规划时 / 想象时**:不看 obs 也能预测 z ⭐ |
-| **Reward** | $p(r_t \mid h_t, z_t)$ | 预测奖励(规划时累加 return) |
-| **Decoder** | $p(o_t \mid h_t, z_t)$ | 重建 obs(**仅训练辅助**,部署不用) |
+| **Encoder**(Posterior) | $q(s_t \mid h_t, o_t)$ | **训练时**:看到真实 obs,出后验 s |
+| **Transition**(Prior) | $p(s_t \mid h_t)$ | **规划时 / 想象时**:不看 obs 也能预测 s ⭐ |
+| **Reward** | $p(r_t \mid h_t, s_t)$ | 预测奖励(规划时累加 return) |
+| **Decoder** | $p(o_t \mid h_t, s_t)$ | 重建 obs(**仅训练辅助**,部署不用) |
 
-🔑 **核心机制**:**训练时用 Encoder 的后验 z(有 obs 监督),规划时用 Transition 的 prior z(没有 obs)** —— 这就是 RSSM 能"在 latent 空间想象未来"的关键。
+🔑 **核心机制**:**训练时用 Encoder 的后验 s(有 obs 监督),规划时用 Transition 的 prior s(没有 obs)** —— 这就是 RSSM 能"在 latent 空间想象未来"的关键。
 
 #### 细节 ③:端到端 ELBO 损失
 
@@ -2064,9 +2064,9 @@ PlaNet 把 World Models 三阶段独立训练的 V 和 M **合并成一个目标
 <p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO"/></p>
 
 三个分量同时优化:
-- **重建项**:让 decoder 能从 (h, z) 重建 obs(类似 VAE)
+- **重建项**:让 decoder 能从 (h, s) 重建 obs(类似 VAE)
 - **奖励项**:让 reward head 能预测真实奖励
-- **KL 项**:让 posterior `q(z|h, o)` 接近 prior `p(z|h)`(VAE 风格正则)
+- **KL 项**:让 posterior `q(s|h, o)` 接近 prior `p(s|h)`(VAE 风格正则)
 
 → 一个梯度同时优化 4 个子网络,**特征自动对决策有用**(不像 World Models 的 V 只学重建)。
 
@@ -2203,7 +2203,7 @@ Dreamer V2/V3 (2021–2023)
 
 #### 一句话总结
 
-> **PlaNet = 端到端的 RSSM 世界模型 + CEM 在线规划。它把 World Models 的分阶段训练打通成端到端,引入了「确定性 h + 随机性 z」双路 latent 架构(被后续所有 Dreamer 沿用),在 DMC 上首次让 model-based RL 在像素任务上 50× 完胜 model-free。但 CEM 在线规划巨慢,直接催生了 DreamerV1 用 actor-critic + 解析梯度反传取代。**
+> **PlaNet = 端到端的 RSSM 世界模型 + CEM 在线规划。它把 World Models 的分阶段训练打通成端到端,引入了「确定性 h + 随机性 s」双路 latent 架构(被后续所有 Dreamer 沿用,只是 Dreamer 把 s 改名叫 z),在 DMC 上首次让 model-based RL 在像素任务上 50× 完胜 model-free。但 CEM 在线规划巨慢,直接催生了 DreamerV1 用 actor-critic + 解析梯度反传取代。**
 
 ### 📚 学习资源
 
