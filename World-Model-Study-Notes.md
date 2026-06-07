@@ -2154,8 +2154,12 @@ The key insight: **you don't need to decode $\hat s_{t+d}$ back to an image to s
 
 Replacing "decoder + pixel loss" by "Gaussian KL in latent space" cleans up the cost model immediately. **The key sits in two places**:
 
-1. **Neither encoder nor decoder gets multiplied by $D$** — the posterior $q_\phi(s_t \mid h_t, o_t)$ does not depend on $d$, so encoding each $t$ once is shared across all $d$; the reconstruction term is **unchanged** (latent overshooting **modifies only the KL**), so the decoder also runs only $T$ times.
-2. **What does get multiplied by $D$ is all on the cheap side** — the transition is a small MLP (1-2 orders of magnitude fewer parameters than encoder / decoder; each forward is essentially instantaneous), and the Gaussian KL has a **closed form** (both sides are $\mathcal{N}(\mu, \sigma^2)$ — plug into the formula, a few multiply-adds), barely registering as "cost".
+1. **Neither encoder nor decoder gets multiplied by $D$**
+   - **Encoder isn't multiplied**: in the KL sum $\sum_{d=1}^{D} \mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta^{(d)}(\cdots)]$, **only the prior side depends on $d$ — the posterior side does not** → the same $q_\phi(s_t \mid h_t, o_t)$ is logically reused inside all $D$ KL terms, so encoder is called $T$ times total, not $T \times D$
+   - **Decoder isn't multiplied**: latent overshooting **modifies only the KL term — the reconstruction term is untouched** → reconstruction is still $\sum_t \log p_\theta(o_t \mid h_t, s_t)$, one decode per $t$, independent of $d$
+2. **What does get multiplied by $D$ is all on the cheap side**
+   - **transition** is a small MLP (1-2 orders of magnitude fewer parameters than encoder / decoder; each forward is essentially instantaneous)
+   - **Gaussian KL** has a **closed form** (both sides are $\mathcal{N}(\mu, \sigma^2)$ — plug into the formula, a few multiply-adds), barely registering as "cost"
 
 Training cost broken down by component across the three options:
 
