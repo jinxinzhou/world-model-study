@@ -1824,14 +1824,14 @@ $$p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) = \prod_t p_\theta(s_t \mid s_{t-1}, a
 **ELBO 是它的一个能算的下界**， 具体来说:
 
 $$
-\ln p(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p(o_t \mid s_t) + \ln p(r_t \mid s_t) - \mathrm{KL}\!\left[\,q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
+\ln p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T}) \;\geq\; \sum_{t=1}^{T} \Big[\ln p_\theta(o_t \mid s_t) + \ln p_\theta(r_t \mid s_t) - \mathrm{KL}\!\left[\,q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\,\right]\Big]
 $$
 
 | Loss 项 | 训谁 | 反向告诉 encoder 什么 |
 |---|---|---|
-| 重建 ln $p(o_t \mid s_t)$ | decoder + encoder | "$s_t$ 要够还原图像" |
-| reward ln $p(r_t \mid s_t)$ | reward model + encoder | "$s_t$ 要够预测奖励" |
-| $\mathrm{KL}[q \,\|\, p]$ | transition + encoder | "$s_t$ 要让下一步可预测" |
+| 重建 $\ln p_\theta(o_t \mid s_t)$ | decoder + encoder | "$s_t$ 要够还原图像" |
+| reward $\ln p_\theta(r_t \mid s_t)$ | reward model + encoder | "$s_t$ 要够预测奖励" |
+| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | transition + encoder | "$s_t$ 要让下一步可预测" |
 
 **所有梯度通过 $s_t$ 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 $s_t$"。
 
@@ -1850,25 +1850,25 @@ $$\log p_\theta(o, r \mid a) \;\geq\; \mathbb{E}_q\!\left[\log p_\theta(o, r, s 
 
 **Step 3 — 展开联合 $p$ 的因子化**(用前面推过的图模型分解 + reward 项):
 
-$$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p(s_t \mid s_{t-1}, a_{t-1}) + \log p(o_t \mid s_t) + \log p(r_t \mid s_t)\big]$$
+$$\log p_\theta(o, r, s \mid a) = \sum_{t=1}^{T} \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) + \log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t)\big]$$
 
 **Step 4 — 展开 $q$ 的因子化**(用步骤2 推过的 chain rule + Markov + filtering):
 
-$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q(s_t \mid h_t, o_t)$$
+$$\log q_\phi(s \mid o, a) = \sum_{t=1}^{T} \log q_\phi(s_t \mid h_t, o_t)$$
 
 **Step 5 — 合并 transition 项与 $q$ 项 → KL**
 
 代回 ELBO 后,每个 $t$ 的贡献是:
 
-$$\log p(o_t \mid s_t) + \log p(r_t \mid s_t) + \big[\log p(s_t \mid s_{t-1}, a_{t-1}) - \log q(s_t \mid h_t, o_t)\big]$$
+$$\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) + \big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid h_t, o_t)\big]$$
 
-其中最后两项在 $\mathbb{E}_{q(s_t)}$ 下正好是**负 KL 散度**:
+其中最后两项在 $\mathbb{E}_{q_\phi(s_t)}$ 下正好是**负 KL 散度**:
 
-$$\mathbb{E}_{q(s_t \mid h_t, o_t)}\big[\log p(s_t \mid s_{t-1}, a_{t-1}) - \log q(s_t \mid h_t, o_t)\big] = -\mathrm{KL}\big[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\big]$$
+$$\mathbb{E}_{q_\phi(s_t \mid h_t, o_t)}\big[\log p_\theta(s_t \mid s_{t-1}, a_{t-1}) - \log q_\phi(s_t \mid h_t, o_t)\big] = -\mathrm{KL}\big[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]$$
 
 合起来得到最终形式:
 
-$$\log p(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p(o_t \mid s_t) + \log p(r_t \mid s_t) - \mathrm{KL}\big[q(s_t \mid h_t, o_t) \,\|\, p(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
+$$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p_\theta(o_t \mid s_t) + \log p_\theta(r_t \mid s_t) - \mathrm{KL}\big[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta(s_t \mid s_{t-1}, a_{t-1})\big]\Big]$$
 
 **每一步用的"工具"**
 
@@ -1883,48 +1883,6 @@ $$\log p(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p(o_t \mid s_t) + \log p
 → **数学只占 2 步(Jensen + KL 定义),其余 3 步全是"代入图模型告诉我们的形式"**。
 
 </details>
-
-
-我们真正想最大化的是模型对真实数据的 log-likelihood:
-
-$$\log p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$$
-
-**这里 $s$ 在哪?** 表面上公式只有 $o, r, a$,但 $p_\theta(o, r \mid a)$ 这个**符号本身**就是边缘化的简写:
-
-$$\underbrace{p_\theta(o, r \mid a)}_{\text{我们想要的 marginal}} \;=\; \int \underbrace{p_\theta(o, r, s \mid a)}_{\text{模型实际定义的联合}} \, ds$$
-
-而模型其实是定义在**带隐变量 $s$ 的生成模型**上(步骤 2 的朴素 SSM):
-
-$$p_\theta(o, r, s \mid a) = \prod_t p_\theta(s_t \mid s_{t-1}, a_{t-1}) \cdot p_\theta(o_t \mid s_t) \cdot p_\theta(r_t \mid s_t)$$
-
-**联合分布能算**(NN 前向),但**积掉 $s$ 没闭式解**(见步骤 2 折叠 section)—— 这就是 marginal likelihood 算不出来的根本原因。
-
-$$\log p_\theta(o, r \mid a) \;\geq\; \text{ELBO}(\theta, \phi)$$
-
-最大化 ELBO 会自动推高真实 log-likelihood。精确的差距公式:
-
-$$\underbrace{\log p_\theta(o, r \mid a)}_{\text{想最大化}} - \underbrace{\text{ELBO}}_{\text{实际最大化}} = \mathrm{KL}\big[\,q_\phi(s \mid o, a) \;\big\|\; \underbrace{p_\theta(s \mid o, a)}_{\text{真后验}}\,\big]$$
-
-- $q_\phi$ **完美等于真后验** → KL = 0 → ELBO 严格等于 $\log p_\theta$ → 最大化 ELBO ≡ 最大化我们真正想要的
-- $q_\phi$ **离真后验很远** → KL 大 → ELBO 是很松的下界 → 优化 ELBO 不一定推高 log-likelihood
-
-→ **encoder $q_\phi$ 的质量直接决定训练效果**。
-
-```mermaid
-flowchart TB
-    Goal["🎯 想最大化:<br/>log p_θ(o, r | a)<br/>(marginal,算不出)"]
-    Joint["📦 能算的:<br/>log p_θ(o, r, s | a)<br/>(联合,需要 s)"]
-    Issue["❌ ∫ ... ds 没闭式解<br/>且训练数据没有 s 的 ground truth"]
-    Sol["✅ 引入 q_φ(s | o, a)<br/>构造 ELBO ≤ log p_θ"]
-    Gap["差距 = KL[q_φ ∥ p_θ(s | o, a)]<br/>q 越准 → gap 越小 → ELBO 越紧"]
-
-    Goal --> Issue
-    Joint --> Issue
-    Issue --> Sol
-    Sol --> Gap
-```
-
-**实现:怎么真的训这个 loss**
 
 理论上 ELBO 含 $\mathbb{E}_q$(对所有可能的 $s$ 轨迹积分),不可解。工程上用**单样本 + reparameterization** 估计:
 
