@@ -1938,7 +1938,7 @@ for batch in dataloader:
 
 #### 3. Why this concretely solves the problem
 
-| Information type | World Models VAE | PlaNet encoder |
+| Information type | World Models' $z$ | PlaNet's $s_t$ |
 |---|---|---|
 | Static appearance (color, shape) | ✅ Needed for reconstruction, learned | ✅ |
 | Velocity (frame difference) | ❌ Not needed for single-frame reconstruction, not learned | ✅ Transition must predict the next frame; pulled back via KL |

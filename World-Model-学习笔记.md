@@ -1936,7 +1936,7 @@ for batch in dataloader:
 
 #### 3. 这样为什么能解决问题:具体对照
 
-| 信息类型 | World Models VAE | PlaNet encoder |
+| 信息类型 | World Models 的 $z$ | PlaNet 的 $s_t$ |
 |---|---|---|
 | 静态外观(颜色、形状) | ✅ 重建需要,会学到 | ✅ |
 | 速度(两帧之差) | ❌ 单帧重建不需要,不学 | ✅ transition 需要预测下一帧,通过 KL 反推 |
