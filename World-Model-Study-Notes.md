@@ -1472,7 +1472,7 @@ flowchart LR
 
 Formalizing this diagram gives the POMDP four-tuple PlaNet writes down in §2:
 
-<p align="center"><img src="asset/formulas/planet/f01.png" alt="formula 01"/></p>
+<p align="center"><img src="asset/formulas/planet/f01.png" alt="formula 01" style="max-width: 100%; height: auto;"/></p>
 
 - **Transition function**: The real environment's latent state $s_t$ is determined stochastically by the previous state and action
 - **Observation function**: The agent cannot access $s_t$ — it only receives a frame of observation $o_t$ (a pixel image) — this is what "partial observability" means
@@ -1602,7 +1602,7 @@ World Models trains in three independent stages: Stage 1 trains the VAE, Stage 2
 
 To end-to-end learn a world model that simulates the POMDP, the simplest form is a **latent variable sequence model**:
 
-<p align="center"><img src="asset/formulas/planet/f02.png" alt="formula 02"/></p>
+<p align="center"><img src="asset/formulas/planet/f02.png" alt="formula 02" style="max-width: 100%; height: auto;"/></p>
 
 > 📝 **Notation convention**: this note uses **upright p** (e.g., $\mathrm{p}(s_t \mid \cdots)$) for the real-environment distribution (the POMDP), and **italic p_$\theta$** (e.g., $p_\theta(s_t \mid \cdots)$) for PlaNet's learned world model — training amounts to making $p_\theta \approx \mathrm{p}$. **This convention is consistent with the notation used in the PlaNet paper.**
 
@@ -1610,7 +1610,7 @@ To end-to-end learn a world model that simulates the POMDP, the simplest form is
 
 To train the Step-1 model, in theory one should sample latent trajectories from the **true posterior** $p_\theta(s_{1:T} \mid o_{1:T}, a_{1:T})$. But this posterior is **intractable**. The fix is to introduce an **approximate posterior** $q$ (also NN-parameterized) as an **encoder**:
 
-<p align="center"><img src="asset/formulas/planet/f03_en.png" alt="formula 03"/></p>
+<p align="center"><img src="asset/formulas/planet/f03_en.png" alt="formula 03" style="max-width: 100%; height: auto;"/></p>
 
 <details>
 <summary><b>How does this factorization come about?</b> Chain rule + filtering + Markov (click to expand)</summary>
@@ -1619,13 +1619,13 @@ To train the Step-1 model, in theory one should sample latent trajectories from 
 
 Any joint distribution can be written sequentially in time:
 
-<p align="center"><img src="asset/formulas/planet/f04.png" alt="formula 04"/></p>
+<p align="center"><img src="asset/formulas/planet/f04.png" alt="formula 04" style="max-width: 100%; height: auto;"/></p>
 
 No approximation yet — pure mathematical identity.
 
 **Step B — filtering approximation (drop future observations / actions)**
 
-<p align="center"><img src="asset/formulas/planet/f05.png" alt="formula 05"/></p>
+<p align="center"><img src="asset/formulas/planet/f05.png" alt="formula 05" style="max-width: 100%; height: auto;"/></p>
 
 **Reason**: at inference (deployment / planning) only past obs/actions are available — **there is no future $o, a$**. The $q$ learned at training must be the same $q$ used at deployment; peeking at future would make it unusable at test time.
 
@@ -1636,7 +1636,7 @@ No approximation yet — pure mathematical identity.
 
 **Step C — Markov approximation (compress all past into $s_{t-1}$)**
 
-<p align="center"><img src="asset/formulas/planet/f06.png" alt="formula 06"/></p>
+<p align="center"><img src="asset/formulas/planet/f06.png" alt="formula 06" style="max-width: 100%; height: auto;"/></p>
 
 **This step does two things at once** (both are Markov sufficiency assumptions):
 
@@ -1654,11 +1654,11 @@ This is PlaNet's **boldest simplification** — it assumes $s_{t-1}$ is a **suff
 
 The true posterior is given by Bayes' rule:
 
-<p align="center"><img src="asset/formulas/planet/f07.png" alt="formula 07"/></p>
+<p align="center"><img src="asset/formulas/planet/f07.png" alt="formula 07" style="max-width: 100%; height: auto;"/></p>
 
 The problem is not the numerator (it is the model's joint distribution and can be **written down directly**); the problem is the **denominator** — this marginal likelihood requires integrating out all possible latent trajectories:
 
-<p align="center"><img src="asset/formulas/planet/f08.png" alt="formula 08"/></p>
+<p align="center"><img src="asset/formulas/planet/f08.png" alt="formula 08" style="max-width: 100%; height: auto;"/></p>
 
 But we need to be careful: "computable" is itself ambiguous.
 
@@ -1697,23 +1697,23 @@ This factorization is not algebraically derived — it follows from **2 applicat
 
 **Step 1 — split as "s first, then o"** (chain rule, exact):
 
-<p align="center"><img src="asset/formulas/planet/f09.png" alt="formula 09"/></p>
+<p align="center"><img src="asset/formulas/planet/f09.png" alt="formula 09" style="max-width: 100%; height: auto;"/></p>
 
 **Step 2 — observation conditional independence** (graphical-model assumption: POMDP observation function): given $s_t$, $o_t$ is conditionally independent of everything else:
 
-<p align="center"><img src="asset/formulas/planet/f10.png" alt="formula 10"/></p>
+<p align="center"><img src="asset/formulas/planet/f10.png" alt="formula 10" style="max-width: 100%; height: auto;"/></p>
 
 **Step 3 — chain-rule split the s sequence in time** (exact):
 
-<p align="center"><img src="asset/formulas/planet/f11.png" alt="formula 11"/></p>
+<p align="center"><img src="asset/formulas/planet/f11.png" alt="formula 11" style="max-width: 100%; height: auto;"/></p>
 
 **Step 4 — Markov transition** (graphical-model assumption: the generative model is itself Markov): given $s_{t-1}, a_{t-1}$, $s_t$ is conditionally independent of everything else:
 
-<p align="center"><img src="asset/formulas/planet/f12.png" alt="formula 12"/></p>
+<p align="center"><img src="asset/formulas/planet/f12.png" alt="formula 12" style="max-width: 100%; height: auto;"/></p>
 
 **Combine**: substituting Step 2 + Step 4 back into Step 1 gives the full factorized form
 
-<p align="center"><img src="asset/formulas/planet/f13.png" alt="formula 13"/></p>
+<p align="center"><img src="asset/formulas/planet/f13.png" alt="formula 13" style="max-width: 100%; height: auto;"/></p>
 
 | Step | Operation | Type | Reason |
 |---|---|---|---|
@@ -1762,7 +1762,7 @@ Listing every scenario where $s$ is needed:
 
 Training data is $(o_{1:T}, a_{1:T})$ — **no ground-truth $s$**. We want to maximize $\log p_\theta(o \mid a)$, but this log-likelihood involves the intractable denominator integral. The ELBO route:
 
-<p align="center"><img src="asset/formulas/planet/f14.png" alt="formula 14"/></p>
+<p align="center"><img src="asset/formulas/planet/f14.png" alt="formula 14" style="max-width: 100%; height: auto;"/></p>
 
 The Monte Carlo estimator here **needs to sample $s$ from some distribution**. Which?
 
@@ -1796,7 +1796,7 @@ flowchart LR
 
 The essence of PlaNet is to make the world model $p_\theta(o, r \mid a)$ **approach the real environment** $p_{\text{real}}(o, r \mid a)$ under the data distribution. Three equivalent statements:
 
-<p align="center"><img src="asset/formulas/planet/f15_en.png" alt="formula 15"/></p>
+<p align="center"><img src="asset/formulas/planet/f15_en.png" alt="formula 15" style="max-width: 100%; height: auto;"/></p>
 
 | Angle | Interpretation |
 |---|---|
@@ -1808,7 +1808,7 @@ The essence of PlaNet is to make the world model $p_\theta(o, r \mid a)$ **appro
 
 Therefore, **PlaNet's training objective is to maximize** the world model's log-likelihood on real data:
 
-<p align="center"><img src="asset/formulas/planet/f16.png" alt="formula 16"/></p>
+<p align="center"><img src="asset/formulas/planet/f16.png" alt="formula 16" style="max-width: 100%; height: auto;"/></p>
 
 <p align="center">
   <img src="asset/planet-2019/ssm.png" alt="PlaNet paper Fig. 2(b) Stochastic State-Space Model" width="28%"/><br/>
@@ -1821,55 +1821,55 @@ However, this $p_\theta(o_{1:T}, r_{1:T} \mid a_{1:T})$ is **not directly comput
 <summary><b>Expand: why the marginal likelihood is intractable</b></summary>
 
 The model is actually defined as a **latent-variable generative model** with $s$ (the bare SSM above):
-<p align="center"><img src="asset/formulas/planet/f17_en.png" alt="formula 17"/></p>
+<p align="center"><img src="asset/formulas/planet/f17_en.png" alt="formula 17" style="max-width: 100%; height: auto;"/></p>
 Using the chain-rule factorization from the Step 2 folded section:
-<p align="center"><img src="asset/formulas/planet/f18.png" alt="formula 18"/></p>
+<p align="center"><img src="asset/formulas/planet/f18.png" alt="formula 18" style="max-width: 100%; height: auto;"/></p>
 **The joint is computable** (NN forward), but **integrating out $s$ has no closed form**, which is the root cause of the marginal likelihood being intractable.
 
 </details>
 
 Written in concrete form:
 
-<p align="center"><img src="asset/formulas/planet/f19.png" alt="formula 19"/></p>
+<p align="center"><img src="asset/formulas/planet/f19.png" alt="formula 19" style="max-width: 100%; height: auto;"/></p>
 
 Combining the **outer expectation over real data** with the **inner ELBO lower bound**, and **adding the encoder parameters $\phi$ to the optimization variables**, gives the training objective whose gradients PlaNet actually backpropagates:
 
-<p align="center"><img src="asset/formulas/planet/f20_en.png" alt="formula 20"/></p>
+<p align="center"><img src="asset/formulas/planet/f20_en.png" alt="formula 20" style="max-width: 100%; height: auto;"/></p>
 
 <details>
 <summary><b>Derivation: where does ELBO come from (5 steps)</b></summary>
 
 **Step 1 — Introduce $q$ (multiply by 1)**
 
-<p align="center"><img src="asset/formulas/planet/f21.png" alt="formula 21"/></p>
+<p align="center"><img src="asset/formulas/planet/f21.png" alt="formula 21" style="max-width: 100%; height: auto;"/></p>
 
 **Step 2 — Jensen's inequality** (log is concave, $\log \mathbb{E}[X] \geq \mathbb{E}[\log X]$):
 
-<p align="center"><img src="asset/formulas/planet/f22.png" alt="formula 22"/></p>
+<p align="center"><img src="asset/formulas/planet/f22.png" alt="formula 22" style="max-width: 100%; height: auto;"/></p>
 
 The right side is the definition of **ELBO**.
 
 **Step 3 — Expand the joint $p$'s factorization** (using the graphical-model decomposition derived above, plus the reward term):
 
-<p align="center"><img src="asset/formulas/planet/f23.png" alt="formula 23"/></p>
+<p align="center"><img src="asset/formulas/planet/f23.png" alt="formula 23" style="max-width: 100%; height: auto;"/></p>
 
 **Step 4 — Expand $q$'s factorization** (chain rule + Markov + filtering as derived in Step 2):
 
-<p align="center"><img src="asset/formulas/planet/f24.png" alt="formula 24"/></p>
+<p align="center"><img src="asset/formulas/planet/f24.png" alt="formula 24" style="max-width: 100%; height: auto;"/></p>
 
 **Step 5 — Merge transition term with $q$ term → KL**
 
 Substituting back into the ELBO (with the outer $\mathbb{E}_{q_\phi}$ wrapping everything), each $t$'s contribution is:
 
-<p align="center"><img src="asset/formulas/planet/f25.png" alt="formula 25"/></p>
+<p align="center"><img src="asset/formulas/planet/f25.png" alt="formula 25" style="max-width: 100%; height: auto;"/></p>
 
 The last two terms under $\mathbb{E}_{q_\phi(s_t)}$ are exactly the **negative KL divergence**:
 
-<p align="center"><img src="asset/formulas/planet/f26.png" alt="formula 26"/></p>
+<p align="center"><img src="asset/formulas/planet/f26.png" alt="formula 26" style="max-width: 100%; height: auto;"/></p>
 
 Combining gives the final form:
 
-<p align="center"><img src="asset/formulas/planet/f27.png" alt="formula 27"/></p>
+<p align="center"><img src="asset/formulas/planet/f27.png" alt="formula 27" style="max-width: 100%; height: auto;"/></p>
 
 **Tools used at each step**
 
