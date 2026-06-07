@@ -1879,7 +1879,8 @@ flowchart TB
     Sol --> Gap
 ```
 
-**Derivation: where does ELBO come from (5 steps)**
+<details>
+<summary><b>Derivation: where does ELBO come from (5 steps)</b></summary>
 
 **Step 1 — Introduce $q$ (multiply by 1)**
 
@@ -1924,6 +1925,8 @@ $$\log p(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\log p(o_t \mid s_t) + \log p
 | 5 | Merge transition term + $q$ term | KL divergence definition | Math |
 
 → **Math only does 2 steps (Jensen + KL definition); the other 3 are all "substitute in the form the graphical model gives us"**.
+
+</details>
 
 **Implementation: how this loss is actually trained**
 
