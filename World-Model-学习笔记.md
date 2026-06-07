@@ -1835,14 +1835,6 @@ $$
 
 三项 loss 都是在 $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ 下取期望(reparameterization),所以 **encoder 通过被采样出的 $s_t$ 进入前两项**,梯度沿 $s_t$ 反向流回 $\phi$:
 
-| Loss 项(对 $s_t \sim q_\phi$ 取期望) | 梯度路径 | 反向告诉 encoder 什么 |
-|---|---|---|
-| 重建 $\ln p_\theta(o_t \mid s_t)$ | decoder → $s_t$ → encoder | "$s_t$ 要够还原图像" |
-| reward $\ln p_\theta(r_t \mid s_t)$ | reward head → $s_t$ → encoder | "$s_t$ 要够预测奖励" |
-| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | 直接训 $q_\phi$ 和 transition $p_\theta$ | "$s_t$ 要让下一步可预测" |
-
-**所有梯度通过 $s_t$ 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 $s_t$"。
-
 <details>
 <summary><b>推导:ELBO 是怎么来的(5 步)</b></summary>
 
@@ -1892,6 +1884,17 @@ $$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t
 
 </details>
 
+| Loss 项(对 $s_t \sim q_\phi$ 取期望) | 梯度路径 | 反向告诉 encoder 什么 |
+|---|---|---|
+| 重建 $\ln p_\theta(o_t \mid s_t)$ | decoder → $s_t$ → encoder | "$s_t$ 要够还原图像" |
+| reward $\ln p_\theta(r_t \mid s_t)$ | reward head → $s_t$ → encoder | "$s_t$ 要够预测奖励" |
+| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | 直接训 $q_\phi$ 和 transition $p_\theta$ | "$s_t$ 要让下一步可预测" |
+
+**所有梯度通过 $s_t$ 互相传播** —— encoder 必须同时满足三个下游任务,任何一项 loss 不满足都会反向逼迫 encoder "再多塞点信息进 $s_t$"。
+
+<details>
+<summary><b>实现:怎么真的训这个 loss(伪代码 + 工程技巧)</b></summary>
+
 理论上 ELBO 含 $\mathbb{E}_q$(对所有可能的 $s$ 轨迹积分),不可解。工程上用**单样本 + reparameterization** 估计:
 
 ```python
@@ -1928,7 +1931,8 @@ for batch in dataloader:
 | **KL 闭式** | 两边都是高斯 → KL 有解析式,不用再采样 |
 | **梯度共享** | 同一个 $s$ 同时进入 3 个 loss,梯度自然在 encoder 上汇合 |
 
-> 💡 **一句话**:**ELBO = 真实 log-likelihood 算不出 → Jensen 造下界 → 图模型把 ELBO 展开成 3 个能算的项(重建 + reward + KL)→ Reparameterization 让梯度流过采样。**
+</details>
+
 
 #### 3. 这样为什么能解决问题:具体对照
 

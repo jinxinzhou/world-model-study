@@ -1836,14 +1836,6 @@ $$
 
 All three loss terms are taken in expectation over $s_t \sim q_\phi(s_t \mid s_{t-1}, a_{t-1}, o_t)$ (reparameterized sample). So **the encoder enters the first two terms through the sampled $s_t$**, with gradients flowing back along $s_t$ into $\phi$:
 
-| Loss term (expectation over $s_t \sim q_\phi$) | Gradient path | What it tells the encoder (backward) |
-|---|---|---|
-| Reconstruction $\ln p_\theta(o_t \mid s_t)$ | decoder → $s_t$ → encoder | "$s_t$ must be enough to reconstruct the image" |
-| Reward $\ln p_\theta(r_t \mid s_t)$ | reward head → $s_t$ → encoder | "$s_t$ must be enough to predict reward" |
-| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | Trains $q_\phi$ and transition $p_\theta$ directly | "$s_t$ must make the next step predictable" |
-
-**All gradients flow back to the encoder through the shared variable $s_t$** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into $s_t$".
-
 <details>
 <summary><b>Derivation: where does ELBO come from (5 steps)</b></summary>
 
@@ -1893,6 +1885,17 @@ $$\log p_\theta(o, r \mid a) \;\geq\; \sum_{t=1}^{T} \Big[\mathbb{E}_{q_\phi(s_t
 
 </details>
 
+| Loss term (expectation over $s_t \sim q_\phi$) | Gradient path | What it tells the encoder (backward) |
+|---|---|---|
+| Reconstruction $\ln p_\theta(o_t \mid s_t)$ | decoder → $s_t$ → encoder | "$s_t$ must be enough to reconstruct the image" |
+| Reward $\ln p_\theta(r_t \mid s_t)$ | reward head → $s_t$ → encoder | "$s_t$ must be enough to predict reward" |
+| $\mathrm{KL}[q_\phi \,\|\, p_\theta]$ | Trains $q_\phi$ and transition $p_\theta$ directly | "$s_t$ must make the next step predictable" |
+
+**All gradients flow back to the encoder through the shared variable $s_t$** — the encoder has to satisfy all three downstream tasks simultaneously, and any unmet loss pushes back: "pack more information into $s_t$".
+
+<details>
+<summary><b>Implementation: how this loss is actually trained (pseudocode + engineering tricks)</b></summary>
+
 In theory the ELBO contains $\mathbb{E}_q$ (an integral over all possible $s$ trajectories), which is intractable. In practice we use **single-sample + reparameterization**:
 
 ```python
@@ -1928,6 +1931,8 @@ for batch in dataloader:
 | **Single-sample estimate** | Sample $s$ once per trajectory; batch averaging reduces variance |
 | **KL closed form** | Both sides are Gaussian → analytic KL, no extra sampling |
 | **Gradient sharing** | The same $s$ feeds 3 losses, so gradients naturally merge at the encoder |
+
+</details>
 
 > 💡 **One sentence**: **ELBO = real log-likelihood is intractable → Jensen creates a lower bound → graphical model expands the ELBO into 3 computable terms (reconstruction + reward + KL) → reparameterization lets gradients flow through sampling.**
 
