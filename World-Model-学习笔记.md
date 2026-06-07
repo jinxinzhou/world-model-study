@@ -1955,6 +1955,12 @@ for batch in dataloader:
 | $h_t$ | **确定性** | GRU 的隐藏状态:$h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **长程记忆**,稳定可靠 |
 | $s_t$ | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
 
+> 🔑 **架构关键约束(易漏)**:**所有关于 $o_t$ 的信息必须经过 encoder 的采样 $s_t$ 才能流到下游** —— $o_t$ 不能旁路注入 decoder / reward / transition。这是论文显式强调的设计:
+>
+> > *"Importantly, all information about the observations must pass through the sampling step of the encoder to avoid a deterministic shortcut from inputs to reconstructions."*
+>
+> 否则 decoder 直接拿到 $o_t$ 重建,**走"确定性捷径"绕过 $s_t$**,latent 就学不到东西。所以 encoder 是唯一读 $o_t$ 的网络,decoder / reward / transition 全只读 $(h_t, s_t)$——这个不对称不是巧合,是设计约束(§🔧 细节 ① 子网络表里可见)。
+
 **为什么必须双路?** 单路设计的两条死路:
 
 | 单路设计 | 致命问题 |

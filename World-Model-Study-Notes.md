@@ -1966,6 +1966,12 @@ state = (h_t, s_t)
 | $h_t$ | **Deterministic** | GRU hidden state: $h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **Long-term memory**, stable |
 | $s_t$ | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
 
+> 🔑 **Key architectural constraint (easy to miss)**: **All information about $o_t$ must pass through the encoder's sampled $s_t$ to reach downstream** — $o_t$ cannot be fed directly into decoder / reward / transition. The paper makes this design explicit:
+>
+> > *"Importantly, all information about the observations must pass through the sampling step of the encoder to avoid a deterministic shortcut from inputs to reconstructions."*
+>
+> Otherwise the decoder would receive $o_t$ directly and reconstruct it, **taking a "deterministic shortcut" that bypasses $s_t$**, leaving the latent useless. That is why the encoder is the only network that reads $o_t$, while decoder / reward / transition all read only $(h_t, s_t)$ — the asymmetry is not accidental, it is a design constraint (visible in the sub-network table of §🔧 Detail ①).
+
 **Why must we go dual-path?** The two dead-ends of single-path designs:
 
 | Single-path Design | Fatal problem |
