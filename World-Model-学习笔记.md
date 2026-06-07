@@ -2142,7 +2142,7 @@ for k in 1..d:
 把 Observation Overshooting 里"解码 + pixel loss"这步**换成"latent 空间高斯 KL"**,代价模型立刻变干净。**关键在两点**:
 
 1. **encoder / decoder 都不会被 $D$ 倍增**
-   - **encoder 不倍增**:KL 求和 $\sum_{d=1}^{D} \mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta^{(d)}(\cdots)]$ 里,**只有 prior 那一边随 $d$ 变,posterior 那一边压根不带 $d$** → 同一个 $q_\phi(s_t \mid h_t, o_t)$ 在 $D$ 个 KL 项里逻辑上复用,encoder 总调用次数还是 $T$,不是 $T \times D$
+   - **encoder 不倍增**:KL 求和 $\sum_{d=1}^{D} \mathrm{KL}[q_\phi(s_t \mid h_t, o_t) \,\|\, p_\theta^{(d)}(s_t \mid s_{t-d}, h_{t-d}, a_{t-d:t-1})]$ 里,**只有 prior 那一边随 $d$ 变,posterior 那一边压根不带 $d$** → 同一个 $q_\phi(s_t \mid h_t, o_t)$ 在 $D$ 个 KL 项里逻辑上复用,encoder 总调用次数还是 $T$,不是 $T \times D$
    - **decoder 不倍增**:latent overshooting **只改 KL 项,完全不碰 reconstruction 项** → reconstruction 还是 $\sum_t \log p_\theta(o_t \mid h_t, s_t)$,每 $t$ 解码一次,跟 $d$ 没关系
 2. **多出来的 $D$ 倍开销都在"廉价侧"**
    - **transition** 是个小 MLP(参数比 encoder / decoder 少 1-2 数量级,每次 forward 几乎瞬时)
