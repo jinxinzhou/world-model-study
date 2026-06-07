@@ -1514,52 +1514,14 @@ flowchart LR
 | **Belief**: $b(s_t \mid o_{≤t}, a_{<t})$ | VAE encoder $q(z \mid o_t)$ **只看当前帧**,历史靠 MDN-RNN 的确定性 h 旁路;**[z,h] 从未被合成"对真实状态的概率 belief"** | Encoder/Posterior $q(s_t \mid h_t, o_t)$,其中 $h_t$ 携带历史 —— **真正的 POMDP belief**:高斯分布,通过 KL 拉向 prior |
 | **训练目标**: max ln $p(o_{1:T}, r_{1:T} \mid a_{1:T})$ | **VAE 的 ELBO + MDN-RNN 的 NLL**,两段独立、分阶段训练 —— **从未合成"对 POMDP 联合似然的下界"** | **单一 ELBO**(对整段轨迹的对数似然下界),由变分推断从 POMDP 联合似然**自然推导**;重建 / reward / KL 在同一公式里,梯度协同 |
 
-#### 3. 逐组件深入:为什么是"隐式 vs 显式"
-
-<details>
-<summary>(点开展开 —— 5 个组件逐一深挖)</summary>
-
-**🔹 组件 1:Transition(转移函数)**
-
-- **World Models 的隐式表现**:MDN-RNN 用 LSTM 维持隐状态 h,转移写成 $p(z_{t+1} \mid z_t, a_t, h_t)$。问题是 —— **"POMDP 的状态"到底是什么?论文从未给出答案**。如果状态是 z,那 h 凭什么出现在条件里?如果状态是 (z, h),那为什么 h 不参与重建、也不参与 KL?这是个**形式上不闭合**的设计。
-- **PlaNet 的显式表现**:状态被**正式拆为两部分** —— 确定性的 $h_t$ 和随机性的 $s_t$,且观测、奖励、prior、posterior 这 4 个网络都同时以 ($h_t$, $s_t$) 为输入,没有任何一个网络"只用 h 不用 s"或反过来。POMDP 的状态在形式上被完全确定:就是这一对变量,各司其职、协同被训。不存在 World Models 那种"h 凭什么出现"的歧义。
-
-> 📝 **符号说明**:本笔记 PlaNet/RSSM 部分**沿用论文原符号** —— `s_t` 表示随机隐变量,`h_t` 表示 GRU 确定性记忆,完整 RSSM 状态写作 `(h_t, s_t)`(论文不引入独立"完整状态"符号)。后续 Dreamer 系列论文(V1/V2/V3)和它们的开源代码改用 `z_t = 随机部分、(h_t, z_t) = 完整状态` —— 看 Dreamer 时把 `z` 当我们的 `s` 即可,两者只差换名。
-
-**🔹 组件 2:Observation(观测函数)**
-
-- **World Models 的隐式表现**:VAE 解码器是**单独训练**的,目标是「把这一帧的编码 z 还原成图像」—— 这是图像压缩任务,不是 POMDP 观测函数。事实上,如果 z 缺少对动力学有用的信息(比如速度),VAE 完全不在乎,因为这不影响重建。
-- **PlaNet 的显式表现**:Decoder $p(o_t \mid s_t)$ 是 ELBO 的一项,**与转移、reward、KL 联合训练**。如果 $s_t$ 缺了什么信息,重建 loss 就会反向把那部分推回 $s_t$ —— 它被「POMDP 的观测函数」这个角色驱动。
-
-**🔹 组件 3:Reward(奖励函数)**
-
-- **World Models 的隐式表现**:**根本没有这个组件**。reward 全程依赖真环境 —— CMA-ES 训 Controller 时把它放回 CarRacing / Doom 真环境跑、用真环境的 reward 评估。所以 World Models 的"世界模型"严格说**不完整**:只学了动力学,没学奖励。
-- **PlaNet 的显式表现**:Reward model $\hat{r}(s_t)$ 是世界模型的一部分,和其他组件一起训。**必要性**:CEM 在 latent 里 rollout 几百条候选动作序列时完全不接触真环境,必须靠模型预测的 reward 来挑选;**附带效果**:reward loss 反向也让 encoder 把"哪些视觉特征与奖励相关"塞进 $s_t$,这正是 World Models 的 VAE 永远学不到的。
-
-**🔹 组件 4:Belief 更新(后验)**
-
-- **World Models 的隐式表现**:VAE 的 $q(z \mid o_t)$ **只看当前一帧**,所以它不可能是"对环境状态的 belief"—— 只是"对这一帧的编码"。历史信息走另一条路:MDN-RNN 的 h(确定性、点估计的)。**两条路从未合并成"对真实状态的一个概率分布"**。Controller 拿到的 [z, h] 只是把两条路的最新切片拼起来,既不是分布、也不是 belief。
-- **PlaNet 的显式表现**:Encoder 同时吃 ($h_t$, $o_t$),输出 $q(s_t \mid h_t, o_t)$ = N($\mu$, $\sigma$²)。$h_t$ 携带历史、$o_t$ 是当前观测,二者一起决定"对当前隐状态的后验"。这是一个**真正的概率分布**,且通过 $\mathrm{KL}[q \,\|\, p]$ 被拉向"用动力学转移过来的预测",**强制 belief 与动力学一致** —— 这正是 POMDP belief update 的定义。
-
-**🔹 组件 5:Training Objective(训练目标)**
-
-- **World Models 的隐式表现**:loss = VAE 的 ELBO **+** MDN-RNN 的 NLL,**两段独立、分阶段串行训**。两个 loss 没有共同的概率根基 —— VAE 的 ELBO 是对图像 $p(o)$ 的下界,MDN-RNN 的 NLL 是对 z 序列 $p(z_{1:T} \mid a_{1:T})$ 的下界,这两个目标**从未被合成"对 POMDP 联合似然的下界"**。结果是:想加新约束就必须再拍个 loss 进来加权,**没有理论依据告诉你该加什么、权重该取多少**。
-- **PlaNet 的显式表现**:loss = 对整段轨迹的 ELBO
-
-  <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
-
-  这**直接就是把 POMDP 当作 latent variable model 做变分推断的结果**。重建、reward、belief 对齐动力学三件事在**同一个公式里**,梯度自动协同 —— encoder 会主动把"对动力学有用"和"对预测 reward 有用"的信息都塞进 $s_t$。**想加新约束?** 沿着同一个变分推导继续推:**Latent Overshooting 正是这样从"单步 ELBO"自然推广到"多步 ELBO"得到的(§4)**,理论一脉相承,没有任何拍脑袋。
-
-</details>
-
-#### 4. 显式形式化的真正价值(不只是用词区别)
+#### 3. 显式形式化的真正价值(不只是用词区别)
 
 - 🎯 **Loss 有源头**:World Models = "VAE loss + MDN-RNN loss"两段独立;PlaNet = ELBO 一步推出。要加新约束(如 latent overshooting)时,可以沿着推导继续加,每一项都还有理论意义。
 - 🎯 **职责可诊断**:Decoder 学坏 → 重建 loss 升;Transition 学坏 → KL 升,可定位。World Models 里 z 不好可能是 VAE 也可能是 MDN-RNN,因为职能没按 POMDP 拆开。
 - 🎯 **模块松耦合,可只换一个组件**:Dreamer 1/2/3 完全复用 PlaNet 的 RSSM(POMDP 那 4 个组件不动),只把"CEM 规划"换成"Actor-Critic + 解析梯度"。这种"换决策层不换世界模型"的灵活性,没有 POMDP 形式化是做不出来的。
 - 🎯 **可苹果对苹果比较**:所有 model-based RL 方法(POMCP / DVRL / SLAC / Dreamer ...)都能放在 POMDP 框架下比较 —— 你的 Z 怎么近似?belief 是什么形式?规划用什么算法?
 
-#### 5. 一句话总结
+#### 4. 一句话总结
 
 > **World Models** 把"部分可观测"当成**需要绕过去的工程问题**(堆 VAE + RNN 凑表示)。
 > **PlaNet** 把它当成**需要正面建模的科学问题**(写下 POMDP,所有架构和 loss 自然推导出来)。
@@ -1954,6 +1916,8 @@ for batch in dataloader:
 |------|------|---------|------|
 | $h_t$ | **确定性** | GRU 的隐藏状态:$h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **长程记忆**,稳定可靠 |
 | $s_t$ | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
+
+> 📝 **符号说明**:本笔记 PlaNet/RSSM 部分**沿用论文原符号** —— `s_t` 表示随机隐变量,`h_t` 表示 GRU 确定性记忆,完整 RSSM 状态写作 `(h_t, s_t)`(论文不引入独立"完整状态"符号)。后续 Dreamer 系列论文(V1/V2/V3)和它们的开源代码改用 `z_t = 随机部分、(h_t, z_t) = 完整状态` —— 看 Dreamer 时把 `z` 当我们的 `s` 即可,两者只差换名。
 
 > 🔑 **架构关键约束(易漏)**:**所有关于 $o_t$ 的信息必须经过 encoder 的采样 $s_t$ 才能流到下游** —— $o_t$ 不能旁路注入 decoder / reward / transition。
 > 否则 decoder 直接拿到 $o_t$ 重建,**走"确定性捷径"绕过 $s_t$**,latent 就学不到东西。所以 encoder 是唯一读 $o_t$ 的网络,decoder / reward / transition 全只读 $(h_t, s_t)$——这个不对称不是巧合,是设计约束(§🔧 细节 ① 子网络表里可见)。

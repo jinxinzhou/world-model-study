@@ -1515,52 +1515,15 @@ Comparison with other paradigms:
 | **Belief**: $b(s_t \mid o_{≤t}, a_{<t})$ | VAE encoder $q(z \mid o_t)$ **only sees the current frame**; history goes through MDN-RNN's deterministic h as a side channel; **[z, h] is never combined into "a probabilistic belief over the true state"** | Encoder/Posterior $q(s_t \mid h_t, o_t)$, where $h_t$ carries the history — **a genuine POMDP belief**: a Gaussian distribution pulled toward the prior via KL |
 | **Training Objective**: max ln $p(o_{1:T}, r_{1:T} \mid a_{1:T})$ | **VAE's ELBO + MDN-RNN's NLL**, two independent losses trained in separate stages — **never combined into "a lower bound on the POMDP joint likelihood"** | **Single ELBO** (lower bound on the log-likelihood of the entire trajectory), **naturally derived** from the POMDP joint likelihood via variational inference; reconstruction / reward / KL live in the same formula with coupled gradients |
 
-#### 3. Component-by-component deep dive: why "implicit vs explicit"
 
-<details>
-<summary>(click to expand — 5 components, one by one)</summary>
-
-**🔹 Component 1: Transition**
-
-- **World Models — implicit**: MDN-RNN maintains a hidden state h via an LSTM, and the transition is written as $p(z_{t+1} \mid z_t, a_t, h_t)$. The problem — **what is "the POMDP state"? The paper never answers**. If the state is z, why does h appear in the conditioning? If the state is (z, h), why is h not part of reconstruction or KL? This is a **formally non-closed** design.
-- **PlaNet — explicit**: The state is **formally decomposed into two parts** — deterministic $h_t$ and stochastic $s_t$ — and all 4 networks (observation, reward, prior, posterior) take ($h_t$, $s_t$) jointly as input; none of them uses only h or only s. This pins down the POMDP state formally: it is this pair of variables, each with a defined role, trained jointly. There is no World-Models-style ambiguity of "why does h show up here?".
-
-> 📝 **Notation note**: This note **follows the PlaNet paper's original symbols** in the PlaNet/RSSM sections — `s_t` is the stochastic latent, `h_t` is the GRU deterministic memory, and the full RSSM state is written as `(h_t, s_t)` (the paper introduces no separate symbol for "full state"). Later Dreamer-family papers (V1/V2/V3) and their open-source code switch to `z_t = stochastic part`, `(h_t, z_t) = full state` — when reading Dreamer, just treat `z` as our `s`; the two differ only in naming.
-
-**🔹 Component 2: Observation**
-
-- **World Models — implicit**: The VAE decoder is trained **separately**, with the goal of "reconstructing the image from this frame's code z" — an image-compression task, not a POMDP observation function. In fact, if z lacks information useful for dynamics (e.g., velocity), the VAE does not care because it does not affect reconstruction.
-- **PlaNet — explicit**: Decoder $p(o_t \mid s_t)$ is one term of the ELBO and is **jointly trained with the transition, reward, and KL**. If $s_t$ is missing some information, the reconstruction loss pushes it back into $s_t$ — the decoder is driven by its role as the POMDP's observation function.
-
-**🔹 Component 3: Reward**
-
-- **World Models — implicit**: **This component simply does not exist**. Reward depends on the real environment throughout — when training the Controller with CMA-ES, it is run inside the real CarRacing / Doom environment and evaluated against the real reward. So World Models' "world model" is strictly **incomplete**: it has learned the dynamics but not the reward.
-- **PlaNet — explicit**: The reward model $\hat{r}(s_t)$ is part of the world model, trained together with the other components. **Necessity**: when CEM rolls out hundreds of candidate action sequences in latent space without touching the real env, the model must predict reward for selection. **Side benefit**: the reward loss also forces the encoder to embed "which visual features are reward-relevant" into $s_t$ — something the World Models' VAE can never learn.
-
-**🔹 Component 4: Belief update (posterior)**
-
-- **World Models — implicit**: VAE's $q(z \mid o_t)$ **only looks at the current frame**, so it cannot be a "belief over the environment state" — only an encoding of this single frame. History flows through another path: MDN-RNN's h (deterministic, point estimate). **The two paths are never merged into "a single probability distribution over the true state"**. What the Controller receives — [z, h] — is just the latest slice of two parallel paths concatenated; it is neither a distribution nor a belief.
-- **PlaNet — explicit**: The encoder takes ($h_t$, $o_t$) jointly and outputs $q(s_t \mid h_t, o_t)$ = N($\mu$, $\sigma$²). $h_t$ carries history, $o_t$ is the current observation, and together they determine "the posterior over the current latent state". This is a **genuine probability distribution**, and is pulled via $\mathrm{KL}[q \,\|\, p]$ toward "the prediction propagated forward by the dynamics", **forcing belief consistency with the dynamics** — exactly the definition of a POMDP belief update.
-
-**🔹 Component 5: Training Objective**
-
-- **World Models — implicit**: loss = VAE's ELBO **+** MDN-RNN's NLL, **two independent losses trained sequentially in separate stages**. The two losses share no common probabilistic foundation — the VAE ELBO is a lower bound on the image likelihood $p(o)$, and the MDN-RNN NLL is a lower bound on the z-sequence likelihood $p(z_{1:T} \mid a_{1:T})$; **these two were never combined into "a lower bound on the POMDP joint likelihood"**. As a result, to add a new constraint one must heuristically tack on yet another loss with hand-tuned weighting — **there is no theory to tell what to add or how to weight it**.
-- **PlaNet — explicit**: loss = ELBO over the entire trajectory
-
-  <p align="center"><img src="asset/formulas/f18.png" width="780"/></p>
-
-  This **is precisely the result of treating the POMDP as a latent variable model and applying variational inference**. Reconstruction, reward, and belief–dynamics alignment all live in the **same formula**, with gradients automatically coupled — the encoder is forced to embed into $s_t$ whatever is useful for both dynamics and reward prediction. **Want to add a new constraint?** Just continue the variational derivation: **Latent Overshooting is precisely what you get by generalizing from "single-step ELBO" to "multi-step ELBO" (§4)** — a single theoretical lineage with no heuristic patches.
-
-</details>
-
-#### 4. The real value of explicit formalization (not just terminology)
+#### 3. The real value of explicit formalization (not just terminology)
 
 - 🎯 **Loss has a source**: World Models = "VAE loss + MDN-RNN loss" in two independent stages; PlaNet = ELBO derived in one step. When adding new constraints (e.g., latent overshooting), the derivation can be extended naturally — every term still has theoretical meaning.
 - 🎯 **Responsibilities are diagnosable**: Decoder degrades → reconstruction loss rises; Transition degrades → KL rises — locatable. In World Models, a bad z could be the VAE's fault or the MDN-RNN's, because responsibilities weren't split along POMDP lines.
 - 🎯 **Modules are loosely coupled — only one can be replaced**: Dreamer 1/2/3 fully reuse PlaNet's RSSM (those 4 POMDP components unchanged) and only swap "CEM planning" for "Actor-Critic + analytic gradients". This "swap the decision layer without touching the world model" flexibility would not be possible without POMDP formalization.
 - 🎯 **Apples-to-apples comparison**: All model-based RL methods (POMCP / DVRL / SLAC / Dreamer ...) can be compared under the POMDP framework — how do you approximate Z? What form is the belief? What planning algorithm?
 
-#### 5. One-sentence summary
+#### 4. One-sentence summary
 
 > **World Models** treats "partial observability" as **an engineering problem to work around** (stack VAE + RNN to cobble together a representation).
 > **PlaNet** treats it as **a scientific problem to model head-on** (write down the POMDP; let all architectures and losses derive naturally).
@@ -1965,6 +1928,8 @@ state = (h_t, s_t)
 |----------|------|-------------|------|
 | $h_t$ | **Deterministic** | GRU hidden state: $h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **Long-term memory**, stable |
 | $s_t$ | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
+
+> 📝 **Notation note**: This note **follows the PlaNet paper's original symbols** in the PlaNet/RSSM sections — `s_t` is the stochastic latent, `h_t` is the GRU deterministic memory, and the full RSSM state is written as `(h_t, s_t)` (the paper introduces no separate symbol for "full state"). Later Dreamer-family papers (V1/V2/V3) and their open-source code switch to `z_t = stochastic part`, `(h_t, z_t) = full state` — when reading Dreamer, just treat `z` as our `s`; the two differ only in naming.
 
 > 🔑 **Key architectural constraint (easy to miss)**: **All information about $o_t$ must pass through the encoder's sampled $s_t$ to reach downstream** — $o_t$ cannot be fed directly into decoder / reward / transition.
 > Otherwise the decoder would receive $o_t$ directly and reconstruct it, **taking a "deterministic shortcut" that bypasses $s_t$**, leaving the latent useless. That is why the encoder is the only network that reads $o_t$, while decoder / reward / transition all read only $(h_t, s_t)$ — the asymmetry is not accidental, it is a design constraint (visible in the sub-network table of §🔧 Detail ①).
