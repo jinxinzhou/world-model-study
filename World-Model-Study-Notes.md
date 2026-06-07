@@ -1963,8 +1963,8 @@ state = (h_t, s_t)
 
 | Variable | Type | Produced By | Role |
 |----------|------|-------------|------|
-| `h_t` | **Deterministic** | GRU hidden state: `h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})` | **Long-term memory**, stable |
-| `s_t` | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
+| $h_t$ | **Deterministic** | GRU hidden state: $h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **Long-term memory**, stable |
+| $s_t$ | **Stochastic Gaussian** | Sampled from Encoder or Prior | **Captures uncertainty / multi-modal futures** |
 
 **Why must we go dual-path?** The two dead-ends of single-path designs:
 

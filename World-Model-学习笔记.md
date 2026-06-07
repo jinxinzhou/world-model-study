@@ -1938,9 +1938,7 @@ for batch in dataloader:
 
 ### 🧬 RSSM:双路 latent 架构
 
-> 对应 §4.2 痛点表第 3 行的展开:"MDN-RNN 长程不稳,确定性记忆与随机性预测未解耦" → **RSSM(确定性 + 随机性双路)**
-
-RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性的 RNN 记忆"和"随机性的 SSM 不确定性"**缝合**在一起的双路 latent 动力学模型。
+> RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性的 RNN 记忆"和"随机性的 SSM 不确定性"**缝合**在一起的双路 latent 动力学模型 → 将确定性记忆与随机性预测解耦 → 缓解world model里MDN-RNN 长程不稳的问题。
 
 #### 问题:纯随机 SSM 的长程信息会被噪声冲掉
 
@@ -1952,17 +1950,10 @@ RSSM(Recurrent State-Space Model)是 PlaNet 的核心架构 —— 把"确定性
 
 <p align="center"><img src="asset/formulas/f16.png" alt="RSSM state"/></p>
 
-```
-RSSM state = (h_t, s_t)
-              ↑    ↑
-         确定性  随机性
-         (GRU)  (高斯)
-```
-
 | 变量 | 类型 | 由谁产生 | 角色 |
 |------|------|---------|------|
-| `h_t` | **确定性** | GRU 的隐藏状态:`h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})` | **长程记忆**,稳定可靠 |
-| `s_t` | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
+| $h_t$ | **确定性** | GRU 的隐藏状态:$h_t = \mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ | **长程记忆**,稳定可靠 |
+| $s_t$ | **随机性高斯** | Encoder 或 Prior 采样 | **捕捉不确定性 / 多模态未来** |
 
 **为什么必须双路?** 单路设计的两条死路:
 
@@ -1979,9 +1970,6 @@ RSSM state = (h_t, s_t)
   <i>论文 Figure 2:三种动力学模型对比。<b>(a) RNN</b> 只有确定性 h / <b>(b) SSM</b> 只有随机 s / <b>(c) RSSM</b> h(方块)+ s(圆圈)并存,各司其职 —— PlaNet 的核心创新</i>
 </p>
 
-#### 一句话总结
-
-> **RSSM = 在朴素 latent SSM 的基础上,加一条确定性记忆通路** —— 用 h 保证长程信息无损传递,用 s 保留表达不确定性的能力。
 
 ### 🧪 关键实验
 
