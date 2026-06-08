@@ -2338,15 +2338,6 @@ Plugging the §1 CEM kernel into the **real control loop**, at deployment time *
 
 > ⚠️ **Key: replan every single step** — do not reuse the leftover sequence from the previous step. This is the essential difference between MPC and open-loop control (after executing $a_t$ you get a fresh observation $o_{t+1}$, and that new information lets the replanning produce a better result).
 
-**Action Repeat (R) trick**
-
-In implementation, PlaNet **repeats each action $a_t$ $R$ times** (typically $R = 2 \sim 4$ on DMC):
-
-- Sum the reward over the $R$ steps as the "effective reward" of this decision
-- Use the observation at step $R$ as the next time step's $o_{t+1}$
-
-**Effect**: it **effectively compresses the planning horizon by a factor of $R$** (50 raw steps → 12 ~ 25 planning steps), making CEM computationally feasible while preserving physical time resolution. An **engineering practice the paper doesn't emphasize but every implementation has** — inherited by all subsequent Dreamer variants.
-
 > 💡 **Training vs deployment — the same CEM kernel reused twice**: at training time §🚀 Algorithm 1 line 11 calls `plan_action` to collect new data; at deployment time an outer observe-plan-act MPC loop wraps `plan_action` for actual control. The only difference is in the outer layer — at training time, after sending the action to the real env, line 16 still appends `D ← D ∪ {…}` back into the buffer; at deployment time, it's just one execution after another.
 
 
