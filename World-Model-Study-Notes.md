@@ -435,7 +435,7 @@ Back to the fundamental difference:
 </details>
 
 <details>
-<summary><b>4.1 World Models (Ha & Schmidhuber, 2018)</b></summary>
+<summary><b>⭐ 4.1 World Models (Ha & Schmidhuber, 2018)</b></summary>
 
 > **Paper**: [arxiv.org/abs/1803.10122](https://arxiv.org/abs/1803.10122) · **Interactive site** (highly recommended): <https://worldmodels.github.io/>
 >
@@ -1374,7 +1374,7 @@ Subsequent work (read immediately after World Models):
 </details>
 
 <details>
-<summary><b>4.2 PlaNet (2019)</b></summary>
+<summary><b>⭐ 4.2 PlaNet (2019)</b></summary>
 
 > **Paper**: [arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551) (Hafner et al., ICML 2019)
 > **Code**: <https://github.com/google-research/planet> · **Project page**: <https://planetrl.github.io/>

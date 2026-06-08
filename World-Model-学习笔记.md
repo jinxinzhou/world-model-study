@@ -434,7 +434,7 @@ Model-Based 学的是 `P(s' | s, a)` —— **转移函数只关心物理规律,
 </details>
 
 <details>
-<summary><b>4.1 World Models (Ha & Schmidhuber, 2018)</b></summary>
+<summary><b>⭐ 4.1 World Models (Ha & Schmidhuber, 2018)</b></summary>
 
 > **论文**:[arxiv.org/abs/1803.10122](https://arxiv.org/abs/1803.10122) · **交互式网站**(强烈推荐):<https://worldmodels.github.io/>
 >
@@ -1373,7 +1373,7 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 </details>
 
 <details>
-<summary><b>4.2 PlaNet (2019)</b></summary>
+<summary><b>⭐ 4.2 PlaNet (2019)</b></summary>
 
 > **论文**:[arxiv.org/abs/1811.04551](https://arxiv.org/abs/1811.04551)(Hafner et al., ICML 2019)
 > **代码**:<https://github.com/google-research/planet> · **项目页**:<https://planetrl.github.io/>
