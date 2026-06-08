@@ -2175,7 +2175,7 @@ flowchart TD
         direction TB
         Sample["sample B × L chunks (line 5)"]
         RSSM["RSSM World Model<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4-tuple (§🧭)"]
-        Train["Training step<br/>L(θ) = §🔭 ELBO (line 6)<br/>θ ← θ − α∇L (line 7)"]
+        Train["Training step<br/>L(θ)&nbsp;=&nbsp;§🔭&nbsp;ELBO&nbsp;(line&nbsp;6)<br/>θ ← θ − α∇L (line 7)"]
         Train -->|"<b>× C times (line 4)</b>"| Sample
         Sample --> RSSM
         RSSM --> Train

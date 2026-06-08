@@ -2161,7 +2161,7 @@ flowchart TD
         direction TB
         Sample["采 B 条 × L 步 chunks (行 5)"]
         RSSM["RSSM 世界模型<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4 件套 (§🧭)"]
-        Train["训练计算<br/>L(θ) = §🔭 ELBO (行 6)<br/>θ ← θ − α∇L (行 7)"]
+        Train["训练计算<br/>L(θ)&nbsp;=&nbsp;§🔭&nbsp;ELBO&nbsp;(行&nbsp;6)<br/>θ ← θ − α∇L (行 7)"]
         Train -->|"<b>× C 次 (行 4)</b>"| Sample
         Sample --> RSSM
         RSSM --> Train
