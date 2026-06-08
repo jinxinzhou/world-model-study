@@ -1398,8 +1398,8 @@ This paper is the **direct predecessor of the Dreamer series** and Hafner's firs
 | V and M trained separately in stages → VAE features may not be useful for decision-making | **End-to-end joint training** (encoder / transition / decoder / reward share a single ELBO loss) | §⚙️ |
 | MDN-RNN unstable over long horizons; deterministic memory and stochastic prediction not decoupled | **RSSM**: deterministic GRU ($h$) + stochastic Gaussian ($s$) **coexisting in dual paths**, distinct from purely deterministic RNNs and purely stochastic SSMs | §🧬 |
 | Only one-step prediction is trained; multi-step errors compound without explicit constraints | **Latent overshooting**: KL regularization on multi-step predictions of all distances in latent space, **without decoding back to images** | §🔭 |
-| Decision depends on a CMA-ES-evolved Controller; switching tasks requires retraining | **No policy network**; uses the learned world model directly with **CEM online planning in latent space** (MPC) | §🎯 |
 | One-shot random data collection, unable to improve with the model | **Online data collection**: actively explores using current model + planning while training; data distribution improves as the model improves | §🚀 |
+| Decision depends on a CMA-ES-evolved Controller; switching tasks requires retraining | **No policy network**; uses the learned world model directly with **CEM online planning in latent space** (MPC) | §🎯 |
 | Only demoed on toy environments like Doom / CarRacing | **DeepMind Control Suite** (6 continuous-control tasks from pixels) | §🧪 |
 
 #### Key Innovations Compared
