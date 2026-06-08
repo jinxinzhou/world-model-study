@@ -2163,11 +2163,23 @@ The PlaNet system consists of two loops that drive each other — **training** (
 
 ```mermaid
 flowchart TD
-    Env["Real Environment"] -->|obs, action, reward| Buffer["Replay Buffer"]
-    Buffer -->|training data| RSSM["RSSM World Model<br/>(Encoder + Transition + Reward + Decoder)<br/>End-to-end ELBO loss"]
-    RSSM -.->|"latent rollout"| CEM["CEM Online Planner<br/>sample 1000 action sequences<br/>pick top-100 elites, 10 iterations"]
-    CEM -->|"a_t"| Env
+    Env["Real Environment"]
+    Buffer["Replay Buffer 𝒟<br/>init = S random-action episodes (line 1)"]
+    RSSM["RSSM World Model<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4-tuple (§🧭)"]
+    CEM["CEM Online Planner (§🎯)<br/>J=1000 samples, K=100 elites, I=10 iters"]
+
+    Env -->|"obs, action, reward<br/>(line 16: append to buffer)"| Buffer
+    Buffer -->|"sample B × L chunks (line 5)<br/>L(θ) = §🔭 ELBO (line 6, Eq.8)<br/>θ ← θ − α∇L (line 7)<br/><b>× C times / outer iter</b> (line 4)"| RSSM
+    RSSM -.->|"latent rollout<br/>(line 11, uses Transition + Reward)"| CEM
+    CEM -->|"a_t + ε~p(ε) (line 12)<br/>real env step × R (lines 13-15)"| Env
+
+    linkStyle 0 stroke:#388e3c,stroke-width:2px
+    linkStyle 1 stroke:#1976d2,stroke-width:3px
+    linkStyle 2 stroke:#388e3c,stroke-width:2px
+    linkStyle 3 stroke:#388e3c,stroke-width:2px
 ```
+
+> 🎨 **Blue solid = A · Model fitting** (paper Algorithm 1 lines 4-7); **green edges = B · Data collection** (paper lines 1, 11-16); **dashed = in latent space, no real env touched**. The "× C times" annotation on the Buffer → RSSM edge means that direction fires C times per outer iteration — matching the Algorithm 1 pseudocode in #### 2 below.
 
 → **This chapter unpacks the left half** (training: how Replay Buffer trains the RSSM); **§🎯 unpacks the right half** (deployment: how RSSM + CEM produces $a_t$).
 
