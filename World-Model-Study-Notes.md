@@ -2246,6 +2246,11 @@ Key hyperparameters (paper's DMC defaults):
 
 #### 1. CEM kernel: how plan_action picks an action
 
+<p align="center">
+  <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
+  <i>Paper Figure 4: CEM planning in latent space. Starting from the current state, multiple trajectories are rolled out in latent space (each generation of candidate action sequences); the world model predicts cumulative reward, elites are selected to update the action distribution, and the procedure iterates — <b>all without touching the real environment</b></i>
+</p>
+
 CEM (Cross-Entropy Method) = **iterative search in the action-sequence space via "sample → pick elites → update distribution"**. PlaNet **does not learn a policy network**; whenever it needs to pick an action (training-time data collection, or actual control at deployment) it **runs this search in real time**:
 
 <p align="center"><img src="asset/formulas/f17.png" alt="CEM optimization"/></p>
@@ -2310,11 +2315,6 @@ def plan_action(world_model, current_state):
 | $I$ (CEM iterations) | 10 | 10 refinement iterations |
 
 **Per-step compute**: $10 \times 1000 \times 12 = 120{,}000$ transition forwards — feasible in tens of milliseconds on a GPU, but **too slow for real-time control on physical robots**. This is one of the core reasons PlaNet was superseded by Dreamer (which trains an actor network and outputs an action in one forward pass at deployment, **eliminating the entire CEM planning loop**).
-
-<p align="center">
-  <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
-  <i>Paper Figure 4: CEM planning in latent space. Starting from the current state, multiple trajectories are rolled out in latent space (each generation of candidate action sequences); the world model predicts cumulative reward, elites are selected to update the action distribution, and the procedure iterates — <b>all without touching the real environment</b></i>
-</p>
 
 #### 2. Deployment loop: Receding-Horizon MPC
 

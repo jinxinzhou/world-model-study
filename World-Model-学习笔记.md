@@ -2232,6 +2232,11 @@ PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 a
 
 #### 1. CEM 内核:plan_action 怎么挑动作
 
+<p align="center">
+  <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
+  <i>论文 Figure 4:CEM 在 latent 空间规划示意。从当前 state 出发,在 latent 里 rollout 多条 trajectory(各代候选动作序列),用 RSSM 预测累积奖励,选 elite 更新动作分布,迭代收敛 —— <b>全程不碰真实环境</b></i>
+</p>
+
 CEM(Cross-Entropy Method)= **在动作序列空间做"采样 → 选 elite → 更新分布"的迭代搜索**。PlaNet **不学 policy 网络**,每次需要决定一个动作(训练期 collect data、部署期实际控制)都**实时跑这个搜索**:
 
 <p align="center"><img src="asset/formulas/f17.png" alt="CEM optimization"/></p>
@@ -2296,11 +2301,6 @@ def plan_action(world_model, current_state):
 | $I$(CEM 迭代次数) | 10 | 收敛迭代 10 次 |
 
 **单步计算量**:$10 \times 1000 \times 12 = 12$ 万次 transition 前向 —— GPU 上几十毫秒可完成,但**真机机器人实时控制吃力**。这是 PlaNet 被 Dreamer 取代的核心原因之一(Dreamer 训 actor 网络,部署时一次 forward 就出 action,**省掉整个 CEM 规划循环**)。
-
-<p align="center">
-  <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
-  <i>论文 Figure 4:CEM 在 latent 空间规划示意。从当前 state 出发,在 latent 里 rollout 多条 trajectory(各代候选动作序列),用 RSSM 预测累积奖励,选 elite 更新动作分布,迭代收敛 —— <b>全程不碰真实环境</b></i>
-</p>
 
 #### 2. 部署循环:Receding-Horizon MPC
 
