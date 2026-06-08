@@ -2149,7 +2149,7 @@ for k in 1..d:
 
 <table>
 <tr>
-<td valign="top" width="55%">
+<td valign="middle" width="55%">
 
 ```mermaid
 flowchart TD
@@ -2172,9 +2172,9 @@ flowchart TD
 <p align="center"><i>↑ 系统鸟瞰图:每条边的注解都给出对应 Algorithm 1 的行号</i></p>
 
 </td>
-<td valign="top" width="45%">
+<td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" width="100%"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="850" style="max-width:100%;height:auto;max-height:850px;"/>
 
 <p align="center"><i>↑ 论文 Algorithm 1: Deep Planning Network<br/>(左图边上的"行 X"对应这里的行号)</i></p>
 

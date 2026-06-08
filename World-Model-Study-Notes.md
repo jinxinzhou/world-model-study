@@ -2163,7 +2163,7 @@ The PlaNet system consists of two loops that drive each other — **training** (
 
 <table>
 <tr>
-<td valign="top" width="55%">
+<td valign="middle" width="55%">
 
 ```mermaid
 flowchart TD
@@ -2186,9 +2186,9 @@ flowchart TD
 <p align="center"><i>↑ System bird's-eye view: each edge annotation gives the matching Algorithm 1 line number</i></p>
 
 </td>
-<td valign="top" width="45%">
+<td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" width="100%"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="850" style="max-width:100%;height:auto;max-height:850px;"/>
 
 <p align="center"><i>↑ Paper Algorithm 1: Deep Planning Network<br/>(the "line X" annotations on the left map to these line numbers)</i></p>
 
