@@ -2166,7 +2166,7 @@ The PlaNet system consists of two loops that drive each other — **training** (
 <td valign="middle" width="55%">
 
 ```mermaid
-%%{init: {'themeVariables': {'fontSize': '18px'}, 'flowchart': {'nodeSpacing': 55, 'rankSpacing': 75}}}%%
+%%{init: {'themeVariables': {'fontSize': '22px'}, 'flowchart': {'nodeSpacing': 70, 'rankSpacing': 100}}}%%
 flowchart TD
     Env["Real Environment"]
     Buffer["Replay Buffer 𝒟<br/>init = S random-action episodes (line 1)"]
