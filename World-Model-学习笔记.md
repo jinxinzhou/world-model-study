@@ -2240,12 +2240,12 @@ CEM(Cross-Entropy Method)= **在动作序列空间做"采样 → 选 elite → �
 
 <p align="center">
   <img src="asset/cem/03_4step_loop.png" width="950"/><br/>
-  <i>CEM 单次"决策"内重复 I 次的 4 步循环:① 从 $\mathcal{N}(\mu, \mathrm{diag}\,\sigma^2)$ 采 J 条候选动作序列 → ② 用 RSSM 在 latent 里 rollout,累积预测奖励 → ③ 选 top-K elite → ④ 用 elite 的元素级均值/方差更新分布。迭代 I 次后,把 μ 的第一个动作 $\mu[0]$ 作为本时刻的 $a_t$,下一时刻重新规划。</i>
+  <i>CEM 单次"决策"内重复 I 次的 4 步循环:① 从 𝒩(μ, diag σ²) 采 J 条候选动作序列 → ② 用 RSSM 在 latent 里 rollout,累积预测奖励 → ③ 选 top-K elite → ④ 用 elite 的元素级均值/方差更新分布。迭代 I 次后,把 μ 的第一个动作 μ[0] 作为本时刻的 aₜ,下一时刻重新规划。</i>
 </p>
 
 <p align="center">
   <img src="asset/cem/02_generations_evolution.png" width="950"/><br/>
-  <i>CEM 在 2D 目标函数 $f(x,y) = -((x-3)^2 + 5(y+1)^2)$ 上的优化过程。绿色三角是真实最优 (3, −1),红星是当前均值 μ,**红色椭圆是 $\mathcal{N}(\mu, \mathrm{diag}\,\sigma^2)$ 的 2σ 范围**(始终轴对齐 —— 这就是"对角高斯"的视觉特征),白点是 J 个候选,橙色圈是 top-K elite。10 次迭代收敛到最优。</i>
+  <i>CEM 在 2D 目标函数 f(x, y) = −((x−3)² + 5(y+1)²) 上的优化过程。绿色三角是真实最优 (3, −1),红星是当前均值 μ,<b>红色椭圆是 𝒩(μ, diag σ²) 的 2σ 范围</b>(始终轴对齐 —— 这就是"对角高斯"的视觉特征),白点是 J 个候选,橙色圈是 top-K elite。10 次迭代收敛到最优。</i>
 </p>
 
 > 🆚 **对比 §🚀 World Models 的 CMA-ES**:同一个反馈搜索框架(采样 → 选 elite → 更新),但 **CMA-ES 学的是完整协方差矩阵 Σ**,椭圆可以**旋转**对齐目标函数的方向(看 [CMA-ES 演化图](#part-1cma-es-是什么--三句话原理)第 3、8 代红色椭圆已经倾斜);而 **CEM 只学每个维度独立的 σ**(对角高斯,椭圆始终轴对齐)。**CEM 更简单 / 更快**(没有 $\mathcal{O}(d^2)$ 协方差更新),但在强相关维度上效率不如 CMA-ES。PlaNet 选 CEM 不是因为它更好,而是因为**每个 time step 都要现场跑一次,必须便宜**(I=10 × J=1000 × H=12 = 12 万次 transition forward),CEM 的"对角假设 + 元素级更新"刚好把每次迭代压到最低成本。

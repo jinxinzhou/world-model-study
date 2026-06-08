@@ -2254,12 +2254,12 @@ CEM (Cross-Entropy Method) = **iterative search in the action-sequence space via
 
 <p align="center">
   <img src="asset/cem/03_4step_loop.png" width="950"/><br/>
-  <i>The 4-step loop CEM repeats I times per single decision: ① sample J candidate action sequences from $\mathcal{N}(\mu, \mathrm{diag}\,\sigma^2)$ → ② roll out each in latent space with the RSSM and accumulate predicted reward → ③ pick top-K elites → ④ update the distribution with elementwise mean/std of the elites. After I iterations, $\mu[0]$ is taken as this time step's $a_t$; the next time step replans from scratch.</i>
+  <i>The 4-step loop CEM repeats I times per single decision: ① sample J candidate action sequences from 𝒩(μ, diag σ²) → ② roll out each in latent space with the RSSM and accumulate predicted reward → ③ pick top-K elites → ④ update the distribution with elementwise mean/std of the elites. After I iterations, μ[0] is taken as this time step's aₜ; the next time step replans from scratch.</i>
 </p>
 
 <p align="center">
   <img src="asset/cem/02_generations_evolution.png" width="950"/><br/>
-  <i>CEM optimisation on the 2D objective $f(x,y) = -((x-3)^2 + 5(y+1)^2)$. Green triangle is the true optimum (3, −1), red star is the current mean μ, **the red ellipse is the 2σ contour of $\mathcal{N}(\mu, \mathrm{diag}\,\sigma^2)$** (always axis-aligned — that is the visual signature of "diagonal Gaussian"); white dots are J candidates, orange circles are top-K elites. Converges to the optimum in 10 iterations.</i>
+  <i>CEM optimisation on the 2D objective f(x, y) = −((x−3)² + 5(y+1)²). Green triangle is the true optimum (3, −1), red star is the current mean μ, <b>the red ellipse is the 2σ contour of 𝒩(μ, diag σ²)</b> (always axis-aligned — that is the visual signature of "diagonal Gaussian"); white dots are J candidates, orange circles are top-K elites. Converges to the optimum in 10 iterations.</i>
 </p>
 
 > 🆚 **Compare with §🚀 World Models' CMA-ES**: same feedback-search framework (sample → elites → update), but **CMA-ES learns a full covariance matrix Σ**, so the ellipse can **rotate** to align with the objective's anisotropy (see the [CMA-ES evolution figure](#part-1-what-is-cma-es--three-sentence-explanation), where the ellipse is already tilted by generation 3 or 8); **CEM only learns a per-dimension σ** (diagonal Gaussian, ellipse always axis-aligned). **CEM is simpler / cheaper** (no $\mathcal{O}(d^2)$ covariance update) but less efficient when dimensions are strongly correlated. PlaNet picks CEM not because it's better, but because **it has to run from scratch at every time step and therefore must be cheap** (I=10 × J=1000 × H=12 = 120k transition forwards per decision); CEM's "diagonal assumption + elementwise update" minimises per-iteration cost.

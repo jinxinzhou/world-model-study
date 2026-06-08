@@ -61,10 +61,11 @@ def _draw_contours(ax):
 
 def run_cem_history(
     mu0=np.array([0.0, 0.0]),
-    sigma0=np.array([2.0, 2.0]),
-    J=40,
-    K=10,
+    sigma0=np.array([3.0, 3.0]),
+    J=60,
+    K=15,
     iters=10,
+    min_sigma=0.18,
     seed=0,
 ):
     rng = np.random.default_rng(seed)
@@ -77,15 +78,16 @@ def run_cem_history(
         elite_idx = np.argsort(scores)[-K:]
         elites = cand[elite_idx]
         history.append((mu.copy(), sigma.copy(), cand.copy(), elites.copy()))
-        # CEM update: elementwise mean and std (NO covariance).
+        # CEM update: elementwise mean and std (NO covariance). Floor sigma so
+        # candidates stay visually distinguishable across the shown iterations.
         mu = elites.mean(axis=0)
-        sigma = elites.std(axis=0) + 1e-6
+        sigma = np.maximum(elites.std(axis=0), min_sigma)
     return history
 
 
 def figure_generations_evolution(out_path: str):
     history = run_cem_history()
-    to_show = [0, 3, 6, 10]
+    to_show = [0, 2, 5, 10]
     fig, axes = plt.subplots(1, 4, figsize=(20, 4.6))
     title = "CEM 在 2D 目标函数上的优化过程(10 次迭代收敛到最优 (3, -1),σ 始终轴对齐 = 对角高斯)"
     fig.suptitle(title, fontsize=15, fontweight="bold", y=1.02)
