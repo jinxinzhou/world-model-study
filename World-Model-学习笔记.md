@@ -2189,7 +2189,7 @@ flowchart TD
 </td>
 <td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="780" style="max-width:100%;height:auto;max-height:780px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="650" style="max-width:100%;height:auto;max-height:650px;"/>
 
 <p align="center"><i>↑ 论文 Algorithm 1: Deep Planning Network<br/>(左图边上的"行 X"对应这里的行号)</i></p>
 
