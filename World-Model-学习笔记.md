@@ -2159,23 +2159,23 @@ flowchart TD
     subgraph A_phase [" "]
         direction TB
         Sample["采 B 条 × L 步 chunks (行 5)"]
-        RSSM["RSSM 世界模型<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4 件套 (§🧭)"]
-        Train["训练计算<br/>L(θ) = §🔭 ELBO (行 6, Eq.8)<br/>θ ← θ − α∇L (行 7)"]
-        Train -.->|"<b>× C 次 / 外层 iter</b> (行 4)"| Sample
+        RSSM["RSSM 世界模型: Encoder + Transition + Reward + Decoder = POMDP 4 件套 (§🧭)"]
+        Train["训练计算: L(θ) = §🔭 ELBO (行 6, Eq.8) ; θ ← θ − α∇L (行 7)"]
+        Train -->|"<b>× C 次 / 外层 iter</b> (行 4)"| Sample
         Sample --> RSSM
         RSSM --> Train
     end
 
     CEM["CEM 在线规划 (§🎯)<br/>J=1000 采样, K=100 elite, I=10 迭代"]
 
-    Env -->|"obs, action, reward<br/>(行 16: 攒回 buffer)"| Buffer
+    Env -->|"obs, action, reward (行 16: 攒回 buffer)"| Buffer
     Buffer --> Sample
-    RSSM -.->|"latent rollout<br/>(行 11: 用 Transition + Reward)"| CEM
+    RSSM -.->|"latent rollout (行 11: 用 Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (行 12)<br/>真环境 step × R (行 13-15)"| Env
 
     style A_phase fill:transparent,stroke:transparent
 
-    linkStyle 0 stroke:#1976d2,stroke-width:2px
+    linkStyle 0 stroke:#1976d2,stroke-width:3px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
     linkStyle 2 stroke:#1976d2,stroke-width:3px
     linkStyle 3 stroke:#388e3c,stroke-width:2px
@@ -2189,7 +2189,7 @@ flowchart TD
 </td>
 <td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="850" style="max-width:100%;height:auto;max-height:850px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="720" style="max-width:100%;height:auto;max-height:720px;"/>
 
 <p align="center"><i>↑ 论文 Algorithm 1: Deep Planning Network<br/>(左图边上的"行 X"对应这里的行号)</i></p>
 
@@ -2197,7 +2197,7 @@ flowchart TD
 </tr>
 </table>
 
-> 🎨 **蓝实线 = A · Model fitting 前向**(行 4-7);**蓝虚线 = 训练内层 C 次迭代的回边**(每次重新采 chunks + 前向 + 反传);**绿实线 = B · Data collection**(行 1, 11-16);**绿虚线 = 在 latent 空间 rollout,不接触真环境**。所有"行 X"对应右侧 Algorithm 1 的行号。
+> 🎨 **蓝实线 = A · Model fitting**(论文 Algorithm 1 行 4-7,含 C 次迭代回边);**绿实线 = B · Data collection**(论文行 1, 11-16);**绿虚线 = 在 latent 空间 rollout,不接触真环境**。所有"行 X"对应右侧 Algorithm 1 的行号。
 
 → **本章详解左半圈**(训练:Replay Buffer 怎么训出 RSSM),**§🎯 详解右半圈**(部署:RSSM 怎么经 CEM 挑出 $a_t$)。
 

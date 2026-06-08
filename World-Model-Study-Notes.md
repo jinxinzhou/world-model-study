@@ -2173,23 +2173,23 @@ flowchart TD
     subgraph A_phase [" "]
         direction TB
         Sample["sample B × L chunks (line 5)"]
-        RSSM["RSSM World Model<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4-tuple (§🧭)"]
-        Train["Training step<br/>L(θ) = §🔭 ELBO (line 6, Eq.8)<br/>θ ← θ − α∇L (line 7)"]
-        Train -.->|"<b>× C times / outer iter</b> (line 4)"| Sample
+        RSSM["RSSM World Model: Encoder + Transition + Reward + Decoder = POMDP 4-tuple (§🧭)"]
+        Train["Training step: L(θ) = §🔭 ELBO (line 6, Eq.8) ; θ ← θ − α∇L (line 7)"]
+        Train -->|"<b>× C times / outer iter</b> (line 4)"| Sample
         Sample --> RSSM
         RSSM --> Train
     end
 
     CEM["CEM Online Planner (§🎯)<br/>J=1000 samples, K=100 elites, I=10 iters"]
 
-    Env -->|"obs, action, reward<br/>(line 16: append to buffer)"| Buffer
+    Env -->|"obs, action, reward (line 16: append to buffer)"| Buffer
     Buffer --> Sample
-    RSSM -.->|"latent rollout<br/>(line 11, uses Transition + Reward)"| CEM
+    RSSM -.->|"latent rollout (line 11, uses Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (line 12)<br/>real env step × R (lines 13-15)"| Env
 
     style A_phase fill:transparent,stroke:transparent
 
-    linkStyle 0 stroke:#1976d2,stroke-width:2px
+    linkStyle 0 stroke:#1976d2,stroke-width:3px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
     linkStyle 2 stroke:#1976d2,stroke-width:3px
     linkStyle 3 stroke:#388e3c,stroke-width:2px
@@ -2203,7 +2203,7 @@ flowchart TD
 </td>
 <td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="850" style="max-width:100%;height:auto;max-height:850px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="720" style="max-width:100%;height:auto;max-height:720px;"/>
 
 <p align="center"><i>↑ Paper Algorithm 1: Deep Planning Network<br/>(the "line X" annotations on the left map to these line numbers)</i></p>
 
@@ -2211,7 +2211,7 @@ flowchart TD
 </tr>
 </table>
 
-> 🎨 **Blue solid = A · Model fitting forward** (lines 4-7); **blue dashed = back-edge for the inner C-times iteration** (each iter re-samples chunks + forward + SGD); **green solid = B · Data collection** (lines 1, 11-16); **green dashed = latent rollout (no real env touched)**. All "line X" annotations match the line numbers in the right-hand Algorithm 1.
+> 🎨 **Blue solid = A · Model fitting** (paper Algorithm 1 lines 4-7, including the C-iter back-edge); **green solid = B · Data collection** (paper lines 1, 11-16); **green dashed = latent rollout (no real env touched)**. All "line X" annotations match the line numbers in the right-hand Algorithm 1.
 
 → **This chapter unpacks the left half** (training: how Replay Buffer trains the RSSM); **§🎯 unpacks the right half** (deployment: how RSSM + CEM produces $a_t$).
 
