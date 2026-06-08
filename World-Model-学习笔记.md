@@ -2369,14 +2369,6 @@ def plan_action(world_model, current_state):
   <i>论文 Figure 6:Latent overshooting 消融。<b>蓝色 = PlaNet(完整 D=50 overshooting)</b>,红色 = No overshooting(只用单步 KL,即标准 ELBO),绿色 = Random dataset(1k episodes 固定随机数据,不在线收集)。在 Walker Walk、Cheetah Run 这类长程任务上,蓝色明显高于红色 —— 多步 KL 约束确实让模型更稳定;Cup Catch / Cartpole 这类短程任务上两者持平,说明 overshooting 的收益主要在长程</i>
 </p>
 
-**规划 horizon H 的影响**:
-- H=1 → 退化成贪心,差
-- **H=12 → 甜点** ⭐
-- H=50 → 模型误差累积,反而变差
-
-→ "**世界模型不能想太远**" 是 model-based RL 的永恒痛点。
-
-> 📎 H 的 sensitivity sweep 在论文 **Appendix F.1**(主文没有专门画图),感兴趣可以查 [arXiv:1811.04551 附录](https://arxiv.org/pdf/1811.04551#page=14)。
 
 
 

@@ -2383,14 +2383,6 @@ Plugging the §1 CEM kernel into the **real control loop**, at deployment time *
   <i>Paper Figure 6: Latent overshooting ablation. <b>Blue = PlaNet (full D=50 overshooting)</b>, red = No overshooting (single-step KL only, i.e. standard ELBO), green = Random dataset (1k episodes of fixed random data, no online collection). On long-horizon tasks like Walker Walk and Cheetah Run, blue is clearly above red — multi-step KL constraints do make the model more stable; on shorter tasks like Cup Catch / Cartpole the two are on par, indicating overshooting mainly pays off on long horizons</i>
 </p>
 
-**Effect of planning horizon H**:
-- H=1 → degenerates to greedy, poor
-- **H=12 → sweet spot** ⭐
-- H=50 → model errors accumulate, performance drops
-
-→ "**The world model cannot imagine too far ahead**" is an eternal pain point of model-based RL.
-
-> 📎 The H sensitivity sweep is in the paper's **Appendix F.1** (no dedicated figure in the main text); see [arXiv:1811.04551 Appendix](https://arxiv.org/pdf/1811.04551#page=14) if you want the curves.
 
 ### 💭 Reflections
 
