@@ -2172,7 +2172,7 @@ flowchart TD
     Env -->|"obs, action, reward<br/>(行 16: 攒回 buffer)"| Buffer
     Buffer --> Sample
     RSSM -.->|"latent rollout (行 11:<br/>用 Transition + Reward)"| CEM
-    CEM -->|"a_t + ε~p(ε) (行 12)<br/>真环境 step × R (行 13-15)"| Env
+    CEM -->|"a_t + ε~p(ε) (行&nbsp;12)<br/>真环境 step × R (行&nbsp;13-15)"| Env
 
     style A_phase fill:transparent,stroke:transparent
 

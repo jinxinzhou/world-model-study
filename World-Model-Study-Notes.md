@@ -2186,7 +2186,7 @@ flowchart TD
     Env -->|"obs, action, reward<br/>(line 16: append to buffer)"| Buffer
     Buffer --> Sample
     RSSM -.->|"latent rollout (line 11:<br/>uses Transition + Reward)"| CEM
-    CEM -->|"a_t + ε~p(ε) (line 12)<br/>real env step × R (lines 13-15)"| Env
+    CEM -->|"a_t + ε~p(ε) (line&nbsp;12)<br/>real env step × R (lines&nbsp;13-15)"| Env
 
     style A_phase fill:transparent,stroke:transparent
 
