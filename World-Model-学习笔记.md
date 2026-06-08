@@ -2143,20 +2143,7 @@ for k in 1..d:
 
 > 前面几章把组件单独讲完了 —— §⚙️ 给了 ELBO、§🧬 给了 RSSM 双路 latent、§🔭 给了 latent overshooting。本章把它们**串成一个能跑的训练流程**:RSSM 怎么从随机初始化变成一个能预测环境的世界模型。
 
-#### 1. 系统总览
-
-PlaNet = **4 个网络** 1:1 对应 POMDP 四件套(完整对照详见 §🧭 #### 2):
-
-| POMDP 角色 | PlaNet 网络 | 形式 |
-|---|---|---|
-| Transition | Prior(transition net) | $p_\theta(s_t \mid h_t)$ |
-| Observation | Decoder | $p_\theta(o_t \mid h_t, s_t)$ |
-| Reward | Reward head | $p_\theta(r_t \mid h_t, s_t)$ |
-| Belief | Encoder(posterior) | $q_\phi(s_t \mid h_t, o_t)$ |
-
-确定性记忆 $h_t = f_\mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ 不算独立网络(就一个 GRU cell),贯穿 4 个网络作为"历史载体"。
-
-#### 2. 系统数据流(俯瞰图)
+#### 1. 系统数据流(俯瞰图)
 
 整个 PlaNet 系统由两个相互推动的循环组成 —— **训练**(真实环境 → Buffer → RSSM)和**部署**(RSSM → CEM → 真实环境)—— 通过一条 replay buffer 串起来:
 
@@ -2170,7 +2157,7 @@ flowchart TD
 
 → **本章详解左半圈**(训练:Replay Buffer 怎么训出 RSSM),**§🎯 详解右半圈**(部署:RSSM 怎么经 CEM 挑出 $a_t$)。
 
-#### 3. 训练循环:Model Fitting + Data Collection 交替
+#### 2. 训练循环:Model Fitting + Data Collection 交替
 
 PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 agent 跑出来的,所以它跟 RL 一样要 **训模型 ↔ 收集数据 交替**:
 
