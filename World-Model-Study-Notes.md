@@ -2262,6 +2262,17 @@ CEM (Cross-Entropy Method) = **iterative search in the action-sequence space via
   <i>The 4-step loop CEM repeats I times per single decision: ① sample J candidate action sequences from 𝒩(μ, diag σ²) → ② roll out each in latent space with the RSSM and accumulate predicted reward → ③ pick top-K elites → ④ update the distribution with elementwise mean/std of the elites. After I iterations, μ[0] is taken as this time step's aₜ; the next time step replans from scratch.</i>
 </p>
 
+**Key parameters**:
+
+| Parameter | Value | Meaning |
+|---|---|---|
+| $H$ (planning horizon) | 12 | Imagine 12 steps ahead |
+| $J$ (candidate sequences) | 1000 | 1000 sequences per iteration |
+| $K$ (elites) | 100 | Top-100 |
+| $I$ (CEM iterations) | 10 | 10 refinement iterations |
+
+**Per-step compute**: $10 \times 1000 \times 12 = 120{,}000$ transition forwards — feasible in tens of milliseconds on a GPU, but **too slow for real-time control on physical robots**. This is one of the core reasons PlaNet was superseded by Dreamer (which trains an actor network and outputs an action in one forward pass at deployment, **eliminating the entire CEM planning loop**).
+
 <details>
 <summary><b>📌 Algorithm implementation: plan_action (click to expand Python pseudocode — the 4 steps above translated to code)</b></summary>
 
@@ -2304,17 +2315,6 @@ def plan_action(world_model, current_state):
 </p>
 
 > 🆚 **Compare with §🚀 World Models' CMA-ES**: same feedback-search framework (sample → elites → update), but **CMA-ES learns a full covariance matrix Σ**, so the ellipse can **rotate** to align with the objective's anisotropy (see the [CMA-ES evolution figure](#part-1-what-is-cma-es--three-sentence-explanation), where the ellipse is already tilted by generation 3 or 8); **CEM only learns a per-dimension σ** (diagonal Gaussian, ellipse always axis-aligned). **CEM is simpler / cheaper** (no $\mathcal{O}(d^2)$ covariance update) but less efficient when dimensions are strongly correlated. PlaNet picks CEM not because it's better, but because **it has to run from scratch at every time step and therefore must be cheap** (I=10 × J=1000 × H=12 = 120k transition forwards per decision); CEM's "diagonal assumption + elementwise update" minimises per-iteration cost.
-
-**Key parameters**:
-
-| Parameter | Value | Meaning |
-|---|---|---|
-| $H$ (planning horizon) | 12 | Imagine 12 steps ahead |
-| $J$ (candidate sequences) | 1000 | 1000 sequences per iteration |
-| $K$ (elites) | 100 | Top-100 |
-| $I$ (CEM iterations) | 10 | 10 refinement iterations |
-
-**Per-step compute**: $10 \times 1000 \times 12 = 120{,}000$ transition forwards — feasible in tens of milliseconds on a GPU, but **too slow for real-time control on physical robots**. This is one of the core reasons PlaNet was superseded by Dreamer (which trains an actor network and outputs an action in one forward pass at deployment, **eliminating the entire CEM planning loop**).
 
 #### 2. Deployment loop: Receding-Horizon MPC
 

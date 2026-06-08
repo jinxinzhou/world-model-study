@@ -2248,6 +2248,17 @@ CEM(Cross-Entropy Method)= **在动作序列空间做"采样 → 选 elite → �
   <i>CEM 单次"决策"内重复 I 次的 4 步循环:① 从 𝒩(μ, diag σ²) 采 J 条候选动作序列 → ② 用 RSSM 在 latent 里 rollout,累积预测奖励 → ③ 选 top-K elite → ④ 用 elite 的元素级均值/方差更新分布。迭代 I 次后,把 μ 的第一个动作 μ[0] 作为本时刻的 aₜ,下一时刻重新规划。</i>
 </p>
 
+**关键参数**:
+
+| 参数 | 值 | 含义 |
+|---|---|---|
+| $H$(规划 horizon) | 12 | 想象 12 步未来 |
+| $J$(候选序列数) | 1000 | 每代采 1000 个序列 |
+| $K$(elite 数) | 100 | 选 top-100 |
+| $I$(CEM 迭代次数) | 10 | 收敛迭代 10 次 |
+
+**单步计算量**:$10 \times 1000 \times 12 = 12$ 万次 transition 前向 —— GPU 上几十毫秒可完成,但**真机机器人实时控制吃力**。这是 PlaNet 被 Dreamer 取代的核心原因之一(Dreamer 训 actor 网络,部署时一次 forward 就出 action,**省掉整个 CEM 规划循环**)。
+
 <details>
 <summary><b>📌 算法实现:plan_action(点击展开 Python 伪代码,把上图的 4 步翻译成代码)</b></summary>
 
@@ -2290,17 +2301,6 @@ def plan_action(world_model, current_state):
 </p>
 
 > 🆚 **对比 §🚀 World Models 的 CMA-ES**:同一个反馈搜索框架(采样 → 选 elite → 更新),但 **CMA-ES 学的是完整协方差矩阵 Σ**,椭圆可以**旋转**对齐目标函数的方向(看 [CMA-ES 演化图](#part-1cma-es-是什么--三句话原理)第 3、8 代红色椭圆已经倾斜);而 **CEM 只学每个维度独立的 σ**(对角高斯,椭圆始终轴对齐)。**CEM 更简单 / 更快**(没有 $\mathcal{O}(d^2)$ 协方差更新),但在强相关维度上效率不如 CMA-ES。PlaNet 选 CEM 不是因为它更好,而是因为**每个 time step 都要现场跑一次,必须便宜**(I=10 × J=1000 × H=12 = 12 万次 transition forward),CEM 的"对角假设 + 元素级更新"刚好把每次迭代压到最低成本。
-
-**关键参数**:
-
-| 参数 | 值 | 含义 |
-|---|---|---|
-| $H$(规划 horizon) | 12 | 想象 12 步未来 |
-| $J$(候选序列数) | 1000 | 每代采 1000 个序列 |
-| $K$(elite 数) | 100 | 选 top-100 |
-| $I$(CEM 迭代次数) | 10 | 收敛迭代 10 次 |
-
-**单步计算量**:$10 \times 1000 \times 12 = 12$ 万次 transition 前向 —— GPU 上几十毫秒可完成,但**真机机器人实时控制吃力**。这是 PlaNet 被 Dreamer 取代的核心原因之一(Dreamer 训 actor 网络,部署时一次 forward 就出 action,**省掉整个 CEM 规划循环**)。
 
 #### 2. 部署循环:Receding-Horizon MPC
 
