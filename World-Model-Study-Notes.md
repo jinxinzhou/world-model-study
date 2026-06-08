@@ -2356,6 +2356,12 @@ Plugging the §1 CEM kernel into the **real control loop**, at deployment time *
   <i>Paper Table 1: PlaNet uses <b>2,000 episodes</b> to reach the performance of D4PG with <b>100,000 episodes</b> — per-task efficiency gains of 11×–180×</i>
 </p>
 
+**World model vs true simulator (quality upper bound)** ── The same Table 1 hides an even more important comparison:
+- CEM + **true simulator** (oracle, upper bound, row 4: `CEM + true simulator`) → best
+- CEM + **PlaNet world model** (row 3: `PlaNet (ours)`) → **only slightly below oracle**
+
+→ This comparison is **the most direct evidence of world-model quality**: PlaNet's learned latent dynamics is good enough that "planning in the head" ≈ "planning in the real env". On each task PlaNet trails the oracle by only 12 ~ 100 points (out of 1000), a tiny gap. If the world model were poor, these two rows would differ by an order of magnitude.
+
 #### Key Ablations
 
 **Necessity of RSSM dual-path**:
@@ -2376,12 +2382,6 @@ Plugging the §1 CEM kernel into the **real control loop**, at deployment time *
   <img src="asset/planet-2019/result_agent.png" width="850"/><br/>
   <i>Paper Figure 6: Latent overshooting ablation. <b>Blue = PlaNet (full D=50 overshooting)</b>, red = No overshooting (single-step KL only, i.e. standard ELBO), green = Random dataset (1k episodes of fixed random data, no online collection). On long-horizon tasks like Walker Walk and Cheetah Run, blue is clearly above red — multi-step KL constraints do make the model more stable; on shorter tasks like Cup Catch / Cartpole the two are on par, indicating overshooting mainly pays off on long horizons</i>
 </p>
-
-**World model vs true simulator (quality upper bound)**:
-- CEM + **true simulator** (oracle, upper bound) → best
-- CEM + **PlaNet world model** → **only slightly below oracle**
-
-→ This comparison is **the most direct evidence of world-model quality**: PlaNet's learned latent dynamics is good enough that "planning in the head" ≈ "planning in the real env". If the world model were poor, these two curves would differ by an order of magnitude. Compare rows 3 and 4 of Table 1 above (`PlaNet` vs `CEM + true simulator`): on each task PlaNet trails the oracle by only 12 ~ 100 points (out of 1000), a tiny gap.
 
 **Effect of planning horizon H**:
 - H=1 → degenerates to greedy, poor

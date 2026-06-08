@@ -2342,6 +2342,12 @@ def plan_action(world_model, current_state):
   <i>论文 Table 1:PlaNet 用 <b>2000 episodes</b> 达到 D4PG <b>100,000 episodes</b> 的性能,各任务样本效率提升 11×~180×</i>
 </p>
 
+**世界模型 vs 真模拟器(质量上限对比)** ── 同一张 Table 1 还藏了一条更重要的对比:
+- CEM + **真模拟器**(oracle,上限,表内第 4 行 `CEM + true simulator`) → 最好
+- CEM + **PlaNet 世界模型**(表内第 3 行 `PlaNet (ours)`) → **仅略低于 oracle**
+
+→ 这条对比是**对世界模型质量最直接的证据**:PlaNet 学到的 latent 动力学好到让"脑内规划"几乎等于"真环境规划"。各任务上 PlaNet 比 oracle 低 12 ~ 100 分(满分 1000),差距很小。如果世界模型差,这两行会有数量级的差距。
+
 #### 关键消融
 
 **RSSM 双路的必要性**:
@@ -2362,12 +2368,6 @@ def plan_action(world_model, current_state):
   <img src="asset/planet-2019/result_agent.png" width="850"/><br/>
   <i>论文 Figure 6:Latent overshooting 消融。<b>蓝色 = PlaNet(完整 D=50 overshooting)</b>,红色 = No overshooting(只用单步 KL,即标准 ELBO),绿色 = Random dataset(1k episodes 固定随机数据,不在线收集)。在 Walker Walk、Cheetah Run 这类长程任务上,蓝色明显高于红色 —— 多步 KL 约束确实让模型更稳定;Cup Catch / Cartpole 这类短程任务上两者持平,说明 overshooting 的收益主要在长程</i>
 </p>
-
-**世界模型 vs 真模拟器(质量上限对比)**:
-- CEM + **真模拟器**(oracle,上限) → 最好
-- CEM + **PlaNet 世界模型** → **仅略低于 oracle**
-
-→ 这条对比是**对世界模型质量最直接的证据**:PlaNet 学到的 latent 动力学好到让"脑内规划"几乎等于"真环境规划"。如果世界模型差,这两条曲线会有数量级的差距。直接对照上面 Table 1 第 3、4 行(`PlaNet` vs `CEM + true simulator`):各任务上 PlaNet 比 oracle 低 12 ~ 100 分(满分 1000),差距很小。
 
 **规划 horizon H 的影响**:
 - H=1 → 退化成贪心,差
