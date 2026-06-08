@@ -2166,6 +2166,47 @@ PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 a
   <i>↑ 论文 Algorithm 1:Deep Planning Network. 外层 <code>while</code> 循环 = "Model fitting(内层 1,行 4-7)" 和 "Data collection(内层 2,行 8-16)" 交替;两个内层各自执行 $C$ 次更新 / 1 条新 episode,共用同一份 replay buffer $\mathcal{D}$。</i>
 </p>
 
+下面把 Algorithm 1 的 loop 结构**显式可视化**——每个节点对应若干行伪代码,外层 `while` 和两个内层 `for` 都画成回边:
+
+```mermaid
+flowchart TD
+    Start([开始]) --> Init["① 初始化  行 1-2<br/>D ← S 个 random-action episodes<br/>θ ← random_init"]
+    Init --> Conv{"converged?  行 3"}
+    Conv -- Yes --> Done([输出 θ])
+    Conv -- No --> A1
+
+    A1["s = 1"] --> A2["采 B 条长度 L 的 chunk · 行 5"]
+    A2 --> A3["算 L(θ) = §🔭 Latent Overshooting ELBO<br/>行 6 论文 Eq.8"]
+    A3 --> A4["θ ← θ − α·∇L(θ) · 行 7"]
+    A4 --> A5{"s = C?  行 4"}
+    A5 -- No --> A6["s ← s+1"]
+    A6 --> A2
+    A5 -- Yes --> B1
+
+    B1["o₁ = env.reset() + 初始化 h, s, a_prev<br/>行 8"] --> B2["t = 1"]
+    B2 --> B3["推 belief = §🧬 RSSM 双路<br/>h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})<br/>s_t ~ q_φ(s_t | h_t, o_t)<br/>行 10"]
+    B3 --> B4["a_t ← CEM planner (§🎯)  行 11"]
+    B4 --> B5["a_t ← a_t + ε,  ε ~ p(ε)  行 12"]
+    B5 --> B6["Action repeat × R:<br/>r_t^k, o_{t+1}^k ← env.step(a_t)<br/>r_t = Σ_k r_t^k · 行 13-15"]
+    B6 --> B7{"t = ⌈T/R⌉?  行 9"}
+    B7 -- No --> B8["t ← t+1"]
+    B8 --> B3
+    B7 -- Yes --> B9["D ← D ∪ {新 episode} · 行 16"]
+    B9 --> Conv
+
+    classDef phaseA fill:#e3f2fd,stroke:#1976d2,color:#000
+    classDef phaseB fill:#e8f5e9,stroke:#388e3c,color:#000
+    classDef ctrl fill:#fff3cd,stroke:#856404,color:#000
+    classDef io fill:#fce4ec,stroke:#c2185b,color:#000
+
+    class A1,A2,A3,A4,A6 phaseA
+    class B1,B2,B3,B4,B5,B6,B8,B9 phaseB
+    class Conv,A5,B7 ctrl
+    class Init,Done io
+```
+
+> 🎨 配色:🔵 蓝 = Model fitting (A);🟢 绿 = Data collection (B);🟡 黄 = 循环判断;🌸 粉 = 初始化 / 终止。回边明确标出三个层级的 loop:外层 `while`(converged)、内层 1(s=C)、内层 2(t=⌈T/R⌉)。
+
 **两个内层 loop 是交替的**,这跟"先收一大堆数据,再训模型"的 supervised 设定不同:
 
 - **A 阶段(行 4-7)** 用当前 buffer 把模型再训 $C$ 步,loss 用 §🔭 给的 **Latent Overshooting ELBO**(论文行 6 的 "Equation 8") —— **模型变好**

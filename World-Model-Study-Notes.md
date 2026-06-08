@@ -2180,6 +2180,47 @@ PlaNet training is **not "train once on a fixed dataset"** — the data is gener
   <i>↑ Paper Algorithm 1: Deep Planning Network. The outer <code>while</code> loop alternates "Model fitting (inner 1, lines 4-7)" and "Data collection (inner 2, lines 8-16)"; the two inner loops do $C$ updates / 1 new episode respectively, sharing a single replay buffer $\mathcal{D}$.</i>
 </p>
 
+The flowchart below makes Algorithm 1's **loop structure visually explicit** — each node corresponds to a few pseudocode lines, and the outer `while` plus both inner `for` loops are drawn as back-edges:
+
+```mermaid
+flowchart TD
+    Start([Start]) --> Init["① Init  lines 1-2<br/>D ← S random-action episodes<br/>θ ← random_init"]
+    Init --> Conv{"converged?  line 3"}
+    Conv -- Yes --> Done([Return θ])
+    Conv -- No --> A1
+
+    A1["s = 1"] --> A2["Sample B chunks of length L · line 5"]
+    A2 --> A3["Compute L(θ) = §🔭 Latent Overshooting ELBO<br/>line 6, paper Eq.8"]
+    A3 --> A4["θ ← θ − α·∇L(θ) · line 7"]
+    A4 --> A5{"s = C?  line 4"}
+    A5 -- No --> A6["s ← s+1"]
+    A6 --> A2
+    A5 -- Yes --> B1
+
+    B1["o₁ = env.reset() + init h, s, a_prev<br/>line 8"] --> B2["t = 1"]
+    B2 --> B3["Infer belief = §🧬 RSSM dual path<br/>h_t = GRU(h_{t-1}, s_{t-1}, a_{t-1})<br/>s_t ~ q_φ(s_t | h_t, o_t)<br/>line 10"]
+    B3 --> B4["a_t ← CEM planner (§🎯)  line 11"]
+    B4 --> B5["a_t ← a_t + ε,  ε ~ p(ε)  line 12"]
+    B5 --> B6["Action repeat × R:<br/>r_t^k, o_{t+1}^k ← env.step(a_t)<br/>r_t = Σ_k r_t^k · lines 13-15"]
+    B6 --> B7{"t = ⌈T/R⌉?  line 9"}
+    B7 -- No --> B8["t ← t+1"]
+    B8 --> B3
+    B7 -- Yes --> B9["D ← D ∪ {new episode} · line 16"]
+    B9 --> Conv
+
+    classDef phaseA fill:#e3f2fd,stroke:#1976d2,color:#000
+    classDef phaseB fill:#e8f5e9,stroke:#388e3c,color:#000
+    classDef ctrl fill:#fff3cd,stroke:#856404,color:#000
+    classDef io fill:#fce4ec,stroke:#c2185b,color:#000
+
+    class A1,A2,A3,A4,A6 phaseA
+    class B1,B2,B3,B4,B5,B6,B8,B9 phaseB
+    class Conv,A5,B7 ctrl
+    class Init,Done io
+```
+
+> 🎨 Color key: 🔵 blue = Model fitting (A); 🟢 green = Data collection (B); 🟡 yellow = loop predicate; 🌸 pink = init / terminate. The back-edges make the three loop levels explicit: outer `while` (converged), inner 1 (s = C), inner 2 (t = ⌈T/R⌉).
+
 **The two inner loops alternate**, which is different from the supervised setup of "collect a big dataset, then train":
 
 - **Stage A (lines 4-7)** trains the model $C$ more steps on the current buffer; the loss is the **Latent Overshooting ELBO** from §🔭 (paper line 6's "Equation 8") — **model improves**
