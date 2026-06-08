@@ -2242,32 +2242,11 @@ Key hyperparameters (paper's DMC defaults):
 
 ### 🎯 Deploying PlaNet: Receding-Horizon MPC + CEM Online Planning
 
-> After training, **PlaNet has no actor / policy network** — every action is produced by CEM **planning in real time**. This is the largest difference from the Dreamer family (actor-critic) and PlaNet's biggest engineering burden (see the per-step compute analysis in §2 below).
+> PlaNet has **no actor / policy network at any point** — neither at training-time data collection (§🚀 line 11) nor at deployment. Every action is produced by **CEM planning in real time** inside latent space. This chapter first explains the CEM kernel in §1, then how it is plugged into a receding-horizon MPC loop at deployment in §2. This "no policy network, plan everything" stance is the largest difference from the Dreamer family (actor-critic) and PlaNet's biggest engineering burden (see the per-step compute analysis in §1).
 
-#### 1. Deployment loop: Receding-Horizon MPC
+#### 1. CEM kernel: how plan_action picks an action
 
-At deployment time, **every time step takes three steps**, forming a standard **receding-horizon MPC** loop:
-
-| Step | What it does | Components used |
-|---|---|---|
-| ① **Observe** | Feed the current observation $o_t$ together with the history into the encoder, obtain the belief $q_\phi(s_t \mid h_t, o_t)$ | Encoder + RSSM's $h_t$ |
-| ② **Predict & Plan** | From the belief, use CEM to roll out 1000 candidate action sequences in latent space, refine over 10 iterations, pick the sequence with the highest cumulative reward | Transition + Reward (runs in latent space — **never touches the real env**) |
-| ③ **Act** | Execute only the **first action** $a_t$ of the best sequence, then go back to ① and replan | — |
-
-> ⚠️ **Key: replan every single step** — do not reuse the leftover sequence from the previous step. This is the essential difference between MPC and open-loop control (after executing $a_t$ you get a fresh observation $o_{t+1}$, and that new information lets the replanning produce a better result).
-
-**Action Repeat (R) trick**
-
-In implementation, PlaNet **repeats each action $a_t$ $R$ times** (typically $R = 2 \sim 4$ on DMC):
-
-- Sum the reward over the $R$ steps as the "effective reward" of this decision
-- Use the observation at step $R$ as the next time step's $o_{t+1}$
-
-**Effect**: it **effectively compresses the planning horizon by a factor of $R$** (50 raw steps → 12 ~ 25 planning steps), making CEM computationally feasible while preserving physical time resolution. An **engineering practice the paper doesn't emphasize but every implementation has** — inherited by all subsequent Dreamer variants.
-
-#### 2. CEM kernel: how plan_action picks an action
-
-CEM (Cross-Entropy Method) = **iterative search in the action-sequence space via "sample → pick elites → update distribution"**. PlaNet **does not learn a policy network**; it runs this search in real time at every time step:
+CEM (Cross-Entropy Method) = **iterative search in the action-sequence space via "sample → pick elites → update distribution"**. PlaNet **does not learn a policy network**; whenever it needs to pick an action (training-time data collection, or actual control at deployment) it **runs this search in real time**:
 
 <p align="center"><img src="asset/formulas/f17.png" alt="CEM optimization"/></p>
 
@@ -2317,6 +2296,29 @@ def plan_action(world_model, current_state):
   <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
   <i>Paper Figure 4: CEM planning in latent space. Starting from the current state, multiple trajectories are rolled out in latent space (each generation of candidate action sequences); the world model predicts cumulative reward, elites are selected to update the action distribution, and the procedure iterates — <b>all without touching the real environment</b></i>
 </p>
+
+#### 2. Deployment loop: Receding-Horizon MPC
+
+Plugging the §1 CEM kernel into the **real control loop**, at deployment time **every time step takes three steps**, forming a standard **receding-horizon MPC** loop:
+
+| Step | What it does | Components used |
+|---|---|---|
+| ① **Observe** | Feed the current observation $o_t$ together with the history into the encoder, obtain the belief $q_\phi(s_t \mid h_t, o_t)$ | Encoder + RSSM's $h_t$ |
+| ② **Predict & Plan** | From the belief, **call `plan_action` from §1** (CEM rolls out 1000 candidates × 10 iterations in latent), pick the sequence with the highest cumulative reward | Transition + Reward (runs in latent space — **never touches the real env**) |
+| ③ **Act** | Execute only the **first action** $a_t$ of the best sequence, then go back to ① and replan | — |
+
+> ⚠️ **Key: replan every single step** — do not reuse the leftover sequence from the previous step. This is the essential difference between MPC and open-loop control (after executing $a_t$ you get a fresh observation $o_{t+1}$, and that new information lets the replanning produce a better result).
+
+**Action Repeat (R) trick**
+
+In implementation, PlaNet **repeats each action $a_t$ $R$ times** (typically $R = 2 \sim 4$ on DMC):
+
+- Sum the reward over the $R$ steps as the "effective reward" of this decision
+- Use the observation at step $R$ as the next time step's $o_{t+1}$
+
+**Effect**: it **effectively compresses the planning horizon by a factor of $R$** (50 raw steps → 12 ~ 25 planning steps), making CEM computationally feasible while preserving physical time resolution. An **engineering practice the paper doesn't emphasize but every implementation has** — inherited by all subsequent Dreamer variants.
+
+> 💡 **Training vs deployment — the same CEM kernel reused twice**: at training time §🚀 Algorithm 1 line 11 calls `plan_action` to collect new data; at deployment time an outer observe-plan-act MPC loop wraps `plan_action` for actual control. The only difference is in the outer layer — at training time, after sending the action to the real env, line 16 still appends `D ← D ∪ {…}` back into the buffer; at deployment time, it's just one execution after another.
 
 
 ### 🧪 Key Experiments

@@ -2228,32 +2228,11 @@ PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 a
 
 ### 🎯 部署 PlaNet:Receding-Horizon MPC + CEM 在线规划
 
-> 训练完拿到 RSSM 之后,**PlaNet 没有 actor / policy 网络** —— 每个动作都是 CEM **实时规划**得出的。这是 PlaNet 跟 Dreamer 系列(actor-critic)最大的区别,也是 PlaNet 最大的工程包袱(下面 §2 单步计算量分析)。
+> PlaNet **从头到尾都没有 actor / policy 网络** —— 不管是训练期 §🚀 行 11 的 data collection,还是训练完之后的部署,每一个动作都靠 **CEM 在 latent 空间实时规划**得出。本章先讲 §1 这个 CEM 内核,再讲 §2 把它套进 receding-horizon MPC 循环里**部署**怎么用。这条"没有 policy 网络、一切靠规划"的路线是 PlaNet 跟 Dreamer 系列(actor-critic)最大的区别,也是 PlaNet 最大的工程包袱(详见 §1 单步计算量分析)。
 
-#### 1. 部署循环:Receding-Horizon MPC
+#### 1. CEM 内核:plan_action 怎么挑动作
 
-部署时每个 time step 走三步,构成标准的 **receding-horizon MPC** 循环:
-
-| 步骤 | 在做什么 | 用到哪个组件 |
-|---|---|---|
-| ① **Observe** | 把当前观测 $o_t$ 和历史一起送入 encoder,得到 belief $q_\phi(s_t \mid h_t, o_t)$ | Encoder + RSSM 的 $h_t$ |
-| ② **Predict & Plan** | 从 belief 出发,用 CEM 在 latent 里 rollout 1000 条候选动作序列,迭代 10 次精化,选累积 reward 最高的序列 | Transition + Reward(在 latent 里跑,**不接触真环境**) |
-| ③ **Act** | 只执行最优序列的**第一个动作** $a_t$,然后回到 ① 重新规划 | — |
-
-> ⚠️ **关键:每一步都重新规划**,不复用上一步的剩余序列 —— 这是 MPC 与开环控制的本质区别(因为执行 $a_t$ 后会拿到新观测 $o_{t+1}$,这条新信息会让规划得到更好的结果)。
-
-**Action Repeat (R) trick**
-
-实现中 PlaNet 把每个动作 $a_t$ **重复执行 $R$ 次**(DMC 上典型 $R = 2 \sim 4$):
-
-- 把 $R$ 步的 reward 累加,作为该决策的 "effective reward"
-- 把第 $R$ 步的观测作为下一时刻的 $o_{t+1}$
-
-**作用**:把规划长度从原始 50 步**有效压缩 $R$ 倍**(压到 12 ~ 25 步),让 CEM 在计算上可行,同时保持物理时间分辨率。这是一个**论文不强调、但代码必有**的工程实践 —— 后续 Dreamer 系列也都沿用。
-
-#### 2. CEM 内核:plan_action 怎么挑动作
-
-CEM(Cross-Entropy Method)= **在动作序列空间做"采样 → 选 elite → 更新分布"的迭代搜索**。PlaNet **不学 policy 网络**,每个 time step 实时跑这个搜索:
+CEM(Cross-Entropy Method)= **在动作序列空间做"采样 → 选 elite → 更新分布"的迭代搜索**。PlaNet **不学 policy 网络**,每次需要决定一个动作(训练期 collect data、部署期实际控制)都**实时跑这个搜索**:
 
 <p align="center"><img src="asset/formulas/f17.png" alt="CEM optimization"/></p>
 
@@ -2303,6 +2282,29 @@ def plan_action(world_model, current_state):
   <img src="asset/planet-2019/planning_in_latent_space.png" width="700"/><br/>
   <i>论文 Figure 4:CEM 在 latent 空间规划示意。从当前 state 出发,在 latent 里 rollout 多条 trajectory(各代候选动作序列),用 RSSM 预测累积奖励,选 elite 更新动作分布,迭代收敛 —— <b>全程不碰真实环境</b></i>
 </p>
+
+#### 2. 部署循环:Receding-Horizon MPC
+
+把 §1 的 CEM 内核套进**真实控制循环**,部署时每个 time step 走三步,构成标准的 **receding-horizon MPC** 循环:
+
+| 步骤 | 在做什么 | 用到哪个组件 |
+|---|---|---|
+| ① **Observe** | 把当前观测 $o_t$ 和历史一起送入 encoder,得到 belief $q_\phi(s_t \mid h_t, o_t)$ | Encoder + RSSM 的 $h_t$ |
+| ② **Predict & Plan** | 从 belief 出发,**调用 §1 的 `plan_action`**(CEM 在 latent 里 rollout 1000 条候选 × 迭代 10 次),选累积 reward 最高的序列 | Transition + Reward(在 latent 里跑,**不接触真环境**) |
+| ③ **Act** | 只执行最优序列的**第一个动作** $a_t$,然后回到 ① 重新规划 | — |
+
+> ⚠️ **关键:每一步都重新规划**,不复用上一步的剩余序列 —— 这是 MPC 与开环控制的本质区别(因为执行 $a_t$ 后会拿到新观测 $o_{t+1}$,这条新信息会让规划得到更好的结果)。
+
+**Action Repeat (R) trick**
+
+实现中 PlaNet 把每个动作 $a_t$ **重复执行 $R$ 次**(DMC 上典型 $R = 2 \sim 4$):
+
+- 把 $R$ 步的 reward 累加,作为该决策的 "effective reward"
+- 把第 $R$ 步的观测作为下一时刻的 $o_{t+1}$
+
+**作用**:把规划长度从原始 50 步**有效压缩 $R$ 倍**(压到 12 ~ 25 步),让 CEM 在计算上可行,同时保持物理时间分辨率。这是一个**论文不强调、但代码必有**的工程实践 —— 后续 Dreamer 系列也都沿用。
+
+> 💡 **训练 vs 部署 ── 同一个 CEM 内核被复用两次**:训练期 §🚀 Algorithm 1 行 11 调 `plan_action` 收集新数据;部署期外层套一个 MPC observe-plan-act 循环,同样调 `plan_action`。区别只在外层 — 训练期最终把动作送回真环境后还要 `D ← D ∪ {…}` 攒回 buffer,部署期单纯一遍接一遍执行。
 
 
 ### 🧪 关键实验
