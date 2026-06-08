@@ -2162,8 +2162,8 @@ flowchart TD
 PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 agent 跑出来的,所以它跟 RL 一样要 **训模型 ↔ 收集数据 交替**:
 
 <p align="center">
-  <img src="asset/planet-2019/planet_algorithm_annotated.png" width="900"/><br/>
-  <i>↑ 论文 Algorithm 1:Deep Planning Network(右侧批注为本笔记添加)。蓝色 = <b>A · Model fitting</b>(模型更新 ×C 次,行 4-7),绿色 = <b>B · Data collection</b>(收 1 条新 episode,行 8-16);橙色 = action repeat 内层(行 13-15);右上蓝色回边 = 外层 <code>while</code> 让 A↔B 交替直到收敛。红色批注把"Equation 8 = §🔭 Overshooting ELBO"、"infer belief = §🧬 RSSM 双路"、"planner = §🎯 CEM" 这三处隐含的跨章关系点出来。</i>
+  <img src="asset/planet-2019/planet_algorithm.png" width="500"/><br/>
+  <i>↑ 论文 Algorithm 1:Deep Planning Network. 外层 <code>while</code> 循环 = "Model fitting(内层 1,行 4-7)" 和 "Data collection(内层 2,行 8-16)" 交替;两个内层各自执行 $C$ 次更新 / 1 条新 episode,共用同一份 replay buffer $\mathcal{D}$。</i>
 </p>
 
 **两个内层 loop 是交替的**,这跟"先收一大堆数据,再训模型"的 supervised 设定不同:
