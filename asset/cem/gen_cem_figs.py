@@ -137,9 +137,11 @@ def figure_4step_loop(out_path: str):
 
     boxes = [
         {"x": 0.4,  "color": "#bbdefb", "title": "① 采样",
-         "sub": r"$a_i \sim \mathcal{N}(\mu, \mathrm{diag}\,\sigma^2)$" + "\n(J = 1000 条序列)"},
+         "sub": r"$a_i = (a_1, \ldots, a_H) \sim \mathcal{N}(\mu, \mathrm{diag}\,\sigma^2)$"
+                + "\n(J = 1000 条序列 × H = 12 步)"},
         {"x": 4.0,  "color": "#c8e6c9", "title": "② Rollout 评估",
-         "sub": r"$R_i = \sum_t \hat r(\hat s_t)$" + "\n(用 RSSM 在 latent 里展开)"},
+         "sub": r"$R_i = \sum_{t=1}^{H} \hat r(\hat s_t)$"
+                + "\n(RSSM 在 latent 里展开 H 步)"},
         {"x": 7.6,  "color": "#fff9c4", "title": "③ 选 top-K elite",
          "sub": "elite_idx = argsort(R)[-K:]\n(K = 100)"},
         {"x": 11.2, "color": "#f8bbd0", "title": "④ 更新 μ, σ",
