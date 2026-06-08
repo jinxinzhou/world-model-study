@@ -2143,9 +2143,13 @@ for k in 1..d:
 
 > 前面几章把组件单独讲完了 —— §⚙️ 给了 ELBO、§🧬 给了 RSSM 双路 latent、§🔭 给了 latent overshooting。本章把它们**串成一个能跑的训练流程**:RSSM 怎么从随机初始化变成一个能预测环境的世界模型。
 
-#### 1. 系统数据流(俯瞰图)
+#### 1. 系统数据流(俯瞰图) ↔ 论文 Algorithm 1 对照
 
-整个 PlaNet 系统由两个相互推动的循环组成 —— **训练**(真实环境 → Buffer → RSSM)和**部署**(RSSM → CEM → 真实环境)—— 通过一条 replay buffer 串起来:
+整个 PlaNet 系统由两个相互推动的循环组成 —— **训练**(真实环境 → Buffer → RSSM)和**部署**(RSSM → CEM → 真实环境)—— 通过一条 replay buffer 串起来。下面把**鸟瞰数据流**(左)和**论文 Algorithm 1**(右)摆在一起对照:
+
+<table>
+<tr>
+<td valign="top" width="55%">
 
 ```mermaid
 flowchart TD
@@ -2165,18 +2169,26 @@ flowchart TD
     linkStyle 3 stroke:#388e3c,stroke-width:2px
 ```
 
-> 🎨 **蓝色实线 = A · Model fitting**(论文 Algorithm 1 行 4-7);**绿色边 = B · Data collection**(论文行 1, 11-16);**虚线 = 在 latent 空间,不接触真环境**。边上标的"× C 次"提示该方向上每个外层 iteration 重复 C 次,跟下面 #### 2 里 Algorithm 1 的伪代码对得上。
+<p align="center"><i>↑ 系统鸟瞰图:每条边的注解都给出对应 Algorithm 1 的行号</i></p>
+
+</td>
+<td valign="top" width="45%">
+
+<img src="asset/planet-2019/planet_algorithm.png" width="100%"/>
+
+<p align="center"><i>↑ 论文 Algorithm 1: Deep Planning Network<br/>(左图边上的"行 X"对应这里的行号)</i></p>
+
+</td>
+</tr>
+</table>
+
+> 🎨 **蓝色实线 = A · Model fitting**(论文 Algorithm 1 行 4-7);**绿色边 = B · Data collection**(论文行 1, 11-16);**虚线 = 在 latent 空间,不接触真环境**。边上标的"× C 次"提示该方向上每个外层 iteration 重复 C 次,跟右侧 Algorithm 1 的伪代码对得上。
 
 → **本章详解左半圈**(训练:Replay Buffer 怎么训出 RSSM),**§🎯 详解右半圈**(部署:RSSM 怎么经 CEM 挑出 $a_t$)。
 
 #### 2. 训练循环:Model Fitting + Data Collection 交替
 
-PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 agent 跑出来的,所以它跟 RL 一样要 **训模型 ↔ 收集数据 交替**:
-
-<p align="center">
-  <img src="asset/planet-2019/planet_algorithm.png" width="500"/><br/>
-  <i>↑ 论文 Algorithm 1:Deep Planning Network. 外层 <code>while</code> 循环 = "Model fitting(内层 1,行 4-7)" 和 "Data collection(内层 2,行 8-16)" 交替;两个内层各自执行 $C$ 次更新 / 1 条新 episode,共用同一份 replay buffer $\mathcal{D}$。</i>
-</p>
+PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 agent 跑出来的,所以它跟 RL 一样要 **训模型 ↔ 收集数据 交替**(详见上面 #### 1 右侧 Algorithm 1 的两个内层 for 循环):
 
 **两个内层 loop 是交替的**,这跟"先收一大堆数据,再训模型"的 supervised 设定不同:
 
