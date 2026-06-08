@@ -2314,7 +2314,7 @@ def plan_action(world_model, current_state):
   <i>CEM optimisation on the 2D objective f(x, y) = −((x−3)² + 5(y+1)²). Green triangle is the true optimum (3, −1), red star is the current mean μ, <b>the red ellipse is the 2σ contour of 𝒩(μ, diag σ²)</b> (always axis-aligned — that is the visual signature of "diagonal Gaussian"); white dots are J candidates, orange circles are top-K elites. Converges to the optimum in 10 iterations.</i>
 </p>
 
-> 🆚 **Compare with §🚀 World Models' CMA-ES**: same feedback-search framework (sample → elites → update), but **CMA-ES learns a full covariance matrix Σ**, so the ellipse can **rotate** to align with the objective's anisotropy (see the [CMA-ES evolution figure](#part-1-what-is-cma-es--three-sentence-explanation), where the ellipse is already tilted by generation 3 or 8); **CEM only learns a per-dimension σ** (diagonal Gaussian, ellipse always axis-aligned). **CEM is simpler / cheaper** (no $\mathcal{O}(d^2)$ covariance update) but less efficient when dimensions are strongly correlated. PlaNet picks CEM not because it's better, but because **it has to run from scratch at every time step and therefore must be cheap** (I=10 × J=1000 × H=12 = 120k transition forwards per decision); CEM's "diagonal assumption + elementwise update" minimises per-iteration cost.
+> 🆚 **Same "sample → elites → update" feedback-search framework as the CMA-ES used by §🚀 World Models**, with two key differences: covariance structure (CMA-ES learns a full covariance and the ellipse can rotate; CEM only learns a diagonal σ and the ellipse stays axis-aligned) and when it runs (CMA-ES optimised once at training time; CEM runs from scratch every time step) — see the full §🔧 [CEM vs CMA-ES table](#cem-vs-cma-es-used-by-world-models).
 
 #### 2. Deployment loop: Receding-Horizon MPC
 
@@ -2414,12 +2414,17 @@ Three terms optimized jointly:
 
 #### CEM vs CMA-ES (used by World Models)
 
+> 🆚 **Both are the same "sample → elites → update" feedback-search framework, just parameterised, complexity-bounded, and invoked differently**. The table below collects every key difference; the two most fundamental: **covariance structure** (determines whether the ellipse can rotate — see [§🎯 CEM evolution figure](#1-cem-kernel-how-plan_action-picks-an-action) vs [§🚀 CMA-ES evolution figure](#part-1-what-is-cma-es--three-sentence-explanation)) and **when it runs** (once at training time vs from scratch at every time step, the latter forcing it to be cheap).
+
 | Dimension | CMA-ES (World Models) | CEM (PlaNet) |
 |-----------|----------------------|--------------|
-| Optimization target | **Controller parameters $\theta$** | **Action sequence $a_{1:H}$** |
-| When optimized | **Training time**, then deployed | **Each step in real-time** (online planning) |
-| Covariance adaptation | Yes ($\Sigma$) | No (independent Gaussian per step) |
-| Needs actor network? | Yes (linear controller) | **No!** |
+| Optimization target | **Controller parameters $\theta$** (a few hundred static parameters) | **Action sequence $a_{1:H}$** (H × action_dim, a fresh set every time step) |
+| When optimized | **Once at training time**, frozen at deployment | **From scratch at every time step** (online MPC planning) |
+| Covariance adaptation | Yes — **learns full $\Sigma$**, ellipse can **rotate** to align with the objective's principal axes (see [CMA-ES gen 3/8](#part-1-what-is-cma-es--three-sentence-explanation) — already tilted) | No — **diagonal $\sigma$ only** (independent Gaussian per dim), ellipse **stays axis-aligned** (see [CEM iter 2](#1-cem-kernel-how-plan_action-picks-an-action) — can only stretch horizontally) |
+| Per-iteration cost | $\mathcal{O}(d^2)$ covariance update | $\mathcal{O}(d)$ elementwise mean/std |
+| Efficiency on correlated dims | High (learns inter-dimension correlation) | Low (diagonal assumption ignores correlation) |
+| Needs actor network? | Yes (linear controller) | **No!** Outsources the entire "policy" to the planner |
+| Why this choice | $\mathcal{O}(d^2)$ is affordable at training time, and controller parameter space is highly correlated → full covariance pays off | Every time step needs I=10 × J=1000 × H=12 = 120k forwards — **must be cheap**; diagonal + elementwise update minimises per-iteration cost |
 
 ### 💭 Reflections
 
