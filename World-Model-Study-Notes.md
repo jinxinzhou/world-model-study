@@ -2314,7 +2314,17 @@ def plan_action(world_model, current_state):
   <i>CEM optimisation on the 2D objective f(x, y) = −((x−3)² + 5(y+1)²). Green triangle is the true optimum (3, −1), red star is the current mean μ, <b>the red ellipse is the 2σ contour of 𝒩(μ, diag σ²)</b> (always axis-aligned — that is the visual signature of "diagonal Gaussian"); white dots are J candidates, orange circles are top-K elites. Converges to the optimum in 10 iterations.</i>
 </p>
 
-> 🆚 **Same "sample → elites → update" feedback-search framework as the CMA-ES used by §🚀 World Models**, with two key differences: covariance structure (CMA-ES learns a full covariance and the ellipse can rotate; CEM only learns a diagonal σ and the ellipse stays axis-aligned) and when it runs (CMA-ES optimised once at training time; CEM runs from scratch every time step) — see the full §🔧 [CEM vs CMA-ES table](#cem-vs-cma-es-used-by-world-models).
+> 🆚 **Compared with the CMA-ES used by §🚀 World Models — both are the same "sample → elites → update" feedback-search framework, just parameterised, complexity-bounded, and invoked differently**. The two most fundamental differences: **covariance structure** (determines whether the ellipse can rotate — see the [CEM evolution figure](#1-cem-kernel-how-plan_action-picks-an-action) above vs the [CMA-ES evolution figure](#part-1-what-is-cma-es--three-sentence-explanation)) and **when it runs** (once at training time vs from scratch at every time step, the latter forcing it to be cheap).
+>
+> | Dimension | CMA-ES (World Models) | CEM (PlaNet) |
+> |-----------|----------------------|--------------|
+> | Optimization target | **Controller parameters $\theta$** (a few hundred static parameters) | **Action sequence $a_{1:H}$** (H × action_dim, a fresh set every time step) |
+> | When optimized | **Once at training time**, frozen at deployment | **From scratch at every time step** (online MPC planning) |
+> | Covariance adaptation | Yes — **learns full $\Sigma$**, ellipse can **rotate** to align with the objective's principal axes (CMA-ES gen 3/8 — already tilted) | No — **diagonal $\sigma$ only** (independent Gaussian per dim), ellipse **stays axis-aligned** (CEM iter 2 — can only stretch horizontally) |
+> | Per-iteration cost | $\mathcal{O}(d^2)$ covariance update | $\mathcal{O}(d)$ elementwise mean/std |
+> | Efficiency on correlated dims | High (learns inter-dimension correlation) | Low (diagonal assumption ignores correlation) |
+> | Needs actor network? | Yes (linear controller) | **No!** Outsources the entire "policy" to the planner |
+> | Why this choice | $\mathcal{O}(d^2)$ is affordable at training time, and controller parameter space is highly correlated → full covariance pays off | Every time step needs I=10 × J=1000 × H=12 = 120k forwards — **must be cheap**; diagonal + elementwise update minimises per-iteration cost |
 
 #### 2. Deployment loop: Receding-Horizon MPC
 
@@ -2385,46 +2395,6 @@ In implementation, PlaNet **repeats each action $a_t$ $R$ times** (typically $R 
 - H=50 → model errors accumulate, performance drops
 
 → "**The world model cannot imagine too far ahead**" is an eternal pain point of model-based RL.
-
-### 🔧 Implementation Details Deep-Dive
-
-#### Detail ①: Roles of the Four Sub-Networks
-
-| Network | Form | When Used |
-|---------|------|-----------|
-| **Encoder** (Posterior) | $q(s_t \mid h_t, o_t)$ | **Training**: sees real obs, outputs posterior s |
-| **Transition** (Prior) | $p(s_t \mid h_t)$ | **Planning / imagination**: predicts s without seeing obs ⭐ |
-| **Reward** | $p(r_t \mid h_t, s_t)$ | Predicts reward (accumulated for return during planning) |
-| **Decoder** | $p(o_t \mid h_t, s_t)$ | Reconstructs obs (**training only**, not used at deployment) |
-
-🔑 **Core mechanism**: **At training time, use the Encoder's posterior s (supervised by obs); at planning time, use the Transition's prior s (no obs available)** — this is what enables RSSM to "imagine the future in latent space".
-
-#### Detail ②: End-to-End ELBO Loss
-
-PlaNet **merges World Models' separately-trained V and M into a single objective**:
-
-<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO"/></p>
-
-Three terms optimized jointly:
-- **Reconstruction term**: enables decoder to reconstruct obs from (h, s) (VAE-style)
-- **Reward term**: enables reward head to predict true reward
-- **KL term**: makes posterior `q(s|h, o)` close to prior `p(s|h)` (VAE-style regularizer)
-
-→ A single gradient optimizes all 4 sub-networks, so **features automatically become decision-useful** (unlike World Models' V which only learns reconstruction).
-
-#### CEM vs CMA-ES (used by World Models)
-
-> 🆚 **Both are the same "sample → elites → update" feedback-search framework, just parameterised, complexity-bounded, and invoked differently**. The table below collects every key difference; the two most fundamental: **covariance structure** (determines whether the ellipse can rotate — see [§🎯 CEM evolution figure](#1-cem-kernel-how-plan_action-picks-an-action) vs [§🚀 CMA-ES evolution figure](#part-1-what-is-cma-es--three-sentence-explanation)) and **when it runs** (once at training time vs from scratch at every time step, the latter forcing it to be cheap).
-
-| Dimension | CMA-ES (World Models) | CEM (PlaNet) |
-|-----------|----------------------|--------------|
-| Optimization target | **Controller parameters $\theta$** (a few hundred static parameters) | **Action sequence $a_{1:H}$** (H × action_dim, a fresh set every time step) |
-| When optimized | **Once at training time**, frozen at deployment | **From scratch at every time step** (online MPC planning) |
-| Covariance adaptation | Yes — **learns full $\Sigma$**, ellipse can **rotate** to align with the objective's principal axes (see [CMA-ES gen 3/8](#part-1-what-is-cma-es--three-sentence-explanation) — already tilted) | No — **diagonal $\sigma$ only** (independent Gaussian per dim), ellipse **stays axis-aligned** (see [CEM iter 2](#1-cem-kernel-how-plan_action-picks-an-action) — can only stretch horizontally) |
-| Per-iteration cost | $\mathcal{O}(d^2)$ covariance update | $\mathcal{O}(d)$ elementwise mean/std |
-| Efficiency on correlated dims | High (learns inter-dimension correlation) | Low (diagonal assumption ignores correlation) |
-| Needs actor network? | Yes (linear controller) | **No!** Outsources the entire "policy" to the planner |
-| Why this choice | $\mathcal{O}(d^2)$ is affordable at training time, and controller parameter space is highly correlated → full covariance pays off | Every time step needs I=10 × J=1000 × H=12 = 120k forwards — **must be cheap**; diagonal + elementwise update minimises per-iteration cost |
 
 ### 💭 Reflections
 

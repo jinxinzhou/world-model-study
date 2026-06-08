@@ -2300,7 +2300,17 @@ def plan_action(world_model, current_state):
   <i>CEM 在 2D 目标函数 f(x, y) = −((x−3)² + 5(y+1)²) 上的优化过程。绿色三角是真实最优 (3, −1),红星是当前均值 μ,<b>红色椭圆是 𝒩(μ, diag σ²) 的 2σ 范围</b>(始终轴对齐 —— 这就是"对角高斯"的视觉特征),白点是 J 个候选,橙色圈是 top-K elite。10 次迭代收敛到最优。</i>
 </p>
 
-> 🆚 **跟 §🚀 World Models 用的 CMA-ES 是同一个"采样 → 选 elite → 更新"反馈搜索框架**,关键区别在协方差结构(CMA-ES 学全协方差,椭圆可旋转;CEM 只学对角 σ,椭圆始终轴对齐)和调用时机(CMA-ES 训练时一次性优化,CEM 每步现场跑) —— 详见 §🔧 [CEM vs CMA-ES 对比表](#cem-vs-cma-esworld-models-用的)。
+> 🆚 **跟 §🚀 World Models 用的 CMA-ES 对比 —— 两者是同一个"采样 → 选 elite → 更新分布"反馈搜索框架,只是参数化、复杂度、用法不同**。最根本的两条:**协方差结构**(决定椭圆能不能旋转 → 见上面的 [CEM 演化图](#1-cem-内核plan_action-怎么挑动作) vs [CMA-ES 演化图](#part-1cma-es-是什么--三句话原理))和**调用时机**(训练时一次性 vs 每个 time step 现场跑,后者强制要"便宜")。
+>
+> | 维度 | CMA-ES (World Models) | CEM (PlaNet) |
+> |------|----------------------|--------------|
+> | 优化对象 | **Controller 的参数 $\theta$**(几百维静态参数) | **动作序列 $a_{1:H}$**(H×action_dim,每个 time step 新的一组) |
+> | 何时优化 | **训练时一次性优化**,部署后冻结 | **每个 time step 从零现场跑**(在线 MPC 规划) |
+> | 协方差自适应 | 是 —— **学完整 $\Sigma$**,椭圆可**旋转**对齐目标函数主轴(看 CMA-ES 第 3、8 代椭圆已倾斜) | 否 —— **只学对角 $\sigma$**(每维独立高斯),椭圆**始终轴对齐**(看 CEM 第 2 次迭代椭圆只能横向拉长) |
+> | 每次迭代成本 | $\mathcal{O}(d^2)$ 协方差矩阵更新 | $\mathcal{O}(d)$ 元素级均值/方差 |
+> | 强相关维度上的效率 | 高(能学到维度间相关性) | 低(对角假设忽略相关性) |
+> | 是否需要 actor 网络 | 是(线性 controller) | **否!** 把"策略"完全外包给规划器 |
+> | 为什么选这个 | 训练时跑得起 $\mathcal{O}(d^2)$,而 controller 参数空间相关性强,需要全协方差 | 每个 time step 都要 I=10 × J=1000 × H=12 = 12 万次 forward,**必须便宜**,对角假设 + 元素级更新刚好把每次迭代压到最低成本 |
 
 #### 2. 部署循环:Receding-Horizon MPC
 
@@ -2372,45 +2382,7 @@ def plan_action(world_model, current_state):
 
 → "**世界模型不能想太远**" 是 model-based RL 的永恒痛点。
 
-### 🔧 实现细节深入
 
-#### 细节 ①:四个子网络的角色
-
-| 网络 | 形式 | 何时使用 |
-|------|------|---------|
-| **Encoder**(Posterior) | $q(s_t \mid h_t, o_t)$ | **训练时**:看到真实 obs,出后验 s |
-| **Transition**(Prior) | $p(s_t \mid h_t)$ | **规划时 / 想象时**:不看 obs 也能预测 s ⭐ |
-| **Reward** | $p(r_t \mid h_t, s_t)$ | 预测奖励(规划时累加 return) |
-| **Decoder** | $p(o_t \mid h_t, s_t)$ | 重建 obs(**仅训练辅助**,部署不用) |
-
-🔑 **核心机制**:**训练时用 Encoder 的后验 s(有 obs 监督),规划时用 Transition 的 prior s(没有 obs)** —— 这就是 RSSM 能"在 latent 空间想象未来"的关键。
-
-#### 细节 ②:端到端 ELBO 损失
-
-PlaNet 把 World Models 三阶段独立训练的 V 和 M **合并成一个目标**:
-
-<p align="center"><img src="asset/formulas/f14.png" alt="PlaNet ELBO"/></p>
-
-三个分量同时优化:
-- **重建项**:让 decoder 能从 (h, s) 重建 obs(类似 VAE)
-- **奖励项**:让 reward head 能预测真实奖励
-- **KL 项**:让 posterior `q(s|h, o)` 接近 prior `p(s|h)`(VAE 风格正则)
-
-→ 一个梯度同时优化 4 个子网络,**特征自动对决策有用**(不像 World Models 的 V 只学重建)。
-
-#### CEM vs CMA-ES(World Models 用的)
-
-> 🆚 **两者是同一个"采样 → 选 elite → 更新分布"反馈搜索框架,只是参数化、复杂度、用法不同**。下表把所有关键差异聚到一起;最根本的两条:**协方差结构**(决定椭圆能不能旋转 → 见 [§🎯 CEM 演化图](#1-cem-内核plan_action-怎么挑动作) vs [§🚀 CMA-ES 演化图](#part-1cma-es-是什么--三句话原理))和**调用时机**(训练时一次性 vs 每个 time step 现场跑,后者强制要"便宜")。
-
-| 维度 | CMA-ES (World Models) | CEM (PlaNet) |
-|------|----------------------|--------------|
-| 优化对象 | **Controller 的参数 $\theta$**(几百维静态参数) | **动作序列 $a_{1:H}$**(H×action_dim,每个 time step 新的一组) |
-| 何时优化 | **训练时一次性优化**,部署后冻结 | **每个 time step 从零现场跑**(在线 MPC 规划) |
-| 协方差自适应 | 是 —— **学完整 $\Sigma$**,椭圆可**旋转**对齐目标函数主轴(看 [CMA-ES 第 3、8 代](#part-1cma-es-是什么--三句话原理)椭圆已倾斜) | 否 —— **只学对角 $\sigma$**(每维独立高斯),椭圆**始终轴对齐**(看 [CEM 第 2 次迭代](#1-cem-内核plan_action-怎么挑动作)椭圆只能横向拉长) |
-| 每次迭代成本 | $\mathcal{O}(d^2)$ 协方差矩阵更新 | $\mathcal{O}(d)$ 元素级均值/方差 |
-| 强相关维度上的效率 | 高(能学到维度间相关性) | 低(对角假设忽略相关性) |
-| 是否需要 actor 网络 | 是(线性 controller) | **否!** 把"策略"完全外包给规划器 |
-| 为什么选这个 | 训练时跑得起 $\mathcal{O}(d^2)$,而 controller 参数空间相关性强,需要全协方差 | 每个 time step 都要 I=10 × J=1000 × H=12 = 12 万次 forward,**必须便宜**,对角假设 + 元素级更新刚好把每次迭代压到最低成本 |
 
 ### 💭 理解思考
 
