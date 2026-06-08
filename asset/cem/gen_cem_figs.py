@@ -186,11 +186,11 @@ def figure_4step_loop(out_path: str):
     end = (boxes[0]["x"] + W / 2, 1.3)
     ax.add_patch(FancyArrowPatch(
         start, end,
-        connectionstyle="arc3,rad=-0.35",
+        connectionstyle="arc3,rad=-0.22",
         arrowstyle="->,head_length=12,head_width=9",
         color="#666", linewidth=1.6,
     ))
-    ax.text((start[0] + end[0]) / 2, 0.05,
+    ax.text((start[0] + end[0]) / 2, 0.55,
             "↑ 下一次 CEM 迭代(I 次 / 每次决策)↑",
             ha="center", va="center", fontsize=12, color="#444", style="italic")
 
@@ -200,10 +200,11 @@ def figure_4step_loop(out_path: str):
             ha="center", va="center", fontsize=12, color="#c62828",
             fontweight="bold")
 
-    ax.set_ylim(-1.0, 5)
+    ax.set_ylim(-1.3, 5)
 
     fig.tight_layout()
-    fig.savefig(out_path, dpi=140, bbox_inches="tight", facecolor="white")
+    fig.savefig(out_path, dpi=140, bbox_inches="tight", pad_inches=0.35,
+                facecolor="white")
     plt.close(fig)
     print(f"wrote {out_path}")
 
