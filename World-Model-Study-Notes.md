@@ -1398,46 +1398,9 @@ This paper is the **direct predecessor of the Dreamer series** and Hafner's firs
 | V and M trained separately in stages → VAE features may not be useful for decision-making | **End-to-end joint training** (encoder / transition / decoder / reward share a single ELBO loss) | §⚙️ |
 | MDN-RNN unstable over long horizons; deterministic memory and stochastic prediction not decoupled | **RSSM**: deterministic GRU ($h$) + stochastic Gaussian ($s$) **coexisting in dual paths**, distinct from purely deterministic RNNs and purely stochastic SSMs | §🧬 |
 | Only one-step prediction is trained; multi-step errors compound without explicit constraints | **Latent overshooting**: KL regularization on multi-step predictions of all distances in latent space, **without decoding back to images** | §🔭 |
-| Decision depends on a CMA-ES-evolved Controller; switching tasks requires retraining | **No policy network**; uses the learned world model directly with **CEM online planning in latent space** (MPC) | §🚀 #4 |
-| One-shot random data collection, unable to improve with the model | **Online data collection**: actively explores using current model + planning while training; data distribution improves as the model improves | §🚀 #2 |
+| Decision depends on a CMA-ES-evolved Controller; switching tasks requires retraining | **No policy network**; uses the learned world model directly with **CEM online planning in latent space** (MPC) | §🎯 #2 |
+| One-shot random data collection, unable to improve with the model | **Online data collection**: actively explores using current model + planning while training; data distribution improves as the model improves | §🚀 #3 |
 | Only demoed on toy environments like Doom / CarRacing | **DeepMind Control Suite** (6 continuous-control tasks from pixels) | §🧪 |
-
-#### Overall Architecture
-
-```mermaid
-flowchart TD
-    Env["Real Environment"] -->|obs, action, reward| Buffer["Replay Buffer"]
-    Buffer -->|training data| RSSM["RSSM World Model<br/>(Encoder + Transition + Reward + Decoder)<br/>End-to-end ELBO loss"]
-    RSSM -.->|"latent rollout"| CEM["CEM Online Planning<br/>Sample 1000 action sequences<br/>Select top-100 elites, iterate 10 times"]
-    CEM -->|"a_t"| Env
-```
-
-**Note**: **PlaNet has no actor / policy network** — each action is derived from CEM real-time planning (this is the biggest difference from Dreamer).
-
-<p align="center">
-  <img src="asset/planet-2019/planet_algorithm.png" width="800"/><br/>
-  <i>PlaNet overall algorithm (paper Figure 2). Left: training phase collects data from the real env and trains RSSM with end-to-end ELBO. Right: planning phase rolls out multiple trajectories in latent space from the current state and uses CEM to pick the best first action</i>
-</p>
-
-#### Decision Loop (MPC inference loop)
-
-At deployment time, PlaNet executes three steps per time step, forming a standard **receding-horizon MPC** loop:
-
-| Step | What it does | Component used |
-|---|---|---|
-| **① Observe** | Feed current observation $o_t$ together with history into the encoder; obtain the current belief $q(s_t \mid h_t, o_t)$ | Encoder + RSSM's h |
-| **② Predict & Plan** | Starting from the belief, use CEM to roll out 1000 candidate action sequences in latent space, refine over 10 iterations, and pick the one with the highest cumulative reward | Transition + Reward (runs in latent, **never touches the real env**) |
-| **③ Act** | Execute only the **first action** $a_t$ of the optimal sequence, then return to ① and replan | — |
-
-> ⚠️ **Key: replanning happens at every step**, the remaining sequence from the previous step is not reused — this is the essence of MPC vs open-loop control (executing $a_t$ yields a new observation, and that fresh information lets the next plan be even better).
-
-##### Action Repeat (R) trick
-
-In practice, PlaNet **repeats each action** $a_t$ **R times** (typically R = 2–4 on DMC):
-- Sums the rewards over those R steps as the "effective reward" of the decision
-- Uses the observation at step R as the next $o_{t+1}$
-
-**Purpose**: effectively compresses the planning horizon by R× (from 50 raw steps down to 12–25), making CEM computationally feasible while preserving physical time resolution. This is a **"paper does not emphasize, but the code must have"** engineering practice — and the Dreamer family inherits it.
 
 #### Key Innovations Compared
 
@@ -2190,9 +2153,9 @@ Substituting back gives **the training objective whose gradients Latent Overshoo
 → This is **the key to PlaNet's long-horizon stability**. But **DreamerV1 simplified to just single-step KL + a critic for residual value, and worked even better** — outsourcing "long-horizon extrapolation by the model" to "long-horizon value estimation by the critic", which is more RL-native. This is also the direction PlaNet's successors evolved.
 
 
-### 🚀 PlaNet Full Algorithm: From Training to Deployment
+### 🚀 Training PlaNet: Model Fitting + Data Collection Alternation
 
-> The previous chapters covered each component in isolation — §⚙️ gave the ELBO, §🧬 gave the RSSM dual-path latent, §🔭 gave latent overshooting. This chapter **glues them into a system that actually runs**: how the model is trained + how it is deployed + the CEM planning kernel.
+> The previous chapters covered each component in isolation — §⚙️ gave the ELBO, §🧬 gave the RSSM dual-path latent, §🔭 gave latent overshooting. This chapter **glues them into a runnable training pipeline**: how RSSM goes from random initialization to a world model that can predict the environment.
 
 #### 1. System overview
 
@@ -2207,9 +2170,21 @@ PlaNet = **4 networks** in 1:1 correspondence with the POMDP's four pieces (full
 
 The deterministic memory $h_t = f_\mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ isn't counted as an independent network (it's just a single GRU cell), but it threads through all 4 networks as the "history carrier".
 
-→ The whole system does two things: **offline training** to fit the 4 networks (§ 2), and **online deployment** to use the trained model + CEM to pick actions in real time (§ 3 and § 4).
+#### 2. System data flow (bird's-eye view)
 
-#### 2. Training loop: Model Fitting + Data Collection alternation
+The PlaNet system consists of two loops that drive each other — **training** (real env → Buffer → RSSM) and **deployment** (RSSM → CEM → real env) — linked by a single replay buffer:
+
+```mermaid
+flowchart TD
+    Env["Real Environment"] -->|obs, action, reward| Buffer["Replay Buffer"]
+    Buffer -->|training data| RSSM["RSSM World Model<br/>(Encoder + Transition + Reward + Decoder)<br/>End-to-end ELBO loss"]
+    RSSM -.->|"latent rollout"| CEM["CEM Online Planner<br/>sample 1000 action sequences<br/>pick top-100 elites, 10 iterations"]
+    CEM -->|"a_t"| Env
+```
+
+→ **This chapter unpacks the left half** (training: how Replay Buffer trains the RSSM); **§🎯 unpacks the right half** (deployment: how RSSM + CEM produces $a_t$).
+
+#### 3. Training loop: Model Fitting + Data Collection alternation
 
 PlaNet training is **not "train once on a fixed dataset"** — the data is generated by the agent itself, so like any RL setting it must **alternate model updates and data collection**:
 
@@ -2241,7 +2216,7 @@ while not converged:
         mu_q, sigma_q = encoder(h, o)
         s = mu_q + sigma_q · ε,   ε ~ N(0, I)
 
-        # 2) plan the current action with CEM (see § 4)
+        # 2) plan the current action with CEM (see §🎯)
         a = plan_action(world_model, (h, s))
         a += exploration_noise                # ε_a ~ p(ε_a)
 
@@ -2253,6 +2228,11 @@ while not converged:
         o, a_prev = o_next, a
     D ← D ∪ {new episode}                    # add to buffer
 ```
+
+<p align="center">
+  <img src="asset/planet-2019/planet_algorithm.png" width="500"/><br/>
+  <i>↑ Paper Algorithm 1: Deep Planning Network. The training outer loop alternates "Model fitting (inner 1)" and "Data collection (inner 2)" — the Python pseudocode above is a direct paraphrase, with the variable names R / S / C / B / L / α matching one-for-one.</i>
+</p>
 
 **The two inner loops alternate**, which is different from the supervised setup of "collect a big dataset, then train":
 
@@ -2273,7 +2253,12 @@ Key hyperparameters (paper's DMC defaults):
 
 > 💡 Contrast with model-free RL: DQN / PPO also collect data and update policy in alternation, but **without an explicit model**; PlaNet alternates collect ↔ update in the same way, only the object of updates is the **world model** rather than the policy, and CEM then **plans a policy on the fly inside the model**.
 
-#### 3. Deployment loop: Receding-Horizon MPC
+
+### 🎯 Deploying PlaNet: Receding-Horizon MPC + CEM Online Planning
+
+> After training, **PlaNet has no actor / policy network** — every action is produced by CEM **planning in real time**. This is the largest difference from the Dreamer family (actor-critic) and PlaNet's biggest engineering burden (see the per-step compute analysis in §2 below).
+
+#### 1. Deployment loop: Receding-Horizon MPC
 
 At deployment time, **every time step takes three steps**, forming a standard **receding-horizon MPC** loop:
 
@@ -2294,7 +2279,7 @@ In implementation, PlaNet **repeats each action $a_t$ $R$ times** (typically $R 
 
 **Effect**: it **effectively compresses the planning horizon by a factor of $R$** (50 raw steps → 12 ~ 25 planning steps), making CEM computationally feasible while preserving physical time resolution. An **engineering practice the paper doesn't emphasize but every implementation has** — inherited by all subsequent Dreamer variants.
 
-#### 4. CEM kernel: how plan_action picks an action
+#### 2. CEM kernel: how plan_action picks an action
 
 CEM (Cross-Entropy Method) = **iterative search in the action-sequence space via "sample → pick elites → update distribution"**. PlaNet **does not learn a policy network**; it runs this search in real time at every time step:
 

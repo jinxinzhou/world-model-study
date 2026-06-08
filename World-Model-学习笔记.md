@@ -1397,46 +1397,9 @@ Dreamer 系完全是这篇论文的"亲儿子"。
 | V 和 M 分阶段独立训 → VAE 学的特征未必对决策有用 | **端到端联合训练**(encoder / transition / decoder / reward 共享一个 ELBO 损失) | §⚙️ |
 | MDN-RNN 长程不稳,确定性记忆与随机性预测未解耦 | **RSSM**:确定性 GRU($h$) + 随机性高斯($s$) **双路并存**,区别于纯确定性 RNN 与纯随机性 SSM | §🧬 |
 | 仅训单步预测,多步预测误差累积无显式约束 | **Latent overshooting**:在隐空间对所有跨度的多步预测施加 KL 正则,**无需解码回图像** | §🔭 |
-| 决策依赖 CMA-ES 进化出的 Controller,换任务需重训 | **无 Policy 网络**,直接用学到的世界模型 + **CEM 在 latent 中在线规划**(MPC) | §🚀 #4 |
-| 一次性随机采集数据,无法随模型改善 | **在线数据采集**:边训边用当前模型 + 规划主动探索,数据分布随模型变好而改善 | §🚀 #2 |
+| 决策依赖 CMA-ES 进化出的 Controller,换任务需重训 | **无 Policy 网络**,直接用学到的世界模型 + **CEM 在 latent 中在线规划**(MPC) | §🎯 #2 |
+| 一次性随机采集数据,无法随模型改善 | **在线数据采集**:边训边用当前模型 + 规划主动探索,数据分布随模型变好而改善 | §🚀 #3 |
 | 只在 Doom / CarRacing 这类玩具环境 demo | **DeepMind Control Suite**(6 个连续控制任务,像素输入) | §🧪 |
-
-#### 整体架构
-
-```mermaid
-flowchart TD
-    Env["真实环境"] -->|obs, action, reward| Buffer["Replay Buffer"]
-    Buffer -->|训练数据| RSSM["RSSM 世界模型<br/>(Encoder + Transition + Reward + Decoder)<br/>端到端 ELBO 损失"]
-    RSSM -.->|"latent rollout"| CEM["CEM 在线规划<br/>采样 1000 个动作序列<br/>选 top-100 elite,迭代 10 次"]
-    CEM -->|"a_t"| Env
-```
-
-**注意**:**PlaNet 没有 actor / policy 网络** —— 每个动作都是 CEM 实时规划得出的(这是和 Dreamer 最大的区别)。
-
-<p align="center">
-  <img src="asset/planet-2019/planet_algorithm.png" width="800"/><br/>
-  <i>PlaNet 算法整体流程(来自论文 Figure 2):左侧训练阶段从真实环境采数据训 RSSM(端到端 ELBO),右侧规划阶段从当前 state 出发,用 RSSM 在 latent 空间 rollout 出多个轨迹,CEM 挑选最优首步动作</i>
-</p>
-
-#### 决策循环(MPC inference loop)
-
-PlaNet 部署时每个 time step 走三步,构成一个标准的 **receding-horizon MPC** 循环:
-
-| 步骤 | 在做什么 | 用到哪个组件 |
-|---|---|---|
-| **① Observe** | 把当前观测 $o_t$ 和历史一起送入 encoder,得到当前 belief $q(s_t \mid h_t, o_t)$ | Encoder + RSSM 的 h |
-| **② Predict & Plan** | 从 belief 出发,用 CEM 在 latent 中 rollout 1000 条候选动作序列,迭代 10 次精化,选出累积 reward 最高的序列 | Transition + Reward(在 latent 里跑,**不接触真环境**) |
-| **③ Act** | 只执行最优序列的**第一个动作** $a_t$,然后回到 ① 重新规划 | — |
-
-> ⚠️ **关键:每一步都重新规划**,不复用上一步的剩余序列 —— 这是 MPC 与开环控制的本质区别(因为执行 $a_t$ 后会拿到新观测,这条新信息会让规划得到更好的结果)。
-
-##### Action Repeat (R) trick
-
-实现中,PlaNet 把每个动作 $a_t$ **重复执行 R 次**(DMC 上典型 R = 2~4):
-- 把 R 步的 reward 累加,作为该决策的"effective reward"
-- 把第 R 步的观测作为下一时刻的 $o_{t+1}$
-
-**作用**:把规划长度从原始 50 步**有效压缩 R 倍**(压到 12~25 步),让 CEM 在计算上可行,同时保持物理时间分辨率。这是一个**论文不强调、但代码必有**的工程实践 —— 后续 Dreamer 系列也都沿用。
 
 #### 关键创新对比
 
@@ -2176,9 +2139,9 @@ for k in 1..d:
 → 这是 PlaNet **长程稳定性的关键**。但 **DreamerV1 简化为只用单步 KL + critic 估剩值,效果反而更好** —— 把"长程外推靠 model"这件事让位给"长程价值估计靠 critic",更符合 RL 的思路。这也是 PlaNet 之后的演化方向。
 
 
-### 🚀 PlaNet 完整算法:从训练到部署
+### 🚀 训练 PlaNet:Model Fitting + Data Collection 交替
 
-> 前面几章把组件单独讲完了 —— §⚙️ 给了 ELBO、§🧬 给了 RSSM 双路 latent、§🔭 给了 latent overshooting。本章把它们**串成一个能跑的系统**:模型怎么训出来 + 训完怎么部署 + CEM 规划内核。
+> 前面几章把组件单独讲完了 —— §⚙️ 给了 ELBO、§🧬 给了 RSSM 双路 latent、§🔭 给了 latent overshooting。本章把它们**串成一个能跑的训练流程**:RSSM 怎么从随机初始化变成一个能预测环境的世界模型。
 
 #### 1. 系统总览
 
@@ -2193,9 +2156,21 @@ PlaNet = **4 个网络** 1:1 对应 POMDP 四件套(完整对照详见 §🧭 ##
 
 确定性记忆 $h_t = f_\mathrm{GRU}(h_{t-1},\, s_{t-1},\, a_{t-1})$ 不算独立网络(就一个 GRU cell),贯穿 4 个网络作为"历史载体"。
 
-→ 整个系统跑两件事:**离线训练** 让 4 个网络学好(§ 2)、**在线部署** 用学好的模型 + CEM 实时挑动作(§ 3、§ 4)。
+#### 2. 系统数据流(俯瞰图)
 
-#### 2. 训练循环:Model Fitting + Data Collection 交替
+整个 PlaNet 系统由两个相互推动的循环组成 —— **训练**(真实环境 → Buffer → RSSM)和**部署**(RSSM → CEM → 真实环境)—— 通过一条 replay buffer 串起来:
+
+```mermaid
+flowchart TD
+    Env["真实环境"] -->|obs, action, reward| Buffer["Replay Buffer"]
+    Buffer -->|训练数据| RSSM["RSSM 世界模型<br/>(Encoder + Transition + Reward + Decoder)<br/>端到端 ELBO 损失"]
+    RSSM -.->|"latent rollout"| CEM["CEM 在线规划<br/>采样 1000 个动作序列<br/>选 top-100 elite,迭代 10 次"]
+    CEM -->|"a_t"| Env
+```
+
+→ **本章详解左半圈**(训练:Replay Buffer 怎么训出 RSSM),**§🎯 详解右半圈**(部署:RSSM 怎么经 CEM 挑出 $a_t$)。
+
+#### 3. 训练循环:Model Fitting + Data Collection 交替
 
 PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 agent 跑出来的,所以它跟 RL 一样要 **训模型 ↔ 收集数据 交替**:
 
@@ -2227,7 +2202,7 @@ while not converged:
         mu_q, sigma_q = encoder(h, o)
         s = mu_q + sigma_q · ε,   ε ~ N(0, I)
 
-        # 2) 用 CEM 规划出当前 action(§ 4 详解)
+        # 2) 用 CEM 规划出当前 action(§🎯 详解)
         a = plan_action(world_model, (h, s))
         a += exploration_noise                # ε_a ~ p(ε_a)
 
@@ -2239,6 +2214,11 @@ while not converged:
         o, a_prev = o_next, a
     D ← D ∪ {新 episode}                     # 攒进 buffer
 ```
+
+<p align="center">
+  <img src="asset/planet-2019/planet_algorithm.png" width="500"/><br/>
+  <i>↑ 论文 Algorithm 1:Deep Planning Network. 训练 outer loop = "Model fitting(内层 1)" 和 "Data collection(内层 2)" 交替 —— 上面 python 伪代码就是这段的改写,变量名 R / S / C / B / L / α 都对得上。</i>
+</p>
 
 **两个内层 loop 是交替的**,这跟"先收一大堆数据,再训模型"的 supervised 设定不同:
 
@@ -2259,9 +2239,14 @@ while not converged:
 
 > 💡 跟 model-free RL 的对比:DQN / PPO 一边 collect data 一边 update policy,但**没有显式的 model**;PlaNet 同样 collect ↔ update 交替,只是更新的对象是**世界模型**而不是 policy,再由 CEM 在 model 里**临时规划出 policy**。
 
-#### 3. 部署循环:Receding-Horizon MPC
 
-训练完之后,**部署时每个 time step 走三步**,构成标准的 **receding-horizon MPC** 循环:
+### 🎯 部署 PlaNet:Receding-Horizon MPC + CEM 在线规划
+
+> 训练完拿到 RSSM 之后,**PlaNet 没有 actor / policy 网络** —— 每个动作都是 CEM **实时规划**得出的。这是 PlaNet 跟 Dreamer 系列(actor-critic)最大的区别,也是 PlaNet 最大的工程包袱(下面 §2 单步计算量分析)。
+
+#### 1. 部署循环:Receding-Horizon MPC
+
+部署时每个 time step 走三步,构成标准的 **receding-horizon MPC** 循环:
 
 | 步骤 | 在做什么 | 用到哪个组件 |
 |---|---|---|
@@ -2280,7 +2265,7 @@ while not converged:
 
 **作用**:把规划长度从原始 50 步**有效压缩 $R$ 倍**(压到 12 ~ 25 步),让 CEM 在计算上可行,同时保持物理时间分辨率。这是一个**论文不强调、但代码必有**的工程实践 —— 后续 Dreamer 系列也都沿用。
 
-#### 4. CEM 内核:plan_action 怎么挑动作
+#### 2. CEM 内核:plan_action 怎么挑动作
 
 CEM(Cross-Entropy Method)= **在动作序列空间做"采样 → 选 elite → 更新分布"的迭代搜索**。PlaNet **不学 policy 网络**,每个 time step 实时跑这个搜索:
 
