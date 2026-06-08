@@ -2169,24 +2169,31 @@ The PlaNet system consists of two loops that drive each other — **training** (
 flowchart TD
     Env["Real Environment"]
     Buffer["Replay Buffer 𝒟<br/>init = S random-action episodes (line 1)"]
-    Sample["sample B × L chunks (line 5)"]
-    RSSM["RSSM World Model<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4-tuple (§🧭)"]
-    Train["Training step<br/>L(θ) = §🔭 ELBO (line 6, Eq.8)<br/>θ ← θ − α∇L (line 7)"]
+
+    subgraph A_phase [" "]
+        direction TB
+        Sample["sample B × L chunks (line 5)"]
+        RSSM["RSSM World Model<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4-tuple (§🧭)"]
+        Train["Training step<br/>L(θ) = §🔭 ELBO (line 6, Eq.8)<br/>θ ← θ − α∇L (line 7)"]
+        Train -.->|"<b>× C times / outer iter</b> (line 4)"| Sample
+        Sample --> RSSM
+        RSSM --> Train
+    end
+
     CEM["CEM Online Planner (§🎯)<br/>J=1000 samples, K=100 elites, I=10 iters"]
 
     Env -->|"obs, action, reward<br/>(line 16: append to buffer)"| Buffer
     Buffer --> Sample
-    Sample --> RSSM
-    RSSM --> Train
-    Train -.->|"<b>× C times / outer iter</b> (line 4)"| Sample
     RSSM -.->|"latent rollout<br/>(line 11, uses Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (line 12)<br/>real env step × R (lines 13-15)"| Env
 
-    linkStyle 0 stroke:#388e3c,stroke-width:2px
+    style A_phase fill:transparent,stroke:transparent
+
+    linkStyle 0 stroke:#1976d2,stroke-width:2px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
     linkStyle 2 stroke:#1976d2,stroke-width:3px
-    linkStyle 3 stroke:#1976d2,stroke-width:3px
-    linkStyle 4 stroke:#1976d2,stroke-width:2px
+    linkStyle 3 stroke:#388e3c,stroke-width:2px
+    linkStyle 4 stroke:#1976d2,stroke-width:3px
     linkStyle 5 stroke:#388e3c,stroke-width:2px
     linkStyle 6 stroke:#388e3c,stroke-width:2px
 ```

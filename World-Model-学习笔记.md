@@ -2155,24 +2155,31 @@ for k in 1..d:
 flowchart TD
     Env["真实环境"]
     Buffer["Replay Buffer 𝒟<br/>初始 = S 个 random-action episode (行 1)"]
-    Sample["采 B 条 × L 步 chunks (行 5)"]
-    RSSM["RSSM 世界模型<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4 件套 (§🧭)"]
-    Train["训练计算<br/>L(θ) = §🔭 ELBO (行 6, Eq.8)<br/>θ ← θ − α∇L (行 7)"]
+
+    subgraph A_phase [" "]
+        direction TB
+        Sample["采 B 条 × L 步 chunks (行 5)"]
+        RSSM["RSSM 世界模型<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4 件套 (§🧭)"]
+        Train["训练计算<br/>L(θ) = §🔭 ELBO (行 6, Eq.8)<br/>θ ← θ − α∇L (行 7)"]
+        Train -.->|"<b>× C 次 / 外层 iter</b> (行 4)"| Sample
+        Sample --> RSSM
+        RSSM --> Train
+    end
+
     CEM["CEM 在线规划 (§🎯)<br/>J=1000 采样, K=100 elite, I=10 迭代"]
 
     Env -->|"obs, action, reward<br/>(行 16: 攒回 buffer)"| Buffer
     Buffer --> Sample
-    Sample --> RSSM
-    RSSM --> Train
-    Train -.->|"<b>× C 次 / 外层 iter</b> (行 4)"| Sample
     RSSM -.->|"latent rollout<br/>(行 11: 用 Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (行 12)<br/>真环境 step × R (行 13-15)"| Env
 
-    linkStyle 0 stroke:#388e3c,stroke-width:2px
+    style A_phase fill:transparent,stroke:transparent
+
+    linkStyle 0 stroke:#1976d2,stroke-width:2px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
     linkStyle 2 stroke:#1976d2,stroke-width:3px
-    linkStyle 3 stroke:#1976d2,stroke-width:3px
-    linkStyle 4 stroke:#1976d2,stroke-width:2px
+    linkStyle 3 stroke:#388e3c,stroke-width:2px
+    linkStyle 4 stroke:#1976d2,stroke-width:3px
     linkStyle 5 stroke:#388e3c,stroke-width:2px
     linkStyle 6 stroke:#388e3c,stroke-width:2px
 ```
