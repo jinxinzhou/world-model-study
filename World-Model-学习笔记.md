@@ -2152,6 +2152,7 @@ for k in 1..d:
 <td valign="middle" width="55%">
 
 ```mermaid
+%%{init: {'themeVariables': {'fontSize': '18px'}, 'flowchart': {'nodeSpacing': 55, 'rankSpacing': 75}}}%%
 flowchart TD
     Env["真实环境"]
     Buffer["Replay Buffer 𝒟<br/>初始 = S 个 random-action episode (行 1)"]
@@ -2189,7 +2190,7 @@ flowchart TD
 </td>
 <td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="650" style="max-width:100%;height:auto;max-height:650px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="780" style="max-width:100%;height:auto;max-height:780px;"/>
 
 <p align="center"><i>↑ 论文 Algorithm 1: Deep Planning Network<br/>(左图边上的"行 X"对应这里的行号)</i></p>
 
