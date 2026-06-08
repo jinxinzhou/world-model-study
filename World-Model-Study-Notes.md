@@ -2372,11 +2372,16 @@ Plugging the §1 CEM kernel into the **real control loop**, at deployment time *
 - Only 1-step KL → short-term predictions OK, severe long-term drift
 - Adding D=50 step overshooting → **long-term predictions significantly more stable**
 
+<p align="center">
+  <img src="asset/planet-2019/result_agent.png" width="850"/><br/>
+  <i>Paper Figure 6: Latent overshooting ablation. <b>Blue = PlaNet (full D=50 overshooting)</b>, red = No overshooting (single-step KL only, i.e. standard ELBO), green = Random dataset (1k episodes of fixed random data, no online collection). On long-horizon tasks like Walker Walk and Cheetah Run, blue is clearly above red — multi-step KL constraints do make the model more stable; on shorter tasks like Cup Catch / Cartpole the two are on par, indicating overshooting mainly pays off on long horizons</i>
+</p>
+
 **World model vs true simulator (quality upper bound)**:
 - CEM + **true simulator** (oracle, upper bound) → best
 - CEM + **PlaNet world model** → **only slightly below oracle**
 
-→ This comparison is **the most direct evidence of world-model quality**: PlaNet's learned latent dynamics is good enough that "planning in the head" ≈ "planning in the real env". If the world model were poor, these two curves would differ by an order of magnitude.
+→ This comparison is **the most direct evidence of world-model quality**: PlaNet's learned latent dynamics is good enough that "planning in the head" ≈ "planning in the real env". If the world model were poor, these two curves would differ by an order of magnitude. Compare rows 3 and 4 of Table 1 above (`PlaNet` vs `CEM + true simulator`): on each task PlaNet trails the oracle by only 12 ~ 100 points (out of 1000), a tiny gap.
 
 **Effect of planning horizon H**:
 - H=1 → degenerates to greedy, poor
@@ -2384,6 +2389,8 @@ Plugging the §1 CEM kernel into the **real control loop**, at deployment time *
 - H=50 → model errors accumulate, performance drops
 
 → "**The world model cannot imagine too far ahead**" is an eternal pain point of model-based RL.
+
+> 📎 The H sensitivity sweep is in the paper's **Appendix F.1** (no dedicated figure in the main text); see [arXiv:1811.04551 Appendix](https://arxiv.org/pdf/1811.04551#page=14) if you want the curves.
 
 ### 💭 Reflections
 

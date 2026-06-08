@@ -2358,11 +2358,16 @@ def plan_action(world_model, current_state):
 - 只用 1 步 KL → 短程预测可以,长程严重漂移
 - 加入 D=50 步 overshooting → **长程预测显著稳定**
 
+<p align="center">
+  <img src="asset/planet-2019/result_agent.png" width="850"/><br/>
+  <i>论文 Figure 6:Latent overshooting 消融。<b>蓝色 = PlaNet(完整 D=50 overshooting)</b>,红色 = No overshooting(只用单步 KL,即标准 ELBO),绿色 = Random dataset(1k episodes 固定随机数据,不在线收集)。在 Walker Walk、Cheetah Run 这类长程任务上,蓝色明显高于红色 —— 多步 KL 约束确实让模型更稳定;Cup Catch / Cartpole 这类短程任务上两者持平,说明 overshooting 的收益主要在长程</i>
+</p>
+
 **世界模型 vs 真模拟器(质量上限对比)**:
 - CEM + **真模拟器**(oracle,上限) → 最好
 - CEM + **PlaNet 世界模型** → **仅略低于 oracle**
 
-→ 这条对比是**对世界模型质量最直接的证据**:PlaNet 学到的 latent 动力学好到让"脑内规划"几乎等于"真环境规划"。如果世界模型差,这两条曲线会有数量级的差距。
+→ 这条对比是**对世界模型质量最直接的证据**:PlaNet 学到的 latent 动力学好到让"脑内规划"几乎等于"真环境规划"。如果世界模型差,这两条曲线会有数量级的差距。直接对照上面 Table 1 第 3、4 行(`PlaNet` vs `CEM + true simulator`):各任务上 PlaNet 比 oracle 低 12 ~ 100 分(满分 1000),差距很小。
 
 **规划 horizon H 的影响**:
 - H=1 → 退化成贪心,差
@@ -2370,6 +2375,8 @@ def plan_action(world_model, current_state):
 - H=50 → 模型误差累积,反而变差
 
 → "**世界模型不能想太远**" 是 model-based RL 的永恒痛点。
+
+> 📎 H 的 sensitivity sweep 在论文 **Appendix F.1**(主文没有专门画图),感兴趣可以查 [arXiv:1811.04551 附录](https://arxiv.org/pdf/1811.04551#page=14)。
 
 
 
