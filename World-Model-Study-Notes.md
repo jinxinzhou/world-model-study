@@ -2163,36 +2163,29 @@ The PlaNet system consists of two loops that drive each other — **training** (
 
 <table>
 <tr>
-<td valign="middle" width="55%">
+<td valign="middle" width="60%">
 
 ```mermaid
-flowchart TD
+flowchart LR
     Env["Real Environment"]
-    Buffer["Replay Buffer 𝒟<br/>init = S random-action episodes (line 1)"]
+    Buffer["Replay Buffer 𝒟<br/>init = S<br/>random-action<br/>episodes (line 1)"]
+    Sample["sample B × L<br/>chunks<br/>(line 5)"]
+    RSSM["RSSM World Model<br/>Encoder + Transition<br/>+ Reward + Decoder<br/>= POMDP 4-tuple (§🧭)"]
+    Train["Training step<br/>L(θ) = §🔭 ELBO (line 6, Eq.8)<br/>θ ← θ − α∇L (line 7)"]
+    CEM["CEM Online Planner (§🎯)<br/>J=1000 samples<br/>K=100 elites, I=10 iters"]
 
-    subgraph A_phase [" "]
-        direction LR
-        Sample["sample B × L chunks (line 5)"]
-        RSSM["RSSM World Model: Encoder + Transition + Reward + Decoder = POMDP 4-tuple (§🧭)"]
-        Train["Training step: L(θ) = §🔭 ELBO (line 6, Eq.8) ; θ ← θ − α∇L (line 7)"]
-        Train -->|"<b>× C times / outer iter</b> (line 4)"| Sample
-        Sample --> RSSM
-        RSSM --> Train
-    end
-
-    CEM["CEM Online Planner (§🎯)<br/>J=1000 samples, K=100 elites, I=10 iters"]
-
-    Env -->|"obs, action, reward (line 16: append to buffer)"| Buffer
+    Env -->|"obs, action, reward<br/>(line 16: append to buffer)"| Buffer
     Buffer --> Sample
-    RSSM -.->|"latent rollout (line 11, uses Transition + Reward)"| CEM
+    Sample --> RSSM
+    RSSM --> Train
+    Train -->|"<b>× C times / outer iter</b><br/>(line 4)"| Sample
+    RSSM -.->|"latent rollout (line 11:<br/>uses Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (line 12)<br/>real env step × R (lines 13-15)"| Env
 
-    style A_phase fill:transparent,stroke:transparent
-
-    linkStyle 0 stroke:#1976d2,stroke-width:3px
+    linkStyle 0 stroke:#388e3c,stroke-width:2px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
     linkStyle 2 stroke:#1976d2,stroke-width:3px
-    linkStyle 3 stroke:#388e3c,stroke-width:2px
+    linkStyle 3 stroke:#1976d2,stroke-width:3px
     linkStyle 4 stroke:#1976d2,stroke-width:3px
     linkStyle 5 stroke:#388e3c,stroke-width:2px
     linkStyle 6 stroke:#388e3c,stroke-width:2px
@@ -2201,9 +2194,9 @@ flowchart TD
 <p align="center"><i>↑ System bird's-eye view: each edge annotation gives the matching Algorithm 1 line number</i></p>
 
 </td>
-<td valign="middle" width="45%" align="center">
+<td valign="middle" width="40%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="520" style="max-width:100%;height:auto;max-height:520px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="700" style="max-width:100%;height:auto;max-height:700px;"/>
 
 <p align="center"><i>↑ Paper Algorithm 1: Deep Planning Network<br/>(the "line X" annotations on the left map to these line numbers)</i></p>
 

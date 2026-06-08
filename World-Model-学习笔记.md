@@ -2149,36 +2149,29 @@ for k in 1..d:
 
 <table>
 <tr>
-<td valign="middle" width="55%">
+<td valign="middle" width="60%">
 
 ```mermaid
-flowchart TD
+flowchart LR
     Env["真实环境"]
-    Buffer["Replay Buffer 𝒟<br/>初始 = S 个 random-action episode (行 1)"]
+    Buffer["Replay Buffer 𝒟<br/>初始 = S 个<br/>random-action<br/>episode (行 1)"]
+    Sample["采 B 条<br/>× L 步 chunks<br/>(行 5)"]
+    RSSM["RSSM 世界模型<br/>Encoder + Transition<br/>+ Reward + Decoder<br/>= POMDP 4 件套 (§🧭)"]
+    Train["训练计算<br/>L(θ) = §🔭 ELBO (行 6, Eq.8)<br/>θ ← θ − α∇L (行 7)"]
+    CEM["CEM 在线规划 (§🎯)<br/>J=1000 采样<br/>K=100 elite, I=10 迭代"]
 
-    subgraph A_phase [" "]
-        direction LR
-        Sample["采 B 条 × L 步 chunks (行 5)"]
-        RSSM["RSSM 世界模型: Encoder + Transition + Reward + Decoder = POMDP 4 件套 (§🧭)"]
-        Train["训练计算: L(θ) = §🔭 ELBO (行 6, Eq.8) ; θ ← θ − α∇L (行 7)"]
-        Train -->|"<b>× C 次 / 外层 iter</b> (行 4)"| Sample
-        Sample --> RSSM
-        RSSM --> Train
-    end
-
-    CEM["CEM 在线规划 (§🎯)<br/>J=1000 采样, K=100 elite, I=10 迭代"]
-
-    Env -->|"obs, action, reward (行 16: 攒回 buffer)"| Buffer
+    Env -->|"obs, action, reward<br/>(行 16: 攒回 buffer)"| Buffer
     Buffer --> Sample
-    RSSM -.->|"latent rollout (行 11: 用 Transition + Reward)"| CEM
+    Sample --> RSSM
+    RSSM --> Train
+    Train -->|"<b>× C 次 / 外层 iter</b><br/>(行 4)"| Sample
+    RSSM -.->|"latent rollout (行 11:<br/>用 Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (行 12)<br/>真环境 step × R (行 13-15)"| Env
 
-    style A_phase fill:transparent,stroke:transparent
-
-    linkStyle 0 stroke:#1976d2,stroke-width:3px
+    linkStyle 0 stroke:#388e3c,stroke-width:2px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
     linkStyle 2 stroke:#1976d2,stroke-width:3px
-    linkStyle 3 stroke:#388e3c,stroke-width:2px
+    linkStyle 3 stroke:#1976d2,stroke-width:3px
     linkStyle 4 stroke:#1976d2,stroke-width:3px
     linkStyle 5 stroke:#388e3c,stroke-width:2px
     linkStyle 6 stroke:#388e3c,stroke-width:2px
@@ -2187,9 +2180,9 @@ flowchart TD
 <p align="center"><i>↑ 系统鸟瞰图:每条边的注解都给出对应 Algorithm 1 的行号</i></p>
 
 </td>
-<td valign="middle" width="45%" align="center">
+<td valign="middle" width="40%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="520" style="max-width:100%;height:auto;max-height:520px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="700" style="max-width:100%;height:auto;max-height:700px;"/>
 
 <p align="center"><i>↑ 论文 Algorithm 1: Deep Planning Network<br/>(左图边上的"行 X"对应这里的行号)</i></p>
 
