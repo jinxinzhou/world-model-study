@@ -2157,7 +2157,7 @@ flowchart TD
     Buffer["Replay Buffer 𝒟<br/>初始 = S 个 random-action episode (行 1)"]
 
     subgraph A_phase [" "]
-        direction TB
+        direction LR
         Sample["采 B 条 × L 步 chunks (行 5)"]
         RSSM["RSSM 世界模型: Encoder + Transition + Reward + Decoder = POMDP 4 件套 (§🧭)"]
         Train["训练计算: L(θ) = §🔭 ELBO (行 6, Eq.8) ; θ ← θ − α∇L (行 7)"]
@@ -2189,7 +2189,7 @@ flowchart TD
 </td>
 <td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="720" style="max-width:100%;height:auto;max-height:720px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="520" style="max-width:100%;height:auto;max-height:520px;"/>
 
 <p align="center"><i>↑ 论文 Algorithm 1: Deep Planning Network<br/>(左图边上的"行 X"对应这里的行号)</i></p>
 

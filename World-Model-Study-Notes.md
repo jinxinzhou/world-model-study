@@ -2171,7 +2171,7 @@ flowchart TD
     Buffer["Replay Buffer 𝒟<br/>init = S random-action episodes (line 1)"]
 
     subgraph A_phase [" "]
-        direction TB
+        direction LR
         Sample["sample B × L chunks (line 5)"]
         RSSM["RSSM World Model: Encoder + Transition + Reward + Decoder = POMDP 4-tuple (§🧭)"]
         Train["Training step: L(θ) = §🔭 ELBO (line 6, Eq.8) ; θ ← θ − α∇L (line 7)"]
@@ -2203,7 +2203,7 @@ flowchart TD
 </td>
 <td valign="middle" width="45%" align="center">
 
-<img src="asset/planet-2019/planet_algorithm.png" height="720" style="max-width:100%;height:auto;max-height:720px;"/>
+<img src="asset/planet-2019/planet_algorithm.png" height="520" style="max-width:100%;height:auto;max-height:520px;"/>
 
 <p align="center"><i>↑ Paper Algorithm 1: Deep Planning Network<br/>(the "line X" annotations on the left map to these line numbers)</i></p>
 
