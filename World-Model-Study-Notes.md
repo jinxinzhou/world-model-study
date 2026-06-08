@@ -2170,17 +2170,22 @@ flowchart TD
     Env["Real Environment"]
     Buffer["Replay Buffer 𝒟<br/>init = S random-action episodes (line 1)"]
     RSSM["RSSM World Model<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4-tuple (§🧭)"]
+    Train["Training step<br/>L(θ) = §🔭 ELBO (line 6, Eq.8)<br/>θ ← θ − α∇L (line 7)"]
     CEM["CEM Online Planner (§🎯)<br/>J=1000 samples, K=100 elites, I=10 iters"]
 
     Env -->|"obs, action, reward<br/>(line 16: append to buffer)"| Buffer
-    Buffer -->|"sample B × L chunks (line 5)<br/>L(θ) = §🔭 ELBO (line 6, Eq.8)<br/>θ ← θ − α∇L (line 7)<br/><b>× C times / outer iter</b> (line 4)"| RSSM
+    Buffer -->|"sample B × L chunks (line 5)"| RSSM
+    RSSM --> Train
+    Train -.->|"<b>× C times / outer iter</b> (line 4)"| RSSM
     RSSM -.->|"latent rollout<br/>(line 11, uses Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (line 12)<br/>real env step × R (lines 13-15)"| Env
 
     linkStyle 0 stroke:#388e3c,stroke-width:2px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
-    linkStyle 2 stroke:#388e3c,stroke-width:2px
-    linkStyle 3 stroke:#388e3c,stroke-width:2px
+    linkStyle 2 stroke:#1976d2,stroke-width:3px
+    linkStyle 3 stroke:#1976d2,stroke-width:2px
+    linkStyle 4 stroke:#388e3c,stroke-width:2px
+    linkStyle 5 stroke:#388e3c,stroke-width:2px
 ```
 
 <p align="center"><i>↑ System bird's-eye view: each edge annotation gives the matching Algorithm 1 line number</i></p>
@@ -2196,7 +2201,7 @@ flowchart TD
 </tr>
 </table>
 
-> 🎨 **Blue solid = A · Model fitting** (paper Algorithm 1 lines 4-7); **green edges = B · Data collection** (paper lines 1, 11-16); **dashed = in latent space, no real env touched**. The "× C times" annotation on the Buffer → RSSM edge means that direction fires C times per outer iteration — matching the Algorithm 1 pseudocode on the right.
+> 🎨 **Blue solid = A · Model fitting forward** (lines 4-7); **blue dashed = back-edge for the inner C-times iteration** (each iter re-samples chunks + forward + SGD); **green solid = B · Data collection** (lines 1, 11-16); **green dashed = latent rollout (no real env touched)**. All "line X" annotations match the line numbers in the right-hand Algorithm 1.
 
 → **This chapter unpacks the left half** (training: how Replay Buffer trains the RSSM); **§🎯 unpacks the right half** (deployment: how RSSM + CEM produces $a_t$).
 

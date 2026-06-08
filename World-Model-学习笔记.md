@@ -2156,17 +2156,22 @@ flowchart TD
     Env["真实环境"]
     Buffer["Replay Buffer 𝒟<br/>初始 = S 个 random-action episode (行 1)"]
     RSSM["RSSM 世界模型<br/>Encoder + Transition + Reward + Decoder<br/>= POMDP 4 件套 (§🧭)"]
+    Train["训练计算<br/>L(θ) = §🔭 ELBO (行 6, Eq.8)<br/>θ ← θ − α∇L (行 7)"]
     CEM["CEM 在线规划 (§🎯)<br/>J=1000 采样, K=100 elite, I=10 迭代"]
 
     Env -->|"obs, action, reward<br/>(行 16: 攒回 buffer)"| Buffer
-    Buffer -->|"采 B 条 × L 步 chunks (行 5)<br/>L(θ) = §🔭 ELBO (行 6, Eq.8)<br/>θ ← θ − α∇L (行 7)<br/><b>× C 次 / 外层 iter</b> (行 4)"| RSSM
+    Buffer -->|"采 B 条 × L 步 chunks (行 5)"| RSSM
+    RSSM --> Train
+    Train -.->|"<b>× C 次 / 外层 iter</b> (行 4)"| RSSM
     RSSM -.->|"latent rollout<br/>(行 11: 用 Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (行 12)<br/>真环境 step × R (行 13-15)"| Env
 
     linkStyle 0 stroke:#388e3c,stroke-width:2px
     linkStyle 1 stroke:#1976d2,stroke-width:3px
-    linkStyle 2 stroke:#388e3c,stroke-width:2px
-    linkStyle 3 stroke:#388e3c,stroke-width:2px
+    linkStyle 2 stroke:#1976d2,stroke-width:3px
+    linkStyle 3 stroke:#1976d2,stroke-width:2px
+    linkStyle 4 stroke:#388e3c,stroke-width:2px
+    linkStyle 5 stroke:#388e3c,stroke-width:2px
 ```
 
 <p align="center"><i>↑ 系统鸟瞰图:每条边的注解都给出对应 Algorithm 1 的行号</i></p>
@@ -2182,7 +2187,7 @@ flowchart TD
 </tr>
 </table>
 
-> 🎨 **蓝色实线 = A · Model fitting**(论文 Algorithm 1 行 4-7);**绿色边 = B · Data collection**(论文行 1, 11-16);**虚线 = 在 latent 空间,不接触真环境**。边上标的"× C 次"提示该方向上每个外层 iteration 重复 C 次,跟右侧 Algorithm 1 的伪代码对得上。
+> 🎨 **蓝实线 = A · Model fitting 前向**(行 4-7);**蓝虚线 = 训练内层 C 次迭代的回边**(每次重新采 chunks + 前向 + 反传);**绿实线 = B · Data collection**(行 1, 11-16);**绿虚线 = 在 latent 空间 rollout,不接触真环境**。所有"行 X"对应右侧 Algorithm 1 的行号。
 
 → **本章详解左半圈**(训练:Replay Buffer 怎么训出 RSSM),**§🎯 详解右半圈**(部署:RSSM 怎么经 CEM 挑出 $a_t$)。
 
