@@ -2152,7 +2152,7 @@ for k in 1..d:
 <td valign="middle" width="55%">
 
 ```mermaid
-%%{init: {'themeVariables': {'fontSize': '22px'}, 'flowchart': {'nodeSpacing': 70, 'rankSpacing': 100}}}%%
+%%{init: {'themeVariables': {'fontSize': '20px'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 85}}}%%
 flowchart TD
     Env["真实环境"]
     Buffer["Replay Buffer 𝒟<br/>初始 = S 个 random-action episode (行 1)"]
