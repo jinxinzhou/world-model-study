@@ -2338,8 +2338,6 @@ Plugging the §1 CEM kernel into the **real control loop**, at deployment time *
 
 > ⚠️ **Key: replan every single step** — do not reuse the leftover sequence from the previous step. This is the essential difference between MPC and open-loop control (after executing $a_t$ you get a fresh observation $o_{t+1}$, and that new information lets the replanning produce a better result).
 
-> 💡 **Training vs deployment — the same CEM kernel reused twice**: at training time §🚀 Algorithm 1 line 11 calls `plan_action` to collect new data; at deployment time an outer observe-plan-act MPC loop wraps `plan_action` for actual control. The only difference is in the outer layer — at training time, after sending the action to the real env, line 16 still appends `D ← D ∪ {…}` back into the buffer; at deployment time, it's just one execution after another.
-
 
 ### 🧪 Key Experiments
 

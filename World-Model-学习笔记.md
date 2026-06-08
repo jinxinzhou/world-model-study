@@ -2324,8 +2324,6 @@ def plan_action(world_model, current_state):
 
 > ⚠️ **关键:每一步都重新规划**,不复用上一步的剩余序列 —— 这是 MPC 与开环控制的本质区别(因为执行 $a_t$ 后会拿到新观测 $o_{t+1}$,这条新信息会让规划得到更好的结果)。
 
-> 💡 **训练 vs 部署 ── 同一个 CEM 内核被复用两次**:训练期 §🚀 Algorithm 1 行 11 调 `plan_action` 收集新数据;部署期外层套一个 MPC observe-plan-act 循环,同样调 `plan_action`。区别只在外层 — 训练期最终把动作送回真环境后还要 `D ← D ∪ {…}` 攒回 buffer,部署期单纯一遍接一遍执行。
-
 
 ### 🧪 关键实验
 
