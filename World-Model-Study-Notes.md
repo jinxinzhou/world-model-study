@@ -2178,7 +2178,7 @@ flowchart TD
     Buffer --> Sample
     Sample --> RSSM
     RSSM --> Train
-    Train -.->|"<b>× C times / outer iter</b> (line 4)"| RSSM
+    Train -.->|"<b>× C times / outer iter</b> (line 4)"| Sample
     RSSM -.->|"latent rollout<br/>(line 11, uses Transition + Reward)"| CEM
     CEM -->|"a_t + ε~p(ε) (line 12)<br/>real env step × R (lines 13-15)"| Env
 
