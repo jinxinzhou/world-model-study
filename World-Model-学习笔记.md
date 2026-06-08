@@ -2161,56 +2161,15 @@ flowchart TD
 
 PlaNet 训练**不是"一次性把数据集训完"** —— 数据本身就是 agent 跑出来的,所以它跟 RL 一样要 **训模型 ↔ 收集数据 交替**:
 
-```python
-# PlaNet 训练 outer loop(论文 Algorithm 1 改写)
-
-# ---- 初始化 ----
-D = empty_replay_buffer
-fill D with S random-action seed episodes    # S ≈ 5
-θ = random_init                              # 4 个网络 + GRU 的参数
-
-while not converged:
-    # ===== (A) Model fitting: 用现有 buffer 训模型 C 次 =====
-    for step in 1..C:                        # C ≈ 100
-        # 从 buffer 随机采 B 条长度 L 的轨迹段
-        batch = sample_chunks(D, batch_size=B, chunk_len=L)   # B ≈ 50, L ≈ 50
-        # 计算 §🔭 给出的 Latent Overshooting ELBO loss
-        loss = ELBO_with_overshooting(batch, θ)
-        # SGD 更新
-        θ ← θ − α · ∇_θ loss
-
-    # ===== (B) Data collection: 用当前模型跑一条新 episode =====
-    o = env.reset()
-    h, s = init_h, init_s
-    a_prev = zeros(action_dim)
-    for t in 1..⌈T / R⌉:                    # R = action repeat
-        # 1) 用 encoder 把当前 obs 转成 belief
-        h = GRU(h, s, a_prev)
-        mu_q, sigma_q = encoder(h, o)
-        s = mu_q + sigma_q · ε,   ε ~ N(0, I)
-
-        # 2) 用 CEM 规划出当前 action(§🎯 详解)
-        a = plan_action(world_model, (h, s))
-        a += exploration_noise                # ε_a ~ p(ε_a)
-
-        # 3) Action repeat: 把同一个 a 在真环境发 R 次,累 reward
-        r_total = 0
-        for k in 1..R:
-            r, o_next = env.step(a)
-            r_total += r
-        o, a_prev = o_next, a
-    D ← D ∪ {新 episode}                     # 攒进 buffer
-```
-
 <p align="center">
   <img src="asset/planet-2019/planet_algorithm.png" width="500"/><br/>
-  <i>↑ 论文 Algorithm 1:Deep Planning Network. 训练 outer loop = "Model fitting(内层 1)" 和 "Data collection(内层 2)" 交替 —— 上面 python 伪代码就是这段的改写,变量名 R / S / C / B / L / α 都对得上。</i>
+  <i>↑ 论文 Algorithm 1:Deep Planning Network. 外层 <code>while</code> 循环 = "Model fitting(内层 1,行 4-7)" 和 "Data collection(内层 2,行 8-16)" 交替;两个内层各自执行 $C$ 次更新 / 1 条新 episode,共用同一份 replay buffer $\mathcal{D}$。</i>
 </p>
 
 **两个内层 loop 是交替的**,这跟"先收一大堆数据,再训模型"的 supervised 设定不同:
 
-- **A 阶段** 用当前 buffer 把模型再训 $C$ 步 —— **模型变好**
-- **B 阶段** 用更好的模型 + CEM 跑一条新 episode —— **数据变好**(覆盖更"有意义"的状态)
+- **A 阶段(行 4-7)** 用当前 buffer 把模型再训 $C$ 步,loss 用 §🔭 给的 **Latent Overshooting ELBO**(论文行 6 的 "Equation 8") —— **模型变好**
+- **B 阶段(行 8-16)** 用更好的模型 + CEM 跑一条新 episode —— **数据变好**(覆盖更"有意义"的状态);其中行 10 的 "infer belief from history" 实际是 §🧬 RSSM 双路:先 $h_t = f_\mathrm{GRU}(h_{t-1}, s_{t-1}, a_{t-1})$,再 $s_t \sim q_\phi(s_t \mid h_t, o_t)$
 - 两个 loop 互为输入,模型和数据**共同迭代收敛**
 
 关键超参(论文 DMC 默认值):
